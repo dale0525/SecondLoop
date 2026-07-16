@@ -3,6 +3,7 @@ use agent_runtime::data_protection::{
     BackupMetadata, DataProtectionError, EncryptedBackup, EncryptedBackupCodec,
 };
 use agent_runtime::storage::Storage;
+use agent_runtime::storage_protection::StorageProtectionState;
 use serde::Serialize;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use std::ffi::OsString;
@@ -30,7 +31,7 @@ struct DataProtectionInner {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct DataProtectionStatus {
     pub enabled: bool,
-    pub at_rest_encryption: &'static str,
+    pub at_rest_encryption: StorageProtectionState,
     pub backup_encryption: &'static str,
     pub backup_format: &'static str,
     pub pending_restart: bool,
@@ -50,12 +51,12 @@ impl DataProtectionService {
         storage: Storage,
         database_path: impl Into<PathBuf>,
         app_id: impl Into<String>,
-        key: SecretMaterial,
+        key: &SecretMaterial,
     ) -> Result<Self, DataProtectionError> {
         Ok(Self {
             inner: Arc::new(DataProtectionInner {
                 app_id: app_id.into(),
-                codec: EncryptedBackupCodec::new(key)?,
+                codec: EncryptedBackupCodec::new_borrowed(key)?,
                 database_path: database_path.into(),
                 storage,
             }),
@@ -65,7 +66,7 @@ impl DataProtectionService {
     pub(crate) fn status(&self) -> DataProtectionStatus {
         DataProtectionStatus {
             enabled: true,
-            at_rest_encryption: "not_provided",
+            at_rest_encryption: self.inner.storage.protection_status().state(),
             backup_encryption: "aes-256-gcm",
             backup_format: "agentweave-backup-v1",
             pending_restart: pending_path(&self.inner.database_path).exists(),
@@ -147,10 +148,10 @@ impl DataProtectionService {
     }
 }
 
-pub(crate) fn disabled_status() -> DataProtectionStatus {
+pub(crate) fn disabled_status(at_rest_encryption: StorageProtectionState) -> DataProtectionStatus {
     DataProtectionStatus {
         enabled: false,
-        at_rest_encryption: "not_provided",
+        at_rest_encryption,
         backup_encryption: "unavailable",
         backup_format: "agentweave-backup-v1",
         pending_restart: false,
@@ -308,7 +309,7 @@ mod tests {
             storage.clone(),
             &database,
             "agentweave.default",
-            SecretMaterial::new(vec![7; 32]).unwrap(),
+            &SecretMaterial::new(vec![7; 32]).unwrap(),
         )
         .unwrap();
         let backup = service.create_backup().await.unwrap();
@@ -317,7 +318,7 @@ mod tests {
             storage.clone(),
             &database,
             "agentweave.default",
-            SecretMaterial::new(vec![8; 32]).unwrap(),
+            &SecretMaterial::new(vec![8; 32]).unwrap(),
         )
         .unwrap();
         let receipt = restore_service

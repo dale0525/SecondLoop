@@ -4,7 +4,7 @@ export const DATA_PROTECTION_RESTORE_CHANNEL = "agentweave:data-protection:resto
 
 export type DataProtectionStatus = Readonly<{
   enabled: boolean;
-  atRestEncryption: "not_provided";
+  atRestEncryption: "not_provided" | "configured" | "active" | "error";
   backupEncryption: "aes-256-gcm" | "unavailable";
   backupFormat: "agentweave-backup-v1";
   pendingRestart: boolean;
@@ -40,7 +40,8 @@ export function parseDataProtectionStatus(value: unknown): DataProtectionStatus 
     "restoreRollbackAvailable",
   ]);
   if (typeof record.enabled !== "boolean"
-    || record.atRestEncryption !== "not_provided"
+    || !new Set(["not_provided", "configured", "active", "error"])
+      .has(String(record.atRestEncryption))
     || !new Set(["aes-256-gcm", "unavailable"]).has(String(record.backupEncryption))
     || record.backupFormat !== "agentweave-backup-v1"
     || typeof record.pendingRestart !== "boolean"

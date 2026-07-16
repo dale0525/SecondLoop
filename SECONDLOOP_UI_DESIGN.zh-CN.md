@@ -87,6 +87,30 @@ Narrow：单列。秘密字段只显示“已配置/未配置”，输入框离�
 
 状态覆盖未配置、配置中、测试中、已连接、需要重新认证、离线、权限不足和失败。产品没有对应 Connector 时显示能力缺口，不显示无效开关。
 
+#### 4.5.1 Mail onboarding 增补评审
+
+评审状态：通过，可以实现。这个增补只改变 Connections 内的 Mail 管理区，不增加新路由，也不把凭据管理放进 Settings。
+
+Desktop 在 Mail 诊断区上方增加一块账户管理面板。面板标题、Host 安全边界和“添加账户”动作保持在首屏；已配置账户使用两列卡片，展示邮箱地址、收件与发件端点、凭据是否就绪，以及编辑和移除动作。模型连接、账户配置和运行诊断仍然是三个清楚分开的层级。
+
+新增与编辑使用 Radix Dialog。表单先选择 Gmail、Microsoft 365、iCloud 或自定义预设，再填写账户身份、App 专用密码和服务器设置；高级邮箱文件夹默认折叠。保存后立即执行一次真实连接测试。保存失败或测试失败时保留可核对的非秘密字段，同时清空密码输入框。编辑既有账户时不回显旧密码，用户必须重新输入才能轮换凭据。
+
+`390 × 844` 下，账户卡改为单列，Dialog 收敛为底部 Sheet。表单字段、关闭按钮和底部动作均保持至少 `44 × 44`；动作栏固定在 Sheet 底部安全区内，不与 SecondLoop 底部导航叠放。长邮箱地址和服务器地址只能换行或截断，不得产生横向滚动。
+
+验收状态包括：元数据加载、空账户、新增、编辑轮换、保存中、测试中、连接成功、保存失败、测试失败、删除确认和删除失败。任何响应、错误文案、截图、DOM 文本和 Debug 输出都不得出现密码；关闭 Dialog 或离开 Connections 后，Renderer 不保留密码状态。
+
+#### 4.5.2 Workspace、Calendar 与 Contacts 增补评审
+
+评审状态：通过，可以实现。本增补不增加产品路由，只扩展 Connections、Today 与 Action Center 的既有信息架构。
+
+Connections 在 Desktop 采用 `2 × 2` 就绪卡片，依次覆盖 Model、Mail、Calendar、Contacts。就绪状态只来自真实 Host 读取；Calendar 与 Contacts 没有可信账户绑定时显示缺口，不使用示例数据冒充连接成功。卡片下方增加 Workspace OAuth 区域：Google 可以在一次同意中绑定 Mail、Calendar、Contacts；Microsoft 的 Mail 与 Calendar/Contacts 因资源 scope 不同，必须分开授权。授权状态完整覆盖 opening、pending、exchanging、completed、denied、failed、permission insufficient、expired、cancelled 与 reauthorize。Renderer 只能接收脱敏状态与账户绑定，不能接收 token、PKCE verifier、state 或授权 URL。
+
+`390 × 844` 下四张卡片和两张 Provider 卡均为单列；授权状态可换行，长 account ID 必须断行，所有授权与取消操作至少为 `44 × 44`，页面不得横向滚动。
+
+Today 的来源覆盖增加 Calendar 与 Contacts。Calendar 读取本地当天边界内的真实 confirmed events，并与 Tasks、Schedules 一起进入“今日重点”；事件必须显示时间、可用地点与 Calendar 来源。Contacts 只展示读取就绪状态，不展示或伪造“近期联系人”。Narrow 仍保持“今日重点、等待批准、需要回复、已确认承诺”的既有冻结顺序。
+
+Action Center 按 canonical `action_name` 确定性渲染 Mail send、Calendar create/update/cancel 与 Contacts update。预览展示外部写入所需的账户、资源、版本、时间、参与者或身份信息，以及 preview hash；未知 action 或名称与结构不匹配时，只展示 action name、资源目标、参数 hash 和幂等键，不推测字段。`uncertain` 只显示对账指引，不提供盲目重试。
+
 ### 4.6 设置 `#settings`
 
 Desktop：设置内容按“外观、语言、隐私与数据、通知、关于”分区，最大宽度 760px。模型和 Mail 连接不重复放在设置中，只提供到 Connections 的链接。开发入口只在明确开发策略下出现。
@@ -163,3 +187,25 @@ Narrow：单列分组，行高至少 52px。危险数据操作与普通外观选
 - 隔离 QA 没有真实 Action 或 Memory 数据，因此这两路由验收空态和详情占位；真实详情契约由自动化测试覆盖。
 - Chat 采用模型未配置引导态，Connections 采用 Mail 未配置态；两者都是本文冻结的合法产品状态。
 - Connections 和 Settings 在 390px 下需要纵向滚动，符合单列设计，不视为布局偏差。
+
+## 9. Workspace Foundations 增补验收
+
+- 验收状态：通过
+- 验收日期：2026-07-16
+- 验收范围：Today、Connections、Action Center
+- 验收视口：`1440 × 900`、`1280 × 800`、`390 × 844`
+- 截图目录：`output/qa-secondloop/screenshots/`
+- 截图数量：13 张
+
+本轮使用产品化 Renderer 和隔离 Host mock 验收 Workspace OAuth、Calendar、Contacts 及其 Action 预览。三个目标视口的页面宽度均与视口宽度一致，没有横向滚动；浏览器 console warning、error 和未捕获异常均为 0。
+
+Connections 在两个桌面视口都保持四张就绪卡和两张 Provider 卡的两列布局，在 `390 × 844` 收敛为单列。授权按钮、模型输入、邮箱账户动作、侧栏导航和移动底栏的可见交互区域均不小于 `44 × 44`。滚动到移动端页面末尾后，邮箱连接动作仍完整位于底栏上方。
+
+Today 在桌面保持双栏，在窄窗口按“今日重点、等待批准、需要回复、已确认承诺”的视觉顺序排列。真实 Calendar 事件与 Tasks、Schedules 同时进入今日重点，五个来源标签在三个视口中均能完整适配。
+
+Action Center 在桌面直接切换 Calendar 与 Contacts 预览，不会误开窄窗口 Dialog。窄窗口从列表进入详情后，独立的固定标题栏把关闭按钮与正文隔开，长参数哈希没有撑宽页面；详情滚动到底部时，拒绝和批准按钮仍完整可见。桌面与移动端的两个决策按钮高度均为 44px。
+
+可接受偏差：
+
+- OAuth 验收使用未授权状态，不在隔离页面发起真实第三方登录；授权状态机和脱敏响应由自动化测试覆盖。
+- QA 数据只覆盖 Calendar update 与 Contacts update 的权威预览；Mail 及其他 Calendar 动作的确定性分派由自动化测试覆盖。

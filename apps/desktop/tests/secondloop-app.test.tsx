@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -17,12 +17,14 @@ class TestResizeObserver implements ResizeObserver {
 
 beforeEach(() => {
   vi.stubGlobal("ResizeObserver", TestResizeObserver);
+  window.localStorage.clear();
 });
 
 describe("SecondLoop product shell", () => {
   afterEach(() => {
     cleanup();
     delete window.agentWeave;
+    window.localStorage.clear();
     window.history.replaceState(null, "", "/");
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
@@ -101,6 +103,119 @@ describe("SecondLoop product shell", () => {
 
     expect(window.location.hash).toBe("#connections");
     expect(container.querySelector(".connections-screen")).toBeInTheDocument();
+  });
+
+  it("onboards Mail through the trusted configuration flow and clears the password", async () => {
+    installSecondLoopBootstrap();
+    const mail = stubMailOnboardingFetch();
+    window.history.replaceState(null, "", "/#connections");
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", {
+      name: /Add account|connections\.mailOnboarding\.add$/,
+    }));
+    await user.type(screen.getByLabelText(
+      /Email address|connections\.mailOnboarding\.email/,
+    ), "user@example.test");
+    await user.type(screen.getByLabelText(
+      /App password|connections\.mailOnboarding\.password/,
+    ), "one-time-password-marker");
+    await user.click(screen.getByRole("button", {
+      name: /Save and test|connections\.mailOnboarding\.saveAndTest/,
+    }));
+
+    await waitFor(() => expect(mail.saved).not.toBeNull());
+    expect(mail.saved?.password).toBe("one-time-password-marker");
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+    expect(document.body).not.toHaveTextContent("one-time-password-marker");
+    expect((await screen.findAllByText("user@example.test")).length).toBeGreaterThan(0);
+    expect(mail.fetch.mock.calls.some(([input, init]) => (
+      String(input).includes("/foundation/mail/accounts/") && init?.method === "POST"
+    ))).toBe(true);
+  });
+
+  it("keeps editable Mail fields but clears the password after a failed live test", async () => {
+    installSecondLoopBootstrap();
+    const mail = stubMailOnboardingFetch({ failConnect: true });
+    window.history.replaceState(null, "", "/#connections");
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", {
+      name: /Add account|connections\.mailOnboarding\.add$/,
+    }));
+    const email = screen.getByLabelText(
+      /Email address|connections\.mailOnboarding\.email/,
+    );
+    const password = screen.getByLabelText(
+      /App password|connections\.mailOnboarding\.password/,
+    );
+    await user.type(email, "retry@example.test");
+    await user.type(password, "failed-test-secret");
+    await user.click(screen.getByRole("button", {
+      name: /Save and test|connections\.mailOnboarding\.saveAndTest/,
+    }));
+
+    expect(await screen.findByRole("alert"))
+      .toHaveTextContent(/The settings were saved|connections\.mailOnboarding\.testFailed/);
+    expect(email).toHaveValue("retry@example.test");
+    expect(password).toHaveValue("");
+    expect(mail.saved?.password).toBe("failed-test-secret");
+    expect(screen.getByRole("button", {
+      name: /Test again|connections\.mailOnboarding\.retryTest/,
+    })).toBeEnabled();
+  });
+
+  it("edits a Mail account only with an explicit credential rotation", async () => {
+    installSecondLoopBootstrap();
+    const mail = stubMailOnboardingFetch({ initialConfiguration: mailConfigurationFixture() });
+    window.history.replaceState(null, "", "/#connections");
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", {
+      name: /Edit|connections\.mailOnboarding\.edit/,
+    }));
+    expect(screen.getByLabelText(
+      /Email address|connections\.mailOnboarding\.email/,
+    )).toHaveValue("user@example.test");
+    const password = screen.getByLabelText(
+      /App password|connections\.mailOnboarding\.password/,
+    );
+    expect(password).toHaveValue("");
+    await user.type(password, "rotated-secret");
+    await user.click(screen.getByRole("button", {
+      name: /Save and test|connections\.mailOnboarding\.saveAndTest/,
+    }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(mail.saved?.password).toBe("rotated-secret");
+    expect(mail.saved).not.toHaveProperty("id");
+  });
+
+  it("removes Mail settings and credentials only after confirmation", async () => {
+    installSecondLoopBootstrap();
+    const mail = stubMailOnboardingFetch({ initialConfiguration: mailConfigurationFixture() });
+    window.history.replaceState(null, "", "/#connections");
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", {
+      name: /Remove|connections\.mailOnboarding\.remove/,
+    }));
+    expect(screen.getByRole("dialog")).toBeVisible();
+    expect(mail.deleted).toBe(false);
+    await user.click(screen.getByRole("button", {
+      name: /Remove account|connections\.mailOnboarding\.confirmRemove/,
+    }));
+
+    await waitFor(() => expect(mail.deleted).toBe(true));
+    expect(await screen.findByText(
+      /No Mail account is configured|connections\.mailOnboarding\.emptyTitle/,
+    )).toBeVisible();
   });
 
   it("exports and restores encrypted data through the trusted Desktop bridge", async () => {
@@ -198,15 +313,19 @@ describe("SecondLoop product shell", () => {
     ))).toHaveLength(1);
   });
 
-  it("shows authoritative tasks and schedules and completes a task once", async () => {
+  it("shows authoritative Calendar events, tasks, and schedules and completes a task once", async () => {
     installSecondLoopBootstrap();
+    installWorkspaceBindings();
     const fetch = stubTodayWorkflowFetch();
     const user = userEvent.setup();
     render(<App />);
 
     expect(await screen.findByText("Prepare the briefing")).toBeInTheDocument();
     expect(screen.getByText("Morning reminder")).toBeInTheDocument();
+    expect(screen.getByText("Calendar review")).toBeInTheDocument();
     expect(screen.getByText("today.sourceTasks · today.sourceStatus.ready")).toBeInTheDocument();
+    expect(screen.getByText("today.sourceCalendar · today.sourceStatus.ready")).toBeInTheDocument();
+    expect(screen.getByText("today.sourceContacts · today.sourceStatus.ready")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "today.completeTask" }));
 
     await waitFor(() => expect(fetch.mock.calls.some(([input, init]) => (
@@ -214,6 +333,42 @@ describe("SecondLoop product shell", () => {
       && init?.method === "POST"
     ))).toBe(true));
     expect(screen.queryByText("Prepare the briefing")).not.toBeInTheDocument();
+  });
+
+  it("does not reuse a Mail account for missing Workspace bindings", async () => {
+    installSecondLoopBootstrap();
+    const mail = stubMailOnboardingFetch({ initialConfiguration: mailConfigurationFixture() });
+    const user = userEvent.setup();
+    const { container } = render(<App />);
+
+    expect(await screen.findByText(
+      "today.sourceMail · today.sourceStatus.ready",
+    )).toBeInTheDocument();
+    expect(screen.getByText(
+      "today.sourceCalendar · today.sourceStatus.missing",
+    )).toBeInTheDocument();
+    expect(screen.getByText(
+      "today.sourceContacts · today.sourceStatus.missing",
+    )).toBeInTheDocument();
+    expect(container.querySelector(".today-error")).not.toBeInTheDocument();
+
+    const connections = container.querySelectorAll<HTMLButtonElement>(
+      ".secondloop-sidebar .secondloop-nav-item",
+    )[4];
+    await user.click(connections);
+    const cards = container.querySelectorAll(".connections-readiness-card");
+    await waitFor(() => {
+      expect(within(cards[1] as HTMLElement).getByText("connections.state.ready"))
+        .toBeInTheDocument();
+      expect(within(cards[2] as HTMLElement).getByText("connections.state.missing"))
+        .toBeInTheDocument();
+      expect(within(cards[3] as HTMLElement).getByText("connections.state.missing"))
+        .toBeInTheDocument();
+    });
+    expect(mail.fetch.mock.calls.some(([input]) => (
+      String(input).includes("/foundation/calendar/events")
+      || String(input).includes("/foundation/contacts")
+    ))).toBe(false);
   });
 
   it("captures one task and one independently scheduled reminder", async () => {
@@ -272,6 +427,21 @@ function installSecondLoopBootstrap(): void {
   installHostBootstrap(discovery);
 }
 
+function installWorkspaceBindings(): void {
+  window.localStorage.setItem("agentweave.workspace.bindings.v1", JSON.stringify({
+    "agentweave-calendar": {
+      accountId: "workspace-account",
+      providerId: "google-workspace",
+      updatedAt: "2026-07-16T00:00:00Z",
+    },
+    "agentweave-contacts": {
+      accountId: "workspace-account",
+      providerId: "google-workspace",
+      updatedAt: "2026-07-16T00:00:00Z",
+    },
+  }));
+}
+
 function stubFoundationFetch(): void {
   vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
     const url = String(input);
@@ -285,6 +455,7 @@ function stubVerticalSliceFetch() {
   const fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input);
     if (url.includes("/foundation/memory?")) return jsonResponse([memoryFixture()]);
+    if (url.endsWith("/foundation/mail/account-configurations")) return jsonResponse([]);
     if (url.endsWith("/foundation/mail/accounts")) return jsonResponse([accountFixture()]);
     if (url.endsWith("/foundation/mail/accounts/primary")) {
       return jsonResponse({ account: accountFixture(), detail: null, state: "connected" });
@@ -300,14 +471,114 @@ function stubVerticalSliceFetch() {
     if (url.endsWith("/foundation/actions")) return jsonResponse([actionFixture()]);
     if (url.includes("/foundation/tasks?")) return jsonResponse({ tasks: [], nextCursor: null });
     if (url.includes("/foundation/schedules?")) return jsonResponse([]);
+    if (url.includes("/foundation/calendar/events?")) return jsonResponse([]);
+    if (url.includes("/foundation/contacts?")) return jsonResponse([]);
     throw new Error(`Unexpected request: ${init?.method ?? "GET"} ${url}`);
   });
   vi.stubGlobal("fetch", fetch);
   return fetch;
 }
 
+function stubMailOnboardingFetch({
+  failConnect = false,
+  initialConfiguration = null,
+}: {
+  failConnect?: boolean;
+  initialConfiguration?: Record<string, unknown> | null;
+} = {}) {
+  let configuration = initialConfiguration;
+  const state: {
+    deleted: boolean;
+    saved: Record<string, unknown> | null;
+    fetch: ReturnType<typeof vi.fn>;
+  } = {
+    deleted: false,
+    saved: null,
+    fetch: vi.fn(),
+  };
+  state.fetch.mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input);
+    if (url.endsWith("/foundation/mail/account-configurations") && init?.method !== "PUT") {
+      return jsonResponse(configuration ? [configuration] : []);
+    }
+    if (url.includes("/foundation/mail/account-configurations/") && init?.method === "PUT") {
+      const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+      const id = decodeURIComponent(url.split("/").at(-1) ?? "primary");
+      state.saved = body;
+      configuration = { ...body, id, credentialConfigured: true };
+      return jsonResponse(configuration);
+    }
+    if (url.includes("/foundation/mail/account-configurations/") && init?.method === "DELETE") {
+      configuration = null;
+      state.deleted = true;
+      return jsonResponse({ deleted: true });
+    }
+    if (url.endsWith("/foundation/mail/accounts")) {
+      return jsonResponse(configuration ? [{
+        addresses: [],
+        displayName: configuration.displayName,
+        id: configuration.id,
+        primaryAddress: {
+          address: configuration.primaryAddress,
+          name: configuration.primaryName ?? null,
+        },
+      }] : []);
+    }
+    if (url.includes("/foundation/mail/accounts/") && init?.method === "POST" && failConnect) {
+      return new Response(JSON.stringify({ error: "connection failed" }), {
+        headers: { "content-type": "application/json" },
+        status: 503,
+      });
+    }
+    if (url.includes("/foundation/mail/accounts/")) {
+      const account = {
+        addresses: [],
+        displayName: configuration?.displayName ?? "Gmail",
+        id: configuration?.id ?? "primary",
+        primaryAddress: {
+          address: configuration?.primaryAddress ?? "user@example.test",
+          name: configuration?.primaryName ?? null,
+        },
+      };
+      return jsonResponse({ account, detail: null, state: "connected" });
+    }
+    if (url.includes("/foundation/tasks?")) {
+      return jsonResponse({ tasks: [], nextCursor: null });
+    }
+    if (url.includes("/foundation/schedules?")) return jsonResponse([]);
+    if (url.endsWith("/foundation/actions")) return jsonResponse([]);
+    if (url.includes("/foundation/calendar/events?")) return jsonResponse([]);
+    if (url.includes("/foundation/contacts?")) return jsonResponse([]);
+    throw new Error(`Unexpected request: ${init?.method ?? "GET"} ${url}`);
+  });
+  vi.stubGlobal("fetch", state.fetch);
+  return state;
+}
+
+function mailConfigurationFixture(): Record<string, unknown> {
+  return {
+    archiveMailbox: "Archive",
+    credentialConfigured: true,
+    displayName: "Work Mail",
+    draftsMailbox: "Drafts",
+    id: "primary",
+    imapHost: "imap.example.test",
+    imapPort: 993,
+    imapTls: "implicit",
+    primaryAddress: "user@example.test",
+    primaryName: "Local User",
+    sentMailbox: "Sent",
+    smtpHost: "smtp.example.test",
+    smtpPort: 587,
+    smtpTls: "start_tls",
+    trashMailbox: "Trash",
+    username: "user@example.test",
+  };
+}
+
 function stubTodayWorkflowFetch() {
   const due = new Date(Date.now() + 30 * 60_000).toISOString();
+  const eventEnd = new Date(Date.now() + 60 * 60_000).toISOString();
   const fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input);
     if (url.includes("/foundation/tasks?")) {
@@ -324,11 +595,36 @@ function stubTodayWorkflowFetch() {
       return jsonResponse({ ...scheduleFixture(due), id: "schedule-created" });
     }
     if (url.endsWith("/foundation/actions")) return jsonResponse([]);
-    if (url.endsWith("/foundation/mail/accounts")) return jsonResponse([]);
+    if (url.endsWith("/foundation/mail/accounts")) return jsonResponse([accountFixture()]);
+    if (url.includes("/foundation/calendar/events?")) {
+      return jsonResponse([calendarEventFixture(due, eventEnd)]);
+    }
+    if (url.includes("/foundation/contacts?")) return jsonResponse([]);
     throw new Error(`Unexpected request: ${init?.method ?? "GET"} ${url}`);
   });
   vi.stubGlobal("fetch", fetch);
   return fetch;
+}
+
+function calendarEventFixture(start: string, end: string) {
+  return {
+    content: {
+      attendees: [],
+      calendarId: "primary",
+      description: null,
+      end,
+      location: "Studio",
+      recurrence: null,
+      start,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      title: "Calendar review",
+    },
+    id: "event-1",
+    providerId: "provider-event-1",
+    status: "confirmed",
+    updatedAt: new Date().toISOString(),
+    version: 1,
+  };
 }
 
 function taskFixture(dueAt: string) {

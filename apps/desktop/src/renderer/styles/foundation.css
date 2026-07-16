@@ -283,9 +283,10 @@
 .action-hashes span { color: var(--color-text-subtle); font-size: 12px; }
 .action-hashes code { overflow-wrap: anywhere; color: var(--color-text-muted); font-size: 11px; line-height: 1.5; }
 .action-decision-row { display: flex; position: sticky; bottom: 0; justify-content: flex-end; gap: 12px; margin-top: 24px; padding: 16px 0 4px; background: linear-gradient(to bottom, transparent, var(--color-surface) 14px); }
-.action-decision-row .rt-Button { min-height: 34px; padding-inline: 14px; }
+.action-decision-row .rt-Button { min-height: 44px; padding-inline: 14px; }
 .action-terminal-note,
 .action-error-detail { display: block; margin-top: 22px; }
+.action-unknown-preview { display: block; margin-top: 22px; padding: 12px 14px; border: 1px dashed var(--color-border-strong); border-radius: 8px; line-height: 1.55; }
 
 @keyframes foundation-fade { from { opacity: 0; } }
 @keyframes foundation-rise { from { opacity: 0; transform: translate(-50%, calc(-50% + 10px)); } }
@@ -314,9 +315,14 @@
   .actions-detail { display: none; }
   .memory-mobile-detail { display: block; }
   .actions-mobile-detail { display: block; }
-  .memory-mobile-detail-content { top: auto; right: 0; bottom: 0; left: 0; width: 100%; max-height: 86vh; padding: 12px; transform: none; border-radius: 18px 18px 0 0; animation: foundation-sheet 180ms ease-out; }
+  .memory-mobile-detail-content { display: grid; top: auto; right: 0; bottom: 0; left: 0; width: 100%; max-height: 86vh; grid-template-rows: auto minmax(0, 1fr); padding: 0 12px 12px; overflow: hidden; transform: none; border-radius: 18px 18px 0 0; background: var(--color-background); animation: foundation-sheet 180ms ease-out; }
+  .foundation-dialog-overlay.actions-mobile-detail { bottom: calc(64px + env(safe-area-inset-bottom)); }
+  .actions-mobile-detail.memory-mobile-detail-content { bottom: calc(64px + env(safe-area-inset-bottom)); height: calc(100vh - 80px - env(safe-area-inset-bottom)); max-height: calc(100vh - 80px - env(safe-area-inset-bottom)); }
   .memory-mobile-detail-content .foundation-detail-card { border: 0 !important; box-shadow: none !important; }
-  .mobile-detail-close { position: sticky; z-index: 2; top: 0; margin: 0 0 -34px auto; }
+  .mobile-detail-header { display: flex; z-index: 3; min-height: 56px; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; padding: 6px 0; border-bottom: 1px solid var(--color-border); background: var(--color-background); }
+  .mobile-detail-header .foundation-dialog-title { font-size: 18px; }
+  .mobile-detail-close { margin-left: auto; }
+  .mobile-detail-body { min-height: 0; overflow: auto; }
   .dialog-close { width: 44px; height: 44px; }
   .foundation-detail-card { border-radius: 12px !important; }
   .foundation-entry-card > div { align-items: flex-start; flex-wrap: wrap; }

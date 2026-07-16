@@ -9,6 +9,11 @@ import {
   resolveFoundationAction
 } from "../api";
 import { useI18n } from "../i18n/I18nProvider";
+import {
+  type ClassifiedFoundationAction,
+  classifyFoundationAction,
+  foundationActionTitle,
+} from "../foundationActionPreview";
 import { FoundationHeader } from "./Accounts";
 
 type FoundationActionsProps = { embedded?: boolean; onBack: () => void };
@@ -77,7 +82,9 @@ export function FoundationActions({ embedded = false, onBack }: FoundationAction
 
   const select = (item: PendingFoundationAction) => {
     setSelectedId(item.approval.approval_id);
-    setDetailOpen(true);
+    if (typeof window.matchMedia === "function" && window.matchMedia("(max-width: 720px)").matches) {
+      setDetailOpen(true);
+    }
   };
 
   return (
@@ -125,7 +132,7 @@ export function FoundationActions({ embedded = false, onBack }: FoundationAction
               type="button"
             >
               <span className="memory-kind">{actionStatusLabel(item, t)}</span>
-              <strong>{item.preview?.subject || item.approval.binding.action_name}</strong>
+              <strong>{foundationActionTitle(item)}</strong>
               <small>{item.approval.binding.resource_target}</small>
             </button>
           ))}
@@ -152,25 +159,29 @@ export function FoundationActions({ embedded = false, onBack }: FoundationAction
         <Dialog.Portal>
           <Dialog.Overlay className="foundation-dialog-overlay actions-mobile-detail" />
           <Dialog.Content className="foundation-dialog-content actions-mobile-detail memory-mobile-detail-content">
-            <Dialog.Title className="sr-only">{t("foundation.actions.details")}</Dialog.Title>
-            <Dialog.Close asChild>
-              <button
-                aria-label={t("foundation.actions.closeDetails")}
-                className="dialog-close mobile-detail-close"
-                type="button"
-              >
-                <X size={16} />
-              </button>
-            </Dialog.Close>
-            {selected ? (
-              <ActionDetail
-                item={selected}
-                onApprove={() => void resolve("approve_once")}
-                onReject={() => void resolve("reject")}
-                resolving={resolving}
-                sanitizeErrors={embedded}
-              />
-            ) : null}
+            <div className="mobile-detail-header">
+              <Dialog.Title className="foundation-dialog-title">{t("foundation.actions.details")}</Dialog.Title>
+              <Dialog.Close asChild>
+                <button
+                  aria-label={t("foundation.actions.closeDetails")}
+                  className="dialog-close mobile-detail-close"
+                  type="button"
+                >
+                  <X size={16} />
+                </button>
+              </Dialog.Close>
+            </div>
+            <div className="mobile-detail-body">
+              {selected ? (
+                <ActionDetail
+                  item={selected}
+                  onApprove={() => void resolve("approve_once")}
+                  onReject={() => void resolve("reject")}
+                  resolving={resolving}
+                  sanitizeErrors={embedded}
+                />
+              ) : null}
+            </div>
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
@@ -192,14 +203,19 @@ function ActionDetail({
   sanitizeErrors: boolean;
 }): JSX.Element {
   const { t } = useI18n();
-  const preview = item.preview;
-  const pending = item.approval.status === "pending" && item.action.status === "waiting_approval";
+  const classified = classifyFoundationAction(item);
+  const pending = classified.kind !== "unknown"
+    && item.action.status !== "uncertain"
+    && item.approval.status === "pending"
+    && item.action.status === "waiting_approval";
   return (
     <Card className="foundation-detail-card action-detail-card" size="4">
       <Flex align="start" justify="between" gap="4" wrap="wrap">
         <div>
-          <Text className="foundation-kicker" size="1" weight="bold">{t("foundation.actions.mailSend")}</Text>
-          <Heading as="h2" mt="2" size="6">{preview?.subject || t("foundation.actions.externalAction")}</Heading>
+          <Text className="foundation-kicker" size="1" weight="bold">
+            {t(`foundation.actions.type.${classified.kind}`)}
+          </Text>
+          <Heading as="h2" mt="2" size="6">{foundationActionTitle(item)}</Heading>
         </div>
         <Badge color={pending ? "amber" : statusColor(item.action.status)} radius="full">
           {actionStatusLabel(item, t)}
@@ -210,20 +226,16 @@ function ActionDetail({
         <ShieldAlert aria-hidden="true" size={16} />
         {item.approval.binding.risk_summary}
       </Text>
-      {preview ? (
-        <dl className="mail-preview-grid">
-          <PreviewFact label={t("foundation.actions.account")} value={preview.accountId} />
-          <PreviewFact label={t("foundation.actions.from")} value={formatAddress(preview.from)} />
-          <PreviewFact label={t("foundation.actions.to")} value={formatAddresses(preview.to)} />
-          <PreviewFact label={t("foundation.actions.ccBcc")} value={formatAddresses([...preview.cc, ...preview.bcc]) || t("foundation.actions.none")} />
-          <PreviewFact label={t("foundation.actions.draftRevision")} value={`v${preview.draftRevision}`} />
-          <PreviewFact label={t("foundation.actions.attachments")} value={String(preview.attachments.length)} />
-        </dl>
-      ) : null}
+      <ActionPreview classified={classified} />
       <section className="action-hashes">
         <Text size="2" weight="bold">{t("foundation.actions.immutableBinding")}</Text>
+        <HashFact label={t("foundation.actions.actionName")} value={item.action.action_name} />
+        <HashFact label={t("foundation.actions.resource")} value={item.action.resource_target} />
+        <HashFact label={t("foundation.actions.idempotency")} value={item.action.idempotency_key} />
         <HashFact label={t("foundation.actions.arguments")} value={item.action.arguments_sha256} />
-        {preview ? <HashFact label={t("foundation.actions.preview")} value={preview.previewHash} /> : null}
+        {classified.kind !== "unknown"
+          ? <HashFact label={t("foundation.actions.preview")} value={classified.preview.previewHash} />
+          : null}
       </section>
       {item.action.last_error ? (
         <Text className="action-error-detail" color="red" size="2">
@@ -241,11 +253,78 @@ function ActionDetail({
         </div>
       ) : (
         <Text className="action-terminal-note" color="gray" size="2">
-          {t("foundation.actions.terminalNote")}
+          {classified.kind === "unknown"
+            ? t("foundation.actions.unknownDecision")
+            : item.action.status === "uncertain"
+            ? t("foundation.actions.uncertainNote")
+            : t("foundation.actions.terminalNote")}
         </Text>
       )}
     </Card>
   );
+}
+
+function ActionPreview({ classified }: {
+  classified: ClassifiedFoundationAction;
+}): JSX.Element | null {
+  const { t } = useI18n();
+  switch (classified.kind) {
+    case "mail": {
+      const preview = classified.preview;
+      return (
+        <dl className="mail-preview-grid">
+          <PreviewFact label={t("foundation.actions.account")} value={preview.accountId} />
+          <PreviewFact label={t("foundation.actions.from")} value={formatAddress(preview.from)} />
+          <PreviewFact label={t("foundation.actions.to")} value={formatAddresses(preview.to)} />
+          <PreviewFact label={t("foundation.actions.ccBcc")} value={formatAddresses([...preview.cc, ...preview.bcc]) || t("foundation.actions.none")} />
+          <PreviewFact label={t("foundation.actions.draftRevision")} value={`v${preview.draftRevision}`} />
+          <PreviewFact label={t("foundation.actions.attachments")} value={String(preview.attachments.length)} />
+        </dl>
+      );
+    }
+    case "calendar": {
+      const preview = classified.preview;
+      const content = preview.content;
+      return (
+        <dl className="mail-preview-grid">
+          <PreviewFact label={t("foundation.actions.account")} value={preview.accountId} />
+          <PreviewFact label={t("foundation.actions.operation")} value={t(`foundation.actions.calendar.${preview.kind}`)} />
+          <PreviewFact label={t("foundation.actions.event")} value={content?.title ?? preview.eventId ?? t("foundation.actions.none")} />
+          <PreviewFact label={t("foundation.actions.calendar")} value={content?.calendarId ?? t("foundation.actions.none")} />
+          <PreviewFact label={t("foundation.actions.time")} value={content ? formatCalendarRange(content.start, content.end) : t("foundation.actions.none")} />
+          <PreviewFact label={t("foundation.actions.timezone")} value={content?.timezone ?? t("foundation.actions.none")} />
+          <PreviewFact label={t("foundation.actions.location")} value={content?.location ?? t("foundation.actions.none")} />
+          <PreviewFact label={t("foundation.actions.attendees")} value={content ? formatAttendees(content.attendees) || t("foundation.actions.none") : t("foundation.actions.none")} />
+          <PreviewFact label={t("foundation.actions.recurrence")} value={content?.recurrence ?? t("foundation.actions.none")} />
+          <PreviewFact label={t("foundation.actions.expectedVersion")} value={preview.expectedVersion ? `v${preview.expectedVersion}` : t("foundation.actions.none")} />
+          <PreviewFact label={t("foundation.actions.conflicts")} value={String(preview.conflicts.length)} />
+          <PreviewFact label={t("foundation.actions.attendeeVisibility")} value={preview.attendeeVisible ? t("foundation.actions.visible") : t("foundation.actions.notVisible")} />
+        </dl>
+      );
+    }
+    case "contacts": {
+      const preview = classified.preview;
+      const replacement = preview.replacement;
+      return (
+        <dl className="mail-preview-grid">
+          <PreviewFact label={t("foundation.actions.account")} value={preview.accountId} />
+          <PreviewFact label={t("foundation.actions.contact")} value={replacement.displayName} />
+          <PreviewFact label={t("foundation.actions.contactId")} value={preview.contactId} />
+          <PreviewFact label={t("foundation.actions.expectedVersion")} value={`v${preview.expectedVersion}`} />
+          <PreviewFact label={t("foundation.actions.identities")} value={replacement.identities.map((identity) => `${identity.label ? `${identity.label}: ` : ""}${identity.value}`).join(", ")} />
+          <PreviewFact label={t("foundation.actions.organization")} value={replacement.organization ?? t("foundation.actions.none")} />
+          <PreviewFact label={t("foundation.actions.relationship")} value={replacement.relationship ?? t("foundation.actions.none")} />
+          <PreviewFact label={t("foundation.actions.providerId")} value={replacement.providerId ?? t("foundation.actions.none")} />
+        </dl>
+      );
+    }
+    case "unknown":
+      return (
+        <Text className="action-unknown-preview" color="gray" size="2">
+          {t("foundation.actions.unknownPreview")}
+        </Text>
+      );
+  }
 }
 
 function PreviewFact({ label, value }: { label: string; value: string }): JSX.Element {
@@ -262,6 +341,20 @@ function formatAddress(address: { name?: string | null; address: string }): stri
 
 function formatAddresses(addresses: Array<{ name?: string | null; address: string }>): string {
   return addresses.map(formatAddress).join(", ");
+}
+
+function formatCalendarRange(start: string, end: string): string {
+  const formatter = new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+  return `${formatter.format(new Date(start))} – ${formatter.format(new Date(end))}`;
+}
+
+function formatAttendees(attendees: readonly { address: string; displayName: string | null }[]): string {
+  return attendees.map((attendee) => attendee.displayName
+    ? `${attendee.displayName} <${attendee.address}>`
+    : attendee.address).join(", ");
 }
 
 function actionStatusLabel(item: PendingFoundationAction, t: Translate): string {

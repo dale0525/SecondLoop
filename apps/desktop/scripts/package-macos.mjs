@@ -250,7 +250,7 @@ export async function packageMacDesktop({
       executableName: plan.name,
       extraResource: readdirSync(staging.resourcesRoot).map((entry) => join(staging.resourcesRoot, entry)),
       name: plan.name,
-      osxSign: signIdentity ? { identity: signIdentity } : undefined,
+      osxSign: signIdentity ? { hardenedRuntime: true, identity: signIdentity } : undefined,
       out: plan.outputRoot,
       overwrite: false,
       platform: "darwin",

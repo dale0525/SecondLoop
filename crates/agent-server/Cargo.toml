@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 agent-runtime = { path = "../agent-runtime" }
+agent-provider-adapters = { path = "../provider-adapters" }
 anyhow.workspace = true
 async-trait.workspace = true
 axum.workspace = true
@@ -26,6 +27,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 tower = "0.5"
 tower-http = { version = "0.6", features = ["cors"] }
+url.workspace = true
 uuid.workspace = true
 zeroize.workspace = true
 

@@ -35,6 +35,7 @@ export type DesktopSidecarController = Readonly<{
 }>;
 
 export type DesktopSidecarControllerDependencies = Readonly<{
+  credentialVaultKey?: Buffer;
   dataProtectionKey?: Buffer;
   log?: SidecarSupervisorOptions["log"];
   prepareDirectory?: (directory: string) => void;
@@ -68,6 +69,9 @@ export function createDesktopSidecarController(
       log: dependencies.log,
       ...(dependencies.dataProtectionKey
         ? { dataProtectionKey: dependencies.dataProtectionKey }
+        : {}),
+      ...(dependencies.credentialVaultKey
+        ? { credentialVaultKey: dependencies.credentialVaultKey }
         : {}),
     });
     return Object.freeze({

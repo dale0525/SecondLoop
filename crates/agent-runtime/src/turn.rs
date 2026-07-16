@@ -64,6 +64,7 @@ pub struct TurnRunner<C> {
     automation_tools: Option<crate::automation_tools::AutomationToolRuntime>,
     attachment_tools: Option<crate::attachment_tools::AttachmentToolRuntime>,
     connector_tools: Option<crate::connector_tools::ConnectorToolRuntime>,
+    mail_actions: Option<crate::foundation_actions::MailActionService>,
 }
 
 impl<C> TurnRunner<C>
@@ -115,6 +116,7 @@ where
             automation_tools: None,
             attachment_tools: None,
             connector_tools: None,
+            mail_actions: None,
         }
     }
 
@@ -146,6 +148,14 @@ where
         connector_tools: crate::connector_tools::ConnectorToolRuntime,
     ) -> Self {
         self.connector_tools = Some(connector_tools);
+        self
+    }
+
+    pub fn with_mail_actions(
+        mut self,
+        mail_actions: crate::foundation_actions::MailActionService,
+    ) -> Self {
+        self.mail_actions = Some(mail_actions);
         self
     }
 
@@ -205,6 +215,10 @@ where
         observer: Option<&RuntimeEventObserver>,
     ) -> anyhow::Result<Vec<RuntimeEvent>> {
         let snapshot = lease.snapshot();
+        let turn_id = request
+            .turn_id
+            .clone()
+            .unwrap_or_else(|| Uuid::new_v4().to_string());
         let management = self
             .management
             .as_ref()
@@ -240,14 +254,23 @@ where
         if let Some(connectors) = &self.connector_tools {
             tools = tools.try_with_connector_tools(connectors.clone())?;
         }
+        if let Some(actions) = &self.mail_actions {
+            let context = request
+                .session_id
+                .clone()
+                .map(|session_id| {
+                    crate::foundation_actions::FoundationActionTurnContext::new(
+                        session_id,
+                        turn_id.clone(),
+                    )
+                })
+                .transpose()?;
+            tools = tools.try_with_mail_actions(actions.clone(), context)?;
+        }
         let tools = tools
             .with_turn_execution_lease(execution_lease.clone())
             .with_execution_observer(tool_observer);
         let skill_catalog = snapshot.catalog();
-        let turn_id = request
-            .turn_id
-            .clone()
-            .unwrap_or_else(|| Uuid::new_v4().to_string());
         let mut events = Vec::new();
         emit(
             &mut events,
@@ -449,6 +472,7 @@ where
                             );
                             return Ok(events);
                         }
+                        let persistence = tools.persistence_for(&name);
                         if let Some(requirement) = tools.approval_requirement(&name) {
                             emit(
                                 &mut events,
@@ -477,6 +501,7 @@ where
                                 RuntimeEvent::ToolCallFinished {
                                     call_id: call_id.clone(),
                                     result: result.clone(),
+                                    persistence,
                                 },
                             );
                             input.push(serde_json::json!({
@@ -506,6 +531,7 @@ where
                                 call_id: call_id.clone(),
                                 name: name.clone(),
                                 arguments: arguments.clone(),
+                                persistence,
                             },
                         );
                         input.push(serde_json::json!({
@@ -564,6 +590,7 @@ where
                             RuntimeEvent::ToolCallFinished {
                                 call_id: call_id.clone(),
                                 result: result.clone(),
+                                persistence,
                             },
                         );
                         input.push(serde_json::json!({

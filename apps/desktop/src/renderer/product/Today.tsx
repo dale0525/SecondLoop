@@ -35,6 +35,13 @@ import {
 } from "../api";
 import { useHostBootstrap } from "../hostBootstrap";
 import { useI18n } from "../i18n/I18nProvider";
+import { foundationActionTitle } from "../foundationActionPreview";
+import { loadWorkspaceAccountId } from "../workspaceBindings";
+import {
+  type FoundationCalendarEvent,
+  listFoundationCalendarEvents,
+  resolveFoundationContacts,
+} from "../workspaceApi";
 
 type SourceStatus = "ready" | "missing" | "error";
 
@@ -44,7 +51,10 @@ export function Today(): JSX.Element {
   const [actions, setActions] = useState<PendingFoundationAction[]>([]);
   const [tasks, setTasks] = useState<FoundationTaskRecord[]>([]);
   const [schedules, setSchedules] = useState<FoundationScheduleRecord[]>([]);
-  const [sources, setSources] = useState<Record<"mail" | "tasks" | "scheduler", SourceStatus>>({
+  const [events, setEvents] = useState<FoundationCalendarEvent[]>([]);
+  const [sources, setSources] = useState<Record<"calendar" | "contacts" | "mail" | "tasks" | "scheduler", SourceStatus>>({
+    calendar: "missing",
+    contacts: "missing",
     mail: "missing",
     tasks: "missing",
     scheduler: "missing",
@@ -82,6 +92,35 @@ export function Today(): JSX.Element {
       setSources((current) => ({ ...current, scheduler: "ready" }));
     } else {
       setSources((current) => ({ ...current, scheduler: "error" }));
+    }
+    const calendarAccountId = loadWorkspaceAccountId("agentweave-calendar");
+    const contactsAccountId = loadWorkspaceAccountId("agentweave-contacts");
+    const range = localDayRange();
+    const workspaceResults = await Promise.allSettled([
+      calendarAccountId
+        ? listFoundationCalendarEvents(calendarAccountId, range.start, range.end)
+        : Promise.resolve(null),
+      contactsAccountId
+        ? resolveFoundationContacts(contactsAccountId, "*", 1)
+        : Promise.resolve(null),
+    ]);
+    const [calendarResult, contactsResult] = workspaceResults;
+    if (calendarResult.status === "fulfilled") {
+      setEvents((calendarResult.value ?? []).filter((event) => event.status === "confirmed"));
+      setSources((current) => ({
+        ...current,
+        calendar: calendarResult.value === null ? "missing" : "ready",
+      }));
+    } else {
+      setSources((current) => ({ ...current, calendar: "error" }));
+    }
+    if (contactsResult.status === "fulfilled") {
+      setSources((current) => ({
+        ...current,
+        contacts: contactsResult.value === null ? "missing" : "ready",
+      }));
+    } else {
+      setSources((current) => ({ ...current, contacts: "error" }));
     }
     setLoading(false);
   };
@@ -153,6 +192,8 @@ export function Today(): JSX.Element {
             <SourcePill label={t("today.sourceMail")} status={sources.mail} />
             <SourcePill label={t("today.sourceTasks")} status={sources.tasks} />
             <SourcePill label={t("today.sourceScheduler")} status={sources.scheduler} />
+            <SourcePill label={t("today.sourceCalendar")} status={sources.calendar} />
+            <SourcePill label={t("today.sourceContacts")} status={sources.contacts} />
           </div>
         </div>
       </header>
@@ -165,12 +206,15 @@ export function Today(): JSX.Element {
       <div className="today-grid">
         <section className="today-main-column">
           <TodaySection
-            count={focusTasks.length + todaySchedules.length}
+            count={focusTasks.length + todaySchedules.length + events.length}
             icon={<CalendarDays size={17} />}
             title={t("today.focus")}
           >
-            {loading ? <LoadingRows /> : focusTasks.length + todaySchedules.length > 0 ? (
+            {loading ? <LoadingRows /> : focusTasks.length + todaySchedules.length + events.length > 0 ? (
               <div className="today-record-list">
+                {events.map((event) => (
+                  <CalendarEventRow event={event} key={event.id} />
+                ))}
                 {focusTasks.map((task) => (
                   <TaskRow
                     busy={busyTask === task.id}
@@ -198,7 +242,7 @@ export function Today(): JSX.Element {
             {loading ? <LoadingRows compact /> : pending.length > 0 ? pending.map((item) => (
               <article className="today-action-row" key={item.approval.approval_id}>
                 <span>
-                  <strong>{item.preview?.subject || item.approval.binding.action_name}</strong>
+                  <strong>{foundationActionTitle(item)}</strong>
                   <small>{item.approval.binding.resource_target}</small>
                 </span>
                 <Badge color="amber" radius="full">{t("today.pending")}</Badge>
@@ -284,6 +328,24 @@ function ScheduleRow({ schedule }: { schedule: FoundationScheduleRecord }): JSX.
       <Badge color={schedule.status === "paused" ? "gray" : "blue"} radius="full">
         {schedule.status === "paused" ? t("today.paused") : t("today.scheduled")}
       </Badge>
+    </article>
+  );
+}
+
+function CalendarEventRow({ event }: { event: FoundationCalendarEvent }): JSX.Element {
+  const { t } = useI18n();
+  return (
+    <article className="today-record-row">
+      <span className="today-schedule-mark"><CalendarDays size={15} /></span>
+      <span className="today-record-copy">
+        <strong>{event.content.title}</strong>
+        <small>
+          {formatEventRange(event.content.start, event.content.end)}
+          {event.content.location ? ` · ${event.content.location}` : ""}
+          {` · ${t("today.confirmedCalendar")}`}
+        </small>
+      </span>
+      <Badge color="green" radius="full">{t("today.calendarEvent")}</Badge>
     </article>
   );
 }
@@ -460,6 +522,19 @@ function formatWhen(value?: string | null): string {
     minute: "2-digit",
     month: "short",
   }).format(new Date(value));
+}
+
+function formatEventRange(start: string, end: string): string {
+  const formatter = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" });
+  return `${formatter.format(new Date(start))}–${formatter.format(new Date(end))}`;
+}
+
+function localDayRange(): { end: string; start: string } {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  return { end: end.toISOString(), start: start.toISOString() };
 }
 
 function isOverdue(task: FoundationTaskRecord): boolean {

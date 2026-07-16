@@ -128,9 +128,13 @@ export function Memory({ embedded = false, onBack }: MemoryProps): JSX.Element {
         <Dialog.Portal>
           <Dialog.Overlay className="foundation-dialog-overlay memory-mobile-detail" />
           <Dialog.Content className="foundation-dialog-content memory-mobile-detail memory-mobile-detail-content">
-            <Dialog.Title className="sr-only">{t("foundation.memory.details")}</Dialog.Title>
-            <Dialog.Close asChild><button aria-label={t("foundation.memory.closeDetails")} className="dialog-close mobile-detail-close" type="button"><X size={16} /></button></Dialog.Close>
-            {selected ? <MemoryDetail onForget={() => { setDetailOpen(false); setConfirmOpen(true); }} record={selected} /> : null}
+            <div className="mobile-detail-header">
+              <Dialog.Title className="foundation-dialog-title">{t("foundation.memory.details")}</Dialog.Title>
+              <Dialog.Close asChild><button aria-label={t("foundation.memory.closeDetails")} className="dialog-close mobile-detail-close" type="button"><X size={16} /></button></Dialog.Close>
+            </div>
+            <div className="mobile-detail-body">
+              {selected ? <MemoryDetail onForget={() => { setDetailOpen(false); setConfirmOpen(true); }} record={selected} /> : null}
+            </div>
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>

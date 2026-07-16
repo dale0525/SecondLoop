@@ -57,6 +57,7 @@ async fn prepared_destination_replacement_is_rejected_without_deleting_replaceme
     let displaced = managed.with_extension("approved-displaced");
     let waiter = spawn_approval(&fixture, &approval.approval_id);
     built.wait_entered().await;
+    make_directory_replaceable(&managed).await;
     tokio::fs::rename(&managed, &displaced).await.unwrap();
     tokio::fs::create_dir(&managed).await.unwrap();
     tokio::fs::write(managed.join("replacement-marker"), "external replacement")
@@ -703,6 +704,23 @@ async fn make_file_writable(path: &Path) {
     {
         use std::os::unix::fs::PermissionsExt;
         permissions.set_mode(0o644);
+    }
+    #[cfg(not(unix))]
+    permissions.set_readonly(false);
+    tokio::fs::set_permissions(path, permissions).await.unwrap();
+}
+
+async fn make_directory_replaceable(path: &Path) {
+    make_directory_writable(path).await;
+    make_directory_writable(path.parent().unwrap()).await;
+}
+
+async fn make_directory_writable(path: &Path) {
+    let mut permissions = tokio::fs::metadata(path).await.unwrap().permissions();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        permissions.set_mode(permissions.mode() | 0o300);
     }
     #[cfg(not(unix))]
     permissions.set_readonly(false);

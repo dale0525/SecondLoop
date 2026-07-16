@@ -345,7 +345,7 @@
           "host-tools"
         ],
         "connectors": [
-          "agentweave.connector.calendar/v1"
+          "agentweave-calendar"
         ],
         "hostTools": []
       },
@@ -623,7 +623,7 @@
           "host-tools"
         ],
         "connectors": [
-          "agentweave.connector.contacts/v1"
+          "agentweave-contacts"
         ],
         "hostTools": []
       },

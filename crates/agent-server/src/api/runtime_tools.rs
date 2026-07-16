@@ -19,6 +19,29 @@ impl AppState {
             self.storage.clone(),
             database_path,
             &self.app_prompt.identity.app_id,
+            &key,
+        )?);
+        Ok(self)
+    }
+
+    pub fn with_borrowed_data_protection(
+        mut self,
+        database_path: impl Into<std::path::PathBuf>,
+        key: &agent_runtime::credential::SecretMaterial,
+    ) -> anyhow::Result<Self> {
+        if !self
+            .app_prompt
+            .identity
+            .enabled_capabilities
+            .iter()
+            .any(|capability| capability == "data-protection")
+        {
+            return Ok(self);
+        }
+        self.data_protection = Some(crate::data_protection::DataProtectionService::new(
+            self.storage.clone(),
+            database_path,
+            &self.app_prompt.identity.app_id,
             key,
         )?);
         Ok(self)
@@ -34,7 +57,7 @@ impl AppState {
             self.storage.clone(),
             database_path,
             &self.app_prompt.identity.app_id,
-            key,
+            &key,
         )?);
         Ok(self)
     }
@@ -85,6 +108,20 @@ impl AppState {
 
     pub fn has_automation_tools(&self) -> bool {
         self.automation_tools.is_some()
+    }
+
+    pub fn allows_background_execution(&self, enabled_by_host: bool) -> bool {
+        self.runtime_config.agent_app_policy.as_ref().map_or(
+            self.has_automation_tools() || enabled_by_host,
+            |policy| {
+                policy.allows_background_execution(self.has_automation_tools(), enabled_by_host)
+            },
+        )
+    }
+
+    pub fn allows_automation_api(&self, enabled_by_host: bool) -> bool {
+        self.runtime_config.agent_app_policy.is_none()
+            || self.allows_background_execution(enabled_by_host)
     }
 
     pub(crate) fn connector_tools(

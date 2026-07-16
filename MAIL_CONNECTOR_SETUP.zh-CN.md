@@ -75,7 +75,26 @@ pixi run server
 
 启动时 Runtime 会验证配置、App scope、Secret ID 和 Connector Account 授权。缺失 Vault、scope 不一致、TLS 策略不安全或配置文件为符号链接时，Server 会 fail closed。
 
-## 5. 已知兼容性边界
+## 5. 运行专用账号 live smoke
+
+默认 Pull Request gate 只编译被忽略的 live 测试，不读取仓库 secret，也不连接外部邮箱。维护者配置受保护的 `live-mail-smoke` environment 后，可以手工运行 `.github/workflows/live-mail-smoke.yml`。
+
+该 environment 要求以下 secrets：
+
+- `LIVE_MAIL_IMAP_HOST`
+- `LIVE_MAIL_IMAP_PORT`
+- `LIVE_MAIL_SMTP_HOST`
+- `LIVE_MAIL_SMTP_PORT`
+- `LIVE_MAIL_USERNAME`
+- `LIVE_MAIL_PASSWORD`
+- `LIVE_MAIL_FROM_ADDRESS`
+- `LIVE_MAIL_TO_ADDRESS`
+
+`LIVE_MAIL_INBOX` 可选，默认值为 `INBOX`。`LIVE_MAIL_SMTP_TLS` 可选，默认值为 `start_tls`，也可设为 `implicit`。IMAP 始终使用隐式 TLS。
+
+发件人与收件人必须是同一个专用测试账号。Smoke 会列举真实 IMAP mailbox，创建带唯一标识的本地 draft，绑定精确 send preview 和 approval，经 SMTP 提交，然后等待相同 Message-ID 出现在 IMAP 中。工作流不会输出配置值、凭据或邮件正文。缺少 secret、收件人为外部地址、TLS 失败、SMTP 结果不确定或在限时内无法观测到邮件，都会让工作流失败。
+
+## 6. 已知兼容性边界
 
 - 支持 IMAP 邮箱列举、搜索、读取、已读标记和 move；thread 语义在缺少服务端 thread ID 时按单消息保守处理。
 - Draft 默认保存在本地 deterministic draft store；不同 IMAP 服务对 Drafts 文件夹行为差异较大。
@@ -83,4 +102,4 @@ pixi run server
 - HTML 邮件按不可信内容处理；活跃内容不会执行，外部邮件中的 Prompt-like 文本不能改变 Runtime 指令或审批策略。
 - OAuth、Gmail API 和 Microsoft Graph 应作为独立 adapter 接入，不应把 vendor 行为写进 Mail Foundation Skill。
 
-仓库默认 conformance gate 使用本地 Fake IMAP/SMTP server，不需要真实账号。Live provider 验证应单独开启，并使用专用测试账号。
+仓库默认 conformance gate 使用本地 Fake IMAP/SMTP server，不需要真实账号。受保护的 live smoke 是额外的显式 provider 检查。

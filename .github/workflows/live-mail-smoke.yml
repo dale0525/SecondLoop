@@ -1,0 +1,93 @@
+name: Live IMAP SMTP smoke
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/live-mail-smoke.yml"
+      - "crates/agent-runtime/src/credential.rs"
+      - "crates/agent-runtime/src/mail.rs"
+      - "crates/agent-runtime/src/mail_imap_smtp.rs"
+      - "crates/agent-runtime/src/mail_imap_smtp_support.rs"
+      - "crates/agent-runtime/tests/mail_live_smoke.rs"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "pixi.lock"
+      - "pixi.toml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    name: Compile live Mail contract
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: prefix-dev/setup-pixi@v0.9.0
+        with:
+          cache: true
+      - name: Compile ignored live smoke without credentials
+        run: pixi run cargo test -p agent-runtime --test mail_live_smoke --no-run
+
+  live:
+    name: Dedicated account round trip
+    if: github.event_name == 'workflow_dispatch'
+    environment: live-mail-smoke
+    needs: contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: prefix-dev/setup-pixi@v0.9.0
+        with:
+          cache: true
+      - name: Require dedicated account secrets
+        shell: bash
+        env:
+          LIVE_MAIL_FROM_ADDRESS: ${{ secrets.LIVE_MAIL_FROM_ADDRESS }}
+          LIVE_MAIL_IMAP_HOST: ${{ secrets.LIVE_MAIL_IMAP_HOST }}
+          LIVE_MAIL_IMAP_PORT: ${{ secrets.LIVE_MAIL_IMAP_PORT }}
+          LIVE_MAIL_PASSWORD: ${{ secrets.LIVE_MAIL_PASSWORD }}
+          LIVE_MAIL_SMTP_HOST: ${{ secrets.LIVE_MAIL_SMTP_HOST }}
+          LIVE_MAIL_SMTP_PORT: ${{ secrets.LIVE_MAIL_SMTP_PORT }}
+          LIVE_MAIL_TO_ADDRESS: ${{ secrets.LIVE_MAIL_TO_ADDRESS }}
+          LIVE_MAIL_USERNAME: ${{ secrets.LIVE_MAIL_USERNAME }}
+        run: |
+          required=(
+            LIVE_MAIL_FROM_ADDRESS
+            LIVE_MAIL_IMAP_HOST
+            LIVE_MAIL_IMAP_PORT
+            LIVE_MAIL_PASSWORD
+            LIVE_MAIL_SMTP_HOST
+            LIVE_MAIL_SMTP_PORT
+            LIVE_MAIL_TO_ADDRESS
+            LIVE_MAIL_USERNAME
+          )
+          for variable in "${required[@]}"; do
+            if [[ -z "${!variable:-}" ]]; then
+              echo "Required live Mail secret is missing: ${variable}" >&2
+              exit 1
+            fi
+          done
+      - name: Run IMAP and SMTP round trip
+        env:
+          AGENTWEAVE_LIVE_MAIL_ENABLED: "1"
+          AGENTWEAVE_LIVE_MAIL_FROM_ADDRESS: ${{ secrets.LIVE_MAIL_FROM_ADDRESS }}
+          AGENTWEAVE_LIVE_MAIL_IMAP_HOST: ${{ secrets.LIVE_MAIL_IMAP_HOST }}
+          AGENTWEAVE_LIVE_MAIL_IMAP_PORT: ${{ secrets.LIVE_MAIL_IMAP_PORT }}
+          AGENTWEAVE_LIVE_MAIL_INBOX: ${{ secrets.LIVE_MAIL_INBOX }}
+          AGENTWEAVE_LIVE_MAIL_PASSWORD: ${{ secrets.LIVE_MAIL_PASSWORD }}
+          AGENTWEAVE_LIVE_MAIL_SMTP_HOST: ${{ secrets.LIVE_MAIL_SMTP_HOST }}
+          AGENTWEAVE_LIVE_MAIL_SMTP_PORT: ${{ secrets.LIVE_MAIL_SMTP_PORT }}
+          AGENTWEAVE_LIVE_MAIL_SMTP_TLS: ${{ secrets.LIVE_MAIL_SMTP_TLS }}
+          AGENTWEAVE_LIVE_MAIL_TO_ADDRESS: ${{ secrets.LIVE_MAIL_TO_ADDRESS }}
+          AGENTWEAVE_LIVE_MAIL_USERNAME: ${{ secrets.LIVE_MAIL_USERNAME }}
+        run: >-
+          pixi run cargo test
+          -p agent-runtime
+          --test mail_live_smoke
+          live_imap_smtp_round_trip
+          --
+          --exact
+          --ignored

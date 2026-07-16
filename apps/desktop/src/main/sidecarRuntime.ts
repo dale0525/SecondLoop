@@ -123,6 +123,7 @@ function managedEnvironment(options: {
   delete env.AGENTWEAVE_SERVER_TOKEN;
   delete env.AGENTWEAVE_SIDECAR_EXECUTABLE;
   delete env.AGENTWEAVE_DESKTOP_URL;
+  delete env.AGENTWEAVE_APP_PACKAGES_ROOT;
   delete env.AGENTWEAVE_LAUNCH_CONFIG_FD;
   delete env.AGENTWEAVE_LAUNCH_RESULT_FD;
   env.AGENTWEAVE_APP_DATA_ROOT = options.dataRoot;
@@ -131,6 +132,7 @@ function managedEnvironment(options: {
   env.AGENTWEAVE_MANAGED_SKILLS ??= "1";
   if (options.isPackaged) {
     env.AGENTWEAVE_APP_ROOT = path.join(options.resourcesPath, "agent-app", "app");
+    env.AGENTWEAVE_APP_PACKAGES_ROOT = path.join(options.resourcesPath, "agent-app", "packages");
     env.AGENTWEAVE_BUILTIN_SKILLS_MODE = "directory";
     env.AGENTWEAVE_SKILLS_ROOT = path.join(options.resourcesPath, "skills");
   } else {

@@ -31,7 +31,9 @@ tokio-stream.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
 unicode-normalization.workspace = true
+url.workspace = true
 uuid.workspace = true
+zeroize.workspace = true
 
 rustix.workspace = true
 

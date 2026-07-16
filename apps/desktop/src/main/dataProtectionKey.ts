@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { hkdfSync, randomBytes } from "node:crypto";
 import {
   closeSync,
   existsSync,
@@ -55,6 +55,19 @@ export function unwrapDataProtectionKey(
   safeStorage: SafeStorageLike,
 ): Buffer {
   return decryptStoredKey({ encryptedKey: wrappedKey, schemaVersion: 1 }, safeStorage);
+}
+
+export function deriveCredentialVaultKey(dataProtectionKey: Buffer): Buffer {
+  if (dataProtectionKey.byteLength !== 32) {
+    throw new Error("Data protection key is invalid");
+  }
+  return Buffer.from(hkdfSync(
+    "sha256",
+    dataProtectionKey,
+    Buffer.from("agentweave.desktop.key-derivation.v1", "utf8"),
+    Buffer.from("agentweave.credential-vault.v1", "utf8"),
+    32,
+  ));
 }
 
 function decryptStoredKey(

@@ -5,7 +5,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { loadOrCreateDataProtectionKey } from "../src/main/dataProtectionKey";
+import {
+  deriveCredentialVaultKey,
+  loadOrCreateDataProtectionKey,
+} from "../src/main/dataProtectionKey";
 
 const roots: string[] = [];
 
@@ -14,6 +17,16 @@ afterEach(() => {
 });
 
 describe("desktop data protection key", () => {
+  it("derives a stable domain-separated credential Vault key", () => {
+    const root = Buffer.alloc(32, 7);
+    const first = deriveCredentialVaultKey(root);
+
+    expect(first).toEqual(deriveCredentialVaultKey(root));
+    expect(first).toHaveLength(32);
+    expect(first).not.toEqual(root);
+    expect(deriveCredentialVaultKey(Buffer.alloc(32, 8))).not.toEqual(first);
+  });
+
   it("persists only an operating-system-encrypted 32-byte key", () => {
     const root = temporaryRoot();
     const storagePath = path.join(root, "data-protection-key.v1.json");

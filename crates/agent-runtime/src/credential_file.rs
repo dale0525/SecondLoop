@@ -21,6 +21,15 @@ pub struct EncryptedFileSecretStore {
 
 impl EncryptedFileSecretStore {
     pub fn new(root: impl Into<PathBuf>, master_key: SecretMaterial) -> anyhow::Result<Self> {
+        Self::new_borrowed(root, &master_key)
+    }
+
+    /// Builds a store from borrowed startup key material without requiring the
+    /// caller to create another secret-bearing allocation.
+    pub fn new_borrowed(
+        root: impl Into<PathBuf>,
+        master_key: &SecretMaterial,
+    ) -> anyhow::Result<Self> {
         anyhow::ensure!(
             master_key.expose_bytes().len() == 32,
             "secret store master key must be 32 bytes"
@@ -280,8 +289,8 @@ mod tests {
             .unwrap();
             assert!(!bytes.windows(12).any(|window| window == b"secret-value"));
         }
-        let store =
-            EncryptedFileSecretStore::new(&root, SecretMaterial::new(key).unwrap()).unwrap();
+        let borrowed_key = SecretMaterial::new(key).unwrap();
+        let store = EncryptedFileSecretStore::new_borrowed(&root, &borrowed_key).unwrap();
         assert_eq!(
             store
                 .load(&scope("app-a"), &id)

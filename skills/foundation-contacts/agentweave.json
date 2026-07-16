@@ -10,6 +10,6 @@
     "packages": [],
     "capabilities": ["approval-engine", "credential-vault", "host-tools"],
     "runtimeTools": [],
-    "connectors": ["agentweave.connector.contacts/v1"]
+    "connectors": ["agentweave-contacts"]
   }
 }

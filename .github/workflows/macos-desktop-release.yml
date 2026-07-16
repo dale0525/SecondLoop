@@ -1,0 +1,234 @@
+name: macOS Desktop release
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: Example Agent App to release
+        required: true
+        type: choice
+        options:
+          - minimal-agent
+          - secretary-agent
+      release_tag:
+        description: New GitHub release tag
+        required: true
+        type: string
+      publish_release:
+        description: Publish after uploading; otherwise leave a draft release
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: macos-release-${{ inputs.app }}-${{ inputs.release_tag }}
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: Validate release request
+    environment: macos-release
+    runs-on: ubuntu-24.04
+    outputs:
+      app_input: ${{ steps.release-inputs.outputs.app_input }}
+      download_base_url: ${{ steps.release-inputs.outputs.download_base_url }}
+    steps:
+      - name: Resolve trusted release inputs
+        id: release-inputs
+        shell: bash
+        env:
+          APP: ${{ inputs.app }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          case "$APP" in
+            minimal-agent|secretary-agent)
+              app_input="examples/$APP"
+              ;;
+            *)
+              echo "Unsupported release App: $APP" >&2
+              exit 1
+              ;;
+          esac
+          if [[ ! "$RELEASE_TAG" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]]; then
+            echo "Release tag is not file-safe" >&2
+            exit 1
+          fi
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "GitHub release already exists: $RELEASE_TAG" >&2
+            exit 1
+          fi
+          echo "app_input=$app_input" >> "$GITHUB_OUTPUT"
+          echo "download_base_url=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+
+  package:
+    name: Build ${{ matrix.architecture }} release
+    environment: macos-release
+    needs: preflight
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - architecture: arm64
+            runner: macos-15
+          - architecture: x64
+            runner: macos-15-intel
+    steps:
+      - uses: actions/checkout@v4
+      - uses: prefix-dev/setup-pixi@v0.9.0
+        with:
+          cache: true
+      - name: Require protected release secrets
+        shell: bash
+        env:
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+        run: |
+          required=(
+            APPLE_APP_SPECIFIC_PASSWORD
+            APPLE_ID
+            APPLE_TEAM_ID
+            MACOS_CERTIFICATE_P12_BASE64
+            MACOS_CERTIFICATE_PASSWORD
+            MACOS_SIGN_IDENTITY
+          )
+          for variable in "${required[@]}"; do
+            if [[ -z "${!variable:-}" ]]; then
+              echo "Required macOS release secret is missing: ${variable}" >&2
+              exit 1
+            fi
+          done
+      - name: Install Desktop dependencies
+        run: pixi run npm --prefix apps/desktop ci
+      - name: Import Developer ID certificate
+        id: release-keychain
+        shell: bash
+        env:
+          MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          certificate_path="$RUNNER_TEMP/developer-id.p12"
+          keychain_path="$RUNNER_TEMP/agentweave-release.keychain-db"
+          keychain_password="$(openssl rand -hex 32)"
+          printf '%s' "$MACOS_CERTIFICATE_P12_BASE64" | base64 --decode > "$certificate_path"
+          security create-keychain -p "$keychain_password" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          security import "$certificate_path" \
+            -k "$keychain_path" \
+            -P "$MACOS_CERTIFICATE_PASSWORD" \
+            -A \
+            -t cert \
+            -f pkcs12
+          security set-key-partition-list \
+            -S apple-tool:,apple: \
+            -s \
+            -k "$keychain_password" \
+            "$keychain_path"
+          security list-keychains -d user -s "$keychain_path"
+          rm -f "$certificate_path"
+          echo "path=$keychain_path" >> "$GITHUB_OUTPUT"
+      - name: Store notarization credentials in the temporary keychain
+        shell: bash
+        env:
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          xcrun notarytool store-credentials agentweave-ci \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --keychain "${{ steps.release-keychain.outputs.path }}" \
+            --validate
+      - name: Build Developer ID package
+        shell: bash
+        env:
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+        run: >-
+          pixi run package-macos
+          --input "${{ needs.preflight.outputs.app_input }}"
+          --output dist/macos/release-input
+          --arch "${{ matrix.architecture }}"
+          --sign-identity "$MACOS_SIGN_IDENTITY"
+          --overwrite
+      - name: Locate App bundle
+        id: app-bundle
+        shell: bash
+        run: |
+          app_path="$(find dist/macos/release-input -mindepth 2 -maxdepth 2 -type d -name '*.app' -print -quit)"
+          test -n "$app_path"
+          echo "path=$app_path" >> "$GITHUB_OUTPUT"
+      - name: Smoke packaged sidecar
+        run: >-
+          pixi run packaged-sidecar-check
+          --app "${{ steps.app-bundle.outputs.path }}"
+      - name: Notarize and prepare release artifacts
+        shell: bash
+        run: >-
+          pixi run release-macos
+          --app "${{ steps.app-bundle.outputs.path }}"
+          --output dist/macos/release
+          --download-base-url "${{ needs.preflight.outputs.download_base_url }}"
+          --notary-profile agentweave-ci
+          --keychain "${{ steps.release-keychain.outputs.path }}"
+          --overwrite
+      - name: Upload immutable workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-${{ matrix.architecture }}
+          path: dist/macos/release/*
+          if-no-files-found: error
+          retention-days: 30
+      - name: Delete temporary release credentials
+        if: always()
+        shell: bash
+        run: |
+          rm -f "$RUNNER_TEMP/developer-id.p12"
+          security delete-keychain "$RUNNER_TEMP/agentweave-release.keychain-db" || true
+
+  publish:
+    name: Create GitHub release
+    environment: macos-release
+    needs:
+      - preflight
+      - package
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download verified release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-assets-*
+          path: dist/macos/release
+          merge-multiple: true
+      - name: Create draft GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: >-
+          gh release create "$RELEASE_TAG"
+          dist/macos/release/*
+          --draft
+          --generate-notes
+          --repo "$GITHUB_REPOSITORY"
+          --target "$GITHUB_SHA"
+          --title "$RELEASE_TAG"
+      - name: Publish GitHub release
+        if: inputs.publish_release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: >-
+          gh release edit "$RELEASE_TAG"
+          --draft=false
+          --repo "$GITHUB_REPOSITORY"

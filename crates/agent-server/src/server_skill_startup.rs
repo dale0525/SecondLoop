@@ -148,10 +148,9 @@ pub(super) async fn load_skill_manager_with_mode(
 
 pub(super) async fn load_app_package_source_from_env()
 -> anyhow::Result<Option<Arc<dyn SkillSource>>> {
-    let Ok(app_root) = std::env::var("AGENTWEAVE_APP_ROOT") else {
+    let Some(packages) = app_packages_root_from_lookup(|name| std::env::var_os(name))? else {
         return Ok(None);
     };
-    let packages = PathBuf::from(app_root).join("packages");
     match tokio::fs::symlink_metadata(&packages).await {
         Ok(metadata) => anyhow::ensure!(
             metadata.is_dir() && !metadata.file_type().is_symlink(),
@@ -164,6 +163,22 @@ pub(super) async fn load_app_package_source_from_env()
         SkillLayer::Session,
         packages,
     ))))
+}
+
+pub(super) fn app_packages_root_from_lookup<F>(lookup: F) -> anyhow::Result<Option<PathBuf>>
+where
+    F: Fn(&str) -> Option<std::ffi::OsString>,
+{
+    if let Some(root) = lookup("AGENTWEAVE_APP_PACKAGES_ROOT") {
+        anyhow::ensure!(!root.is_empty(), "Agent App packages root cannot be empty");
+        let root = PathBuf::from(root);
+        anyhow::ensure!(
+            root.is_absolute(),
+            "Agent App packages root must be absolute"
+        );
+        return Ok(Some(root));
+    }
+    Ok(lookup("AGENTWEAVE_APP_ROOT").map(|root| PathBuf::from(root).join("packages")))
 }
 
 pub(super) async fn load_builtin_skill_source(

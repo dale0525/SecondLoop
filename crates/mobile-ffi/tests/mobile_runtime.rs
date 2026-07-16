@@ -52,6 +52,7 @@ fn mobile_config(root: &std::path::Path) -> MobileInitConfig {
             "secure_storage".into(),
             "model.http_provider".into(),
         ],
+        storage_protection_key_hex: None,
     }
 }
 
@@ -99,6 +100,53 @@ fn initializes_runtime_and_returns_android_capabilities() {
     assert_eq!(diagnostics.platform, "android");
     assert!(diagnostics.capabilities.contains(&"network.http".into()));
     assert!(diagnostics.database_ready);
+    assert_eq!(diagnostics.storage_protection_state, "not_provided");
+}
+
+#[test]
+fn mobile_init_config_redacts_storage_protection_key() {
+    let dir = tempdir().unwrap();
+    let mut config = android_config(dir.path());
+    let secret = "11".repeat(32);
+    let mut wire = serde_json::to_value(&config).unwrap();
+    wire["storage_protection_key_hex"] = serde_json::Value::String(secret.clone());
+    config = serde_json::from_value(wire).unwrap();
+
+    let debug = format!("{config:?}");
+    let serialized = serde_json::to_string(&config).unwrap();
+
+    assert!(!debug.contains(&secret));
+    assert!(debug.contains("storage_protection_key_configured: true"));
+    assert!(!serialized.contains(&secret));
+    assert!(!serialized.contains("storage_protection_key_hex"));
+}
+
+#[test]
+fn configured_mobile_storage_key_does_not_claim_active_protection_without_provider() {
+    let dir = tempdir().unwrap();
+    let mut config = android_config(dir.path());
+    let database_path = config.database_path.clone();
+    config.storage_protection_key_hex = Some("22".repeat(32));
+
+    let runtime = MobileRuntime::initialize(config).unwrap();
+    let diagnostics = runtime.diagnostics().unwrap();
+
+    assert_eq!(diagnostics.storage_protection_state, "configured");
+    let database_header = std::fs::read(database_path).unwrap();
+    assert!(database_header.starts_with(b"SQLite format 3\0"));
+}
+
+#[test]
+fn invalid_mobile_storage_key_is_not_echoed_in_errors() {
+    let dir = tempdir().unwrap();
+    let mut config = android_config(dir.path());
+    let invalid_secret = "not-a-storage-key".repeat(4);
+    config.storage_protection_key_hex = Some(invalid_secret.clone());
+
+    let error = MobileRuntime::initialize(config).err().unwrap().to_string();
+
+    assert!(!error.contains(&invalid_secret));
+    assert!(error.contains("exactly 64 hexadecimal characters"));
 }
 
 #[test]

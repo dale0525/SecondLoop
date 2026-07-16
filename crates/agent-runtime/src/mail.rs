@@ -9,6 +9,9 @@ pub const MAX_BODY_CHUNK_BYTES: u32 = 256 * 1_024;
 pub const MAX_ATTACHMENT_CHUNK_BYTES: u32 = 256 * 1_024;
 pub const MAX_OUTGOING_BODY_BYTES: usize = 2 * 1_024 * 1_024;
 pub const MAX_RECIPIENTS: usize = 200;
+pub const MAX_DRAFT_ATTACHMENTS: usize = 20;
+pub const MAX_DRAFT_ATTACHMENT_BYTES: u64 = 16 * 1024 * 1024;
+pub const MAX_DRAFT_ATTACHMENTS_TOTAL_BYTES: u64 = 32 * 1024 * 1024;
 
 pub type MailResult<T> = Result<T, MailError>;
 
@@ -447,11 +450,58 @@ impl OutgoingBody {
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DraftAttachment {
+    pub host_attachment_id: Option<String>,
     pub source_message_id: Option<String>,
     pub source_attachment_id: Option<String>,
     pub file_name: String,
     pub mime_type: String,
     pub size_bytes: u64,
+    pub sha256: Option<String>,
+}
+
+impl DraftAttachment {
+    pub fn validate(&self) -> MailResult<()> {
+        let host = self.host_attachment_id.is_some();
+        let message = self.source_message_id.is_some();
+        let source = self.source_attachment_id.is_some();
+        let host_reference = host && !message && !source;
+        let message_reference = !host && message && source;
+        if !host_reference && !message_reference {
+            return Err(MailError::InvalidRequest(
+                "draft attachment must use one exact Host or source-message reference".into(),
+            ));
+        }
+        if self.file_name.trim().is_empty()
+            || self.file_name.len() > 255
+            || self.file_name.chars().any(char::is_control)
+            || self.mime_type.trim().is_empty()
+            || self.mime_type.len() > 255
+            || !self.mime_type.is_ascii()
+            || self.mime_type.chars().any(char::is_whitespace)
+            || !self.mime_type.contains('/')
+        {
+            return Err(MailError::InvalidRequest(
+                "draft attachment metadata is invalid".into(),
+            ));
+        }
+        if self.size_bytes > MAX_DRAFT_ATTACHMENT_BYTES {
+            return Err(MailError::BoundExceeded {
+                bound: "draft.attachment.bytes",
+                actual: usize::try_from(self.size_bytes).unwrap_or(usize::MAX),
+                maximum: MAX_DRAFT_ATTACHMENT_BYTES as usize,
+            });
+        }
+        if host
+            && self.sha256.as_ref().is_none_or(|hash| {
+                hash.len() != 64 || !hash.bytes().all(|byte| byte.is_ascii_hexdigit())
+            })
+        {
+            return Err(MailError::InvalidRequest(
+                "Host draft attachment requires an exact SHA-256".into(),
+            ));
+        }
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -496,6 +546,25 @@ impl DraftContent {
             return Err(MailError::InvalidRequest(
                 "draft cannot be both a reply and a forward".into(),
             ));
+        }
+        if self.attachments.len() > MAX_DRAFT_ATTACHMENTS {
+            return Err(MailError::BoundExceeded {
+                bound: "draft.attachments",
+                actual: self.attachments.len(),
+                maximum: MAX_DRAFT_ATTACHMENTS,
+            });
+        }
+        let mut total_bytes = 0_u64;
+        for attachment in &self.attachments {
+            attachment.validate()?;
+            total_bytes = total_bytes.saturating_add(attachment.size_bytes);
+        }
+        if total_bytes > MAX_DRAFT_ATTACHMENTS_TOTAL_BYTES {
+            return Err(MailError::BoundExceeded {
+                bound: "draft.attachments.totalBytes",
+                actual: usize::try_from(total_bytes).unwrap_or(usize::MAX),
+                maximum: MAX_DRAFT_ATTACHMENTS_TOTAL_BYTES as usize,
+            });
         }
         self.body.validate()
     }

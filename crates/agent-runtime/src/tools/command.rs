@@ -1,5 +1,6 @@
 use super::{
-    CommandMode, RuntimeConfig, RuntimeMode, ToolDefinition, ToolPermission, ToolSource, path,
+    CommandMode, RuntimeConfig, RuntimeMode, ToolDefinition, ToolPermission, ToolPersistence,
+    ToolSource, path,
     process::read_limited_child_output,
     result::{ToolError, ToolResult, ToolResultMetadata},
 };
@@ -27,6 +28,7 @@ pub fn definition() -> ToolDefinition {
         }),
         output_schema: None,
         permission: ToolPermission::ExecuteCommand,
+        persistence: ToolPersistence::Full,
         source: ToolSource::BuiltIn,
     }
 }

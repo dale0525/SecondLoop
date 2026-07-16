@@ -1,4 +1,11 @@
 use super::*;
+use crate::connector::ConnectorRuntime;
+use crate::connector_tools::{ConnectorToolRuntime, EphemeralConnectorContextProvider};
+use crate::credential::CredentialScope;
+use crate::foundation_actions::MailActionService;
+use crate::mail::{CreateDraftRequest, DraftContent, MailAccount, MailAddress, OutgoingBody};
+use crate::mail_connector_transport::MailConnectorTransport;
+use crate::mail_fake::FakeMailConnector;
 use crate::model_config::StoredModelConfig;
 use crate::platform::{CapabilitySet, PlatformId};
 use crate::skill::SkillRegistry;
@@ -16,7 +23,9 @@ use model_gateway::responses::GatewayEvent;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use tempfile::tempdir;
 
 struct FakeModel;
@@ -30,6 +39,56 @@ impl crate::turn::ModelClient for FakeModel {
         Ok(Box::pin(stream::iter(vec![Ok(GatewayEvent::TextDelta {
             text: "hello from android".into(),
         })])))
+    }
+}
+
+struct MobileMailPreviewModel {
+    calls: AtomicUsize,
+    draft_id: String,
+}
+
+#[async_trait::async_trait]
+impl crate::turn::ModelClient for MobileMailPreviewModel {
+    async fn stream(
+        &self,
+        request: model_gateway::responses::GatewayRequest,
+    ) -> anyhow::Result<crate::turn::ModelEventStream> {
+        let call = self.calls.fetch_add(1, Ordering::SeqCst);
+        let events = if call == 0 {
+            assert!(
+                request
+                    .tools
+                    .iter()
+                    .any(|tool| tool.advertised_name() == "mail_send_preview")
+            );
+            assert!(
+                request
+                    .tools
+                    .iter()
+                    .all(|tool| tool.advertised_name() != "mail_send")
+            );
+            vec![
+                GatewayEvent::ToolCall {
+                    call_id: "mobile-mail-preview".into(),
+                    name: "mail_send_preview".into(),
+                    legacy_alias_selected: false,
+                    arguments: json!({
+                        "accountId": "primary",
+                        "draftId": self.draft_id,
+                        "expectedRevision": 1
+                    }),
+                },
+                GatewayEvent::Completed,
+            ]
+        } else {
+            vec![
+                GatewayEvent::TextDelta {
+                    text: "Waiting for approval.".into(),
+                },
+                GatewayEvent::Completed,
+            ]
+        };
+        Ok(Box::pin(stream::iter(events.into_iter().map(Ok))))
     }
 }
 
@@ -94,6 +153,110 @@ async fn mobile_host_persists_turn_messages() {
     assert_eq!(messages.len(), 2);
     assert_eq!(messages[0].role, "user");
     assert_eq!(messages[1].content, "hello from android");
+}
+
+#[tokio::test]
+async fn mobile_host_persists_agent_mail_preview_as_session_bound_action() {
+    let dir = tempdir().unwrap();
+    let db_url = format!("sqlite://{}?mode=rwc", dir.path().join("ga.db").display());
+    let storage = Storage::connect(&db_url).await.unwrap();
+    let mail = Arc::new(FakeMailConnector::new());
+    mail.add_account(MailAccount {
+        id: "primary".into(),
+        display_name: "Work Mail".into(),
+        primary_address: MailAddress {
+            name: Some("Local User".into()),
+            address: "local@example.test".into(),
+        },
+        addresses: Vec::new(),
+        provider_reference: None,
+    })
+    .unwrap();
+    let connector_runtime = Arc::new(ConnectorRuntime::new(None, 256 * 1024).unwrap());
+    connector_runtime
+        .register(
+            MailConnectorTransport::descriptor("Fake Mail", true),
+            Arc::new(MailConnectorTransport::new(mail.clone())),
+        )
+        .await
+        .unwrap();
+    let scope = CredentialScope {
+        app_id: "agentweave.default".into(),
+        tenant_id: "local".into(),
+        user_id: "local-user".into(),
+    };
+    let context = Arc::new(
+        EphemeralConnectorContextProvider::fail_closed(scope.clone(), Duration::from_secs(2))
+            .unwrap(),
+    );
+    let connector_tools = ConnectorToolRuntime::load(connector_runtime, context.clone()).unwrap();
+    let draft = connector_tools
+        .execute_trusted_host_action(
+            "mail_draft_create",
+            "mobile-draft",
+            serde_json::to_value(CreateDraftRequest {
+                account_id: "primary".into(),
+                content: DraftContent {
+                    to: vec![MailAddress {
+                        name: Some("Recipient".into()),
+                        address: "recipient@example.test".into(),
+                    }],
+                    cc: Vec::new(),
+                    bcc: Vec::new(),
+                    subject: "Mobile approval".into(),
+                    body: OutgoingBody {
+                        plain_text: "Please review".into(),
+                        html: None,
+                    },
+                    attachments: Vec::new(),
+                    reply_context: None,
+                    forward_context: None,
+                },
+            })
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+    let actions = MailActionService::new(
+        &storage,
+        connector_tools.clone(),
+        context,
+        scope,
+        "mobile-agent-test-v1",
+    )
+    .await
+    .unwrap();
+    let host = MobileRuntimeHost::new_for_test(
+        storage,
+        MobileMailPreviewModel {
+            calls: AtomicUsize::new(0),
+            draft_id: draft["output"]["id"].as_str().unwrap().to_string(),
+        },
+        SkillRegistry::empty(),
+        SkillCatalog::empty(),
+        RuntimeConfig::workspace_write(dir.path(), dir.path()).without_builtin_tools(),
+        MobileRuntimeInit {
+            platform: PlatformId::Android,
+            capabilities: CapabilitySet::android_mvp(),
+        },
+    )
+    .with_foundations(None, Some(connector_tools))
+    .with_mail_actions(Some(actions.clone()));
+    let session = host.create_session("Mail approval").await.unwrap();
+
+    let result = host
+        .send_message(&session.id, "Send the reviewed draft")
+        .await
+        .unwrap();
+
+    assert_eq!(result.assistant_text, "Waiting for approval.");
+    let pending = actions.list_actions().await.unwrap();
+    assert_eq!(pending.len(), 1);
+    assert_eq!(
+        pending[0].approval.binding.session_id.as_deref(),
+        Some(session.id.as_str())
+    );
+    assert_eq!(mail.provider_submission_count(), 0);
 }
 
 #[tokio::test]

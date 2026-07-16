@@ -135,7 +135,31 @@ fn config(root: &Path, sources: Vec<Arc<dyn SkillSource>>) -> TenantSkillManager
         allowed_overrides: Vec::new(),
         runtime_version: "0.1.0".parse().unwrap(),
         management_policy: SkillManagementPolicy::owner_only(),
+        storage_protection_key: None,
+        credential_vault_key: None,
     }
+}
+
+#[tokio::test]
+async fn tenant_storage_receives_protection_key_before_open() {
+    let root = tempfile::tempdir().unwrap();
+    let mut tenant_config = config(root.path(), Vec::new());
+    tenant_config.storage_protection_key = Some(Arc::new(
+        agent_runtime::credential::SecretMaterial::new(vec![4; 32]).unwrap(),
+    ));
+    let factory = FilesystemTenantSkillManagerFactory::new(tenant_config)
+        .await
+        .unwrap();
+    let runtime = factory.create("protected").await.unwrap();
+    assert_eq!(
+        runtime.storage.protection_status().state(),
+        agent_runtime::storage_protection::StorageProtectionState::Configured
+    );
+    runtime.storage.close().await;
+    assert_eq!(
+        &std::fs::read(runtime.database_path).unwrap()[..16],
+        b"SQLite format 3\0"
+    );
 }
 
 async fn wait_for_path(path: &Path) {

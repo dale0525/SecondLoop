@@ -23,7 +23,7 @@ permissions:
 jobs:
   package:
     name: ${{ matrix.app }}
-    runs-on: macos-14
+    runs-on: macos-15
     strategy:
       fail-fast: false
       matrix:
@@ -47,12 +47,21 @@ jobs:
           --input ${{ matrix.input }}
           --output dist/macos/${{ matrix.app }}
           --overwrite
-      - name: Archive App bundle
+      - name: Locate App bundle
+        id: app-bundle
         shell: bash
         run: |
           app_path="$(find "dist/macos/${{ matrix.app }}" -mindepth 2 -maxdepth 2 -type d -name '*.app' -print -quit)"
           test -n "$app_path"
-          /usr/bin/ditto -c -k --keepParent "$app_path" "dist/macos/${{ matrix.app }}.zip"
+          echo "path=$app_path" >> "$GITHUB_OUTPUT"
+      - name: Smoke packaged sidecar
+        run: >-
+          pixi run packaged-sidecar-check
+          --app "${{ steps.app-bundle.outputs.path }}"
+      - name: Archive App bundle
+        shell: bash
+        run: |
+          /usr/bin/ditto -c -k --keepParent "${{ steps.app-bundle.outputs.path }}" "dist/macos/${{ matrix.app }}.zip"
       - uses: actions/upload-artifact@v4
         with:
           name: agentweave-${{ matrix.app }}-macos

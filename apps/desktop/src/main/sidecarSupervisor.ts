@@ -32,6 +32,7 @@ export type SidecarSpawn = (
 export type SidecarSupervisorOptions = {
   args?: string[];
   command: string;
+  credentialVaultKey?: Buffer;
   cwd: string;
   dataProtectionKey?: Buffer;
   env: NodeJS.ProcessEnv;
@@ -73,8 +74,9 @@ type ActiveTransport = {
 };
 
 export class DesktopSidecarSupervisor {
-  private readonly options: Required<Omit<SidecarSupervisorOptions, "args" | "dataProtectionKey" | "fetchImpl" | "log" | "now" | "spawnImpl" | "wait">> & Pick<SidecarSupervisorOptions, "log"> & {
+  private readonly options: Required<Omit<SidecarSupervisorOptions, "args" | "credentialVaultKey" | "dataProtectionKey" | "fetchImpl" | "log" | "now" | "spawnImpl" | "wait">> & Pick<SidecarSupervisorOptions, "log"> & {
     args: string[];
+    credentialVaultKey: Buffer | null;
     dataProtectionKey: Buffer | null;
     fetchImpl: typeof fetch;
     now: () => number;
@@ -100,6 +102,9 @@ export class DesktopSidecarSupervisor {
     this.options = {
       command: options.command,
       args: [...(options.args ?? [])],
+      credentialVaultKey: options.credentialVaultKey
+        ? Buffer.from(options.credentialVaultKey)
+        : null,
       dataProtectionKey: options.dataProtectionKey
         ? Buffer.from(options.dataProtectionKey)
         : null,
@@ -236,6 +241,7 @@ export class DesktopSidecarSupervisor {
         launchId,
         token,
         this.options.dataProtectionKey,
+        this.options.credentialVaultKey,
       );
       const origin = await readLaunchResult(
         child,
@@ -449,6 +455,7 @@ function writeLaunchConfig(
   launchId: string,
   token: Buffer,
   dataProtectionKey: Buffer | null,
+  credentialVaultKey: Buffer | null,
 ): Promise<void> {
   if (!stream || stream.destroyed) throw new Error("Sidecar launch pipe is unavailable");
   const document = JSON.stringify({
@@ -457,6 +464,9 @@ function writeLaunchConfig(
     transportToken: token.toString("base64url"),
     ...(dataProtectionKey
       ? { dataProtectionKeyHex: dataProtectionKey.toString("hex") }
+      : {}),
+    ...(credentialVaultKey
+      ? { credentialVaultKeyHex: credentialVaultKey.toString("hex") }
       : {}),
   });
   return new Promise((resolve, reject) => {
@@ -600,6 +610,9 @@ function validateOptions(options: DesktopSidecarSupervisor["options"]): void {
   if (!options.command || !options.cwd) throw new Error("Sidecar launch paths are required");
   if (options.dataProtectionKey && options.dataProtectionKey.byteLength !== 32) {
     throw new Error("Sidecar data protection key must be 32 bytes");
+  }
+  if (options.credentialVaultKey && options.credentialVaultKey.byteLength !== 32) {
+    throw new Error("Sidecar credential Vault key must be 32 bytes");
   }
   for (const [label, value] of [
     ["startup timeout", options.startupTimeoutMs],

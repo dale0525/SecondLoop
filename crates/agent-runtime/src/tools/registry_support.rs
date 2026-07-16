@@ -41,6 +41,16 @@ impl ToolRegistry {
         self.validate()
     }
 
+    pub fn try_with_mail_actions(
+        mut self,
+        actions: crate::foundation_actions::MailActionService,
+        context: Option<crate::foundation_actions::FoundationActionTurnContext>,
+    ) -> anyhow::Result<Self> {
+        self.mail_actions = Some(actions);
+        self.foundation_action_context = context;
+        self.validate()
+    }
+
     pub fn parallel_safe(&self, name: &str) -> bool {
         if self
             .task_tools

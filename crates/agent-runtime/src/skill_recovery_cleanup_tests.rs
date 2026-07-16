@@ -143,6 +143,7 @@ async fn cleanup_never_deletes_a_replacement_at_the_observed_path() {
     let manager = fixture.manager.clone();
     let cleanup = tokio::spawn(async move { manager.cleanup_unreferenced_revisions().await });
     gate.wait_entered().await;
+    make_directory_replaceable(&observed).await;
     tokio::fs::rename(&observed, &displaced).await.unwrap();
     tokio::fs::create_dir(&observed).await.unwrap();
     tokio::fs::write(observed.join("replacement-marker"), b"preserve")
@@ -158,4 +159,15 @@ async fn cleanup_never_deletes_a_replacement_at_the_observed_path() {
         b"preserve"
     );
     assert!(fixture.state.get_revision(&first).await.unwrap().is_some());
+}
+
+#[cfg(unix)]
+async fn make_directory_replaceable(path: &std::path::Path) {
+    use std::os::unix::fs::PermissionsExt;
+
+    for path in [path, path.parent().unwrap()] {
+        let mut permissions = tokio::fs::metadata(path).await.unwrap().permissions();
+        permissions.set_mode(permissions.mode() | 0o300);
+        tokio::fs::set_permissions(path, permissions).await.unwrap();
+    }
 }

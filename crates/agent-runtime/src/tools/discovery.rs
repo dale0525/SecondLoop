@@ -1,4 +1,4 @@
-use super::{ToolDefinition, ToolPermission, ToolSource};
+use super::{ToolDefinition, ToolPermission, ToolPersistence, ToolSource};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -111,6 +111,7 @@ impl ExternalToolConfig {
             input_schema: self.input_schema.clone(),
             output_schema: None,
             permission: self.permission,
+            persistence: ToolPersistence::for_permission(self.permission),
             source: self.source(),
         }))
     }

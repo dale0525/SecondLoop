@@ -1,7 +1,17 @@
 use super::*;
+use crate::approval::ApprovalDecision;
+use crate::attachments::{AttachmentScope, SqliteAttachmentStore};
+use crate::connector::ConnectorRuntime;
+use crate::connector_tools::{ConnectorToolRuntime, EphemeralConnectorContextProvider};
 use crate::credential::{
-    ConnectorAccount, InMemorySecretStore, SecretId, SecretMaterial, SecretStore,
+    ConnectorAccount, InMemorySecretStore, ProviderCredential, SecretId, SecretMaterial,
+    SecretStore,
 };
+use crate::foundation_actions::MailActionService;
+use crate::mail_attachments::StoredMailAttachmentSource;
+use crate::mail_connector_transport::MailConnectorTransport;
+use crate::storage::Storage;
+use async_imap::Authenticator;
 use std::collections::BTreeSet;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
@@ -52,6 +62,36 @@ fn config() -> ImapSmtpMailConfig {
     }
 }
 
+#[test]
+fn xoauth2_authentication_is_explicit_scoped_and_redacted_from_config() {
+    let authenticator = XOAuth2Authenticator {
+        username: "user@example.test",
+        token: "access-token",
+    };
+    let mut reference = &authenticator;
+    assert_eq!(
+        reference.process(&[]),
+        "user=user@example.test\u{1}auth=Bearer access-token\u{1}\u{1}"
+    );
+    let connector = ImapSmtpMailConnector::new(
+        config(),
+        Arc::new(CredentialVault::new(Arc::new(
+            InMemorySecretStore::default(),
+        ))),
+    )
+    .unwrap()
+    .with_xoauth2_authentication("agentweave-mail", BTreeSet::from(["provider.mail".into()]))
+    .unwrap();
+    assert_eq!(connector.authentication, MailAuthentication::XOAuth2);
+    assert_eq!(connector.credential_connector_id, "agentweave-mail");
+    assert!(
+        connector
+            .credential_scopes
+            .unwrap()
+            .contains("provider.mail")
+    );
+}
+
 async fn connector() -> ImapSmtpMailConnector {
     connector_with_config(config()).await
 }
@@ -69,18 +109,35 @@ async fn connector_with_config(config: ImapSmtpMailConfig) -> ImapSmtpMailConnec
         .unwrap();
     let vault = Arc::new(CredentialVault::new(store));
     vault
+        .register_provider_credential(
+            &scope(),
+            ProviderCredential {
+                access_secret_id: secret_id,
+                credential_id: "mail-primary".into(),
+                expires_at: None,
+                granted_scopes: BTreeSet::from([
+                    "mail.message.read".into(),
+                    "mail.message.organize".into(),
+                    "mail.message.send".into(),
+                ]),
+                provider_id: "imap-smtp".into(),
+                provider_subject: "user@example.test".into(),
+                refresh_secret_id: None,
+                revoked_at: None,
+            },
+        )
+        .unwrap();
+    vault
         .register_account(ConnectorAccount {
             account_id: "primary".into(),
-            connector_id: CONNECTOR_ID.into(),
-            provider_id: "imap-smtp".into(),
-            secret_id,
-            scope: scope(),
-            granted_scopes: BTreeSet::from([
+            allowed_scopes: BTreeSet::from([
                 "mail.message.read".into(),
                 "mail.message.organize".into(),
                 "mail.message.send".into(),
             ]),
-            expires_at: None,
+            connector_id: CONNECTOR_ID.into(),
+            credential_id: "mail-primary".into(),
+            scope: scope(),
         })
         .unwrap();
     ImapSmtpMailConnector::new(config, vault).unwrap()
@@ -175,7 +232,28 @@ async fn local_imap_and_smtp_servers_cover_read_draft_and_send_lifecycle() {
     let mut live = config();
     live.imap_port = imap_port;
     live.smtp_port = smtp_port;
-    let connector = connector_with_config(live).await;
+    let storage = Storage::connect("sqlite::memory:").await.unwrap();
+    let attachment_store = SqliteAttachmentStore::from_storage(&storage).await.unwrap();
+    let attachment_scope = AttachmentScope::new("com.example.agent", "local", "user").unwrap();
+    let attachment = attachment_store
+        .import(
+            &attachment_scope,
+            "brief.txt",
+            "text/plain",
+            b"attachment bytes",
+            "smtp-attachment-1",
+        )
+        .await
+        .unwrap();
+    let connector = Arc::new(
+        connector_with_config(live)
+            .await
+            .with_attachment_source(Arc::new(StoredMailAttachmentSource::new(
+                attachment_store,
+                attachment_scope,
+            ))),
+    );
+    assert!(connector.capability_report()["outgoing_attachments"]);
 
     let mailboxes = connector.list_mailboxes("primary").await.unwrap();
     assert!(
@@ -232,7 +310,15 @@ async fn local_imap_and_smtp_servers_cover_read_draft_and_send_lifecycle() {
                     plain_text: "Exactly once body".into(),
                     html: None,
                 },
-                attachments: vec![],
+                attachments: vec![DraftAttachment {
+                    host_attachment_id: Some(attachment.id),
+                    source_message_id: None,
+                    source_attachment_id: None,
+                    file_name: attachment.file_name,
+                    mime_type: attachment.mime_type,
+                    size_bytes: attachment.size_bytes,
+                    sha256: Some(attachment.sha256),
+                }],
                 reply_context: None,
                 forward_context: None,
             },
@@ -248,19 +334,61 @@ async fn local_imap_and_smtp_servers_cover_read_draft_and_send_lifecycle() {
         })
         .await
         .unwrap();
-    let receipt = connector
-        .send_approved(ApprovedSendRequest {
-            preview_id: preview.id.clone(),
-            approval: preview.approval_grant("approval-1"),
-        })
+    let runtime = Arc::new(ConnectorRuntime::new(None, 256 * 1024).unwrap());
+    runtime
+        .register(
+            MailConnectorTransport::descriptor("IMAP/SMTP Mail", false),
+            Arc::new(MailConnectorTransport::new(connector.clone())),
+        )
         .await
         .unwrap();
-    assert_eq!(receipt.state, DeliveryState::Delivered);
+    let context = Arc::new(
+        EphemeralConnectorContextProvider::fail_closed(scope(), Duration::from_secs(3)).unwrap(),
+    );
+    let tools = ConnectorToolRuntime::load(runtime, context.clone()).unwrap();
+    let actions = MailActionService::new(
+        &storage,
+        tools,
+        context,
+        scope(),
+        "smtp-attachment-policy-v1",
+    )
+    .await
+    .unwrap();
+    let pending = actions
+        .request_send(preview.clone(), Some("smtp-session".into()), Utc::now())
+        .await
+        .unwrap();
+    assert_eq!(
+        pending.preview.as_ref().unwrap().attachments,
+        preview.attachments
+    );
+    let receipt = actions
+        .resolve(
+            &pending.approval.approval_id,
+            ApprovalDecision::ApproveOnce,
+            "user",
+            Utc::now(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        receipt.action.result.as_ref().unwrap()["state"],
+        "delivered"
+    );
     let delivered = smtp_messages.lock().unwrap();
     assert_eq!(delivered.len(), 1);
     let delivered = String::from_utf8_lossy(&delivered[0]);
     assert!(delivered.contains("SMTP conformance"));
     assert!(delivered.contains(&preview.internet_message_id));
+    assert!(delivered.contains("Content-Type: multipart/mixed"));
+    assert!(delivered.contains("filename=\"brief.txt\""));
+    assert!(delivered.contains("Content-Type: text/plain"));
+    assert!(delivered.contains("attachment bytes"));
+    assert_eq!(
+        receipt.action.action_name,
+        crate::mail_action_envelope::MAIL_SEND_ACTION_KIND
+    );
 
     imap_task.abort();
     smtp_task.abort();

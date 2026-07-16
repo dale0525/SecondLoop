@@ -2,6 +2,7 @@ use crate::api::{AppState, router};
 use crate::data_protection::{MAX_BACKUP_BYTES, apply_pending_restore};
 use agent_runtime::credential::SecretMaterial;
 use agent_runtime::storage::Storage;
+use agent_runtime::storage_protection::{StorageOpenOptions, StorageProtectionState};
 use axum::body::{Body, to_bytes};
 use axum::http::{Method, Request, StatusCode, header};
 use serde_json::Value;
@@ -32,7 +33,9 @@ async fn data_protection_api_exports_and_stages_an_authenticated_backup() {
         .await
         .unwrap();
     assert_eq!(status.status(), StatusCode::OK);
-    assert_eq!(read_json(status).await["enabled"], true);
+    let status = read_json(status).await;
+    assert_eq!(status["enabled"], true);
+    assert_eq!(status["atRestEncryption"], "not_provided");
 
     let backup = app
         .clone()
@@ -116,6 +119,33 @@ async fn data_protection_api_fails_closed_when_disabled_or_oversized() {
         protected.oneshot(oversized).await.unwrap().status(),
         StatusCode::PAYLOAD_TOO_LARGE
     );
+}
+
+#[tokio::test]
+async fn data_protection_status_reports_configured_storage_without_backup_service() {
+    let root = tempfile::tempdir().unwrap();
+    let database = root.path().join("configured.db");
+    let url = format!("sqlite://{}?mode=rwc", database.display());
+    let key = Arc::new(SecretMaterial::new(vec![5; 32]).unwrap());
+    let storage = Storage::connect_with_options(&url, StorageOpenOptions::default().with_key(key))
+        .await
+        .unwrap();
+    assert_eq!(
+        storage.protection_status().state(),
+        StorageProtectionState::Configured
+    );
+    let response = router(Arc::new(AppState::new(storage)))
+        .oneshot(request(
+            Method::GET,
+            "/foundation/data-protection/status",
+            Body::empty(),
+        ))
+        .await
+        .unwrap();
+    let status = read_json(response).await;
+    assert_eq!(status["enabled"], false);
+    assert_eq!(status["atRestEncryption"], "configured");
+    assert_eq!(status["backupEncryption"], "unavailable");
 }
 
 fn request(method: Method, uri: &str, body: Body) -> Request<Body> {

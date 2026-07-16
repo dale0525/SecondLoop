@@ -11,6 +11,7 @@ describe("trusted sidecar API controller", () => {
     const sidecarRequest = vi.fn(async () => new Response(JSON.stringify([{ id: "memory-1" }])));
     registerSidecarApiController({
       ipcMain: harness.ipcMain,
+      openExternal: vi.fn(),
       requesterWebContents: { id: 42 },
       sidecarRequest,
     });
@@ -76,6 +77,7 @@ describe("trusted sidecar API controller", () => {
     const sidecarRequest = vi.fn(async () => new Response(JSON.stringify({ id: "task-1" })));
     registerSidecarApiController({
       ipcMain: harness.ipcMain,
+      openExternal: vi.fn(),
       requesterWebContents: { id: 42 },
       sidecarRequest,
     });
@@ -167,11 +169,94 @@ describe("trusted sidecar API controller", () => {
     );
   });
 
+  it("maps bounded Mail configuration only to the trusted Host API", async () => {
+    const harness = ipcHarness();
+    const sidecarRequest = vi.fn(async () => new Response(JSON.stringify({ configured: true })));
+    registerSidecarApiController({
+      ipcMain: harness.ipcMain,
+      openExternal: vi.fn(),
+      requesterWebContents: { id: 42 },
+      sidecarRequest,
+    });
+    const password = "transient-app-password";
+    await harness.invoke(
+      { sender: { id: 42 } },
+      {
+        operation: "mail.configuration.put",
+        input: {
+          id: "primary",
+          displayName: "Primary Mail",
+          primaryAddress: "user@example.test",
+          username: "user@example.test",
+          password,
+          imapHost: "imap.example.test",
+          imapPort: 993,
+          imapTls: "implicit",
+          smtpHost: "smtp.example.test",
+          smtpPort: 587,
+          smtpTls: "start_tls",
+        },
+      },
+    );
+    expect(sidecarRequest).toHaveBeenLastCalledWith(
+      "/foundation/mail/account-configurations/primary",
+      expect.objectContaining({
+        method: "PUT",
+        body: expect.stringContaining(password),
+      }),
+    );
+    await harness.invoke(
+      { sender: { id: 42 } },
+      { operation: "mail.configuration.delete", input: { id: "primary" } },
+    );
+    expect(sidecarRequest).toHaveBeenLastCalledWith(
+      "/foundation/mail/account-configurations/primary",
+      expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+
+  it.each([
+    ["invalid TLS", { imapTls: "disabled" }, /imapTls is invalid/],
+    ["blank password", { password: "  " }, /password is invalid/],
+    ["unknown Mail field", { credentialPath: "/tmp/secret" }, /unknown fields/],
+  ])("rejects %s before Mail sidecar access", async (_name, override, error) => {
+    const harness = ipcHarness();
+    const sidecarRequest = vi.fn();
+    registerSidecarApiController({
+      ipcMain: harness.ipcMain,
+      openExternal: vi.fn(),
+      requesterWebContents: { id: 42 },
+      sidecarRequest,
+    });
+    await expect(harness.invoke(
+      { sender: { id: 42 } },
+      {
+        operation: "mail.configuration.put",
+        input: {
+          id: "primary",
+          displayName: "Primary Mail",
+          primaryAddress: "user@example.test",
+          username: "user@example.test",
+          password: "secret",
+          imapHost: "imap.example.test",
+          imapPort: 993,
+          imapTls: "implicit",
+          smtpHost: "smtp.example.test",
+          smtpPort: 587,
+          smtpTls: "start_tls",
+          ...override,
+        },
+      },
+    )).rejects.toThrow(error as RegExp);
+    expect(sidecarRequest).not.toHaveBeenCalled();
+  });
+
   it("maps attachment metadata operations without exposing attachment bytes", async () => {
     const harness = ipcHarness();
     const sidecarRequest = vi.fn(async () => new Response(JSON.stringify([])));
     registerSidecarApiController({
       ipcMain: harness.ipcMain,
+      openExternal: vi.fn(),
       requesterWebContents: { id: 42 },
       sidecarRequest,
     });
@@ -205,6 +290,315 @@ describe("trusted sidecar API controller", () => {
     );
   });
 
+  it("opens a validated OAuth authorization in Main and returns only non-secret state", async () => {
+    const harness = ipcHarness();
+    const openExternal = vi.fn(async () => undefined);
+    const sidecarRequest = vi.fn(async () => new Response(JSON.stringify(oauthStartResponse())));
+    registerSidecarApiController({
+      ipcMain: harness.ipcMain,
+      openExternal,
+      requesterWebContents: { id: 42 },
+      sidecarRequest,
+    });
+
+    const result = await harness.invoke(
+      { sender: { id: 42 } },
+      {
+        input: {
+          connectorIds: ["google-mail"],
+          providerId: "google-workspace",
+          requestedCapabilities: ["mail.read", "mail.send"],
+        },
+        operation: "oauth.start",
+      },
+    );
+
+    expect(sidecarRequest).toHaveBeenCalledWith(
+      "/host/oauth/authorizations",
+      expect.objectContaining({
+        body: JSON.stringify({
+          providerId: "google-workspace",
+          connectorIds: ["google-mail"],
+          requestedCapabilities: ["mail.read", "mail.send"],
+        }),
+        method: "POST",
+      }),
+    );
+    expect(openExternal).toHaveBeenCalledWith(
+      "https://accounts.example.com/oauth/authorize?state=server-secret-state",
+    );
+    expect(result).toEqual({
+      authorizationId: "authorization-1",
+      expiresAt: "2026-07-16T10:15:00Z",
+      providerId: "google-workspace",
+      status: "pending",
+    });
+    expect(JSON.stringify(result)).not.toMatch(
+      /authorizationUrl|authorizationOrigin|secret-state/,
+    );
+  });
+
+  it("accepts OAuth request fields echoed in a different order", async () => {
+    const harness = ipcHarness();
+    const openExternal = vi.fn(async () => undefined);
+    const sidecarRequest = vi.fn(async () => new Response(JSON.stringify(oauthStartResponse({
+      connectorIds: ["google-calendar", "google-mail"],
+      requestedCapabilities: ["mail.send", "mail.read"],
+    }))));
+    registerSidecarApiController({
+      ipcMain: harness.ipcMain,
+      openExternal,
+      requesterWebContents: { id: 42 },
+      sidecarRequest,
+    });
+
+    await expect(harness.invoke(
+      { sender: { id: 42 } },
+      {
+        input: {
+          connectorIds: ["google-mail", "google-calendar"],
+          providerId: "google-workspace",
+          requestedCapabilities: ["mail.read", "mail.send"],
+        },
+        operation: "oauth.start",
+      },
+    )).resolves.toEqual({
+      authorizationId: "authorization-1",
+      expiresAt: "2026-07-16T10:15:00Z",
+      providerId: "google-workspace",
+      status: "pending",
+    });
+    expect(openExternal).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ["provider", { providerId: "microsoft-graph" }],
+    ["connector", { connectorIds: ["google-calendar"] }],
+    ["extra connector", { connectorIds: ["google-mail", "google-calendar"] }],
+    ["capability", { requestedCapabilities: ["mail.read"] }],
+    ["extra capability", {
+      requestedCapabilities: ["mail.read", "mail.send", "calendar.read"],
+    }],
+  ])("rejects a mismatched OAuth %s echo without opening it", async (_name, overrides) => {
+    const harness = ipcHarness();
+    const openExternal = vi.fn();
+    const sidecarRequest = vi.fn(async () => new Response(JSON.stringify(
+      oauthStartResponse(overrides),
+    )));
+    registerSidecarApiController({
+      ipcMain: harness.ipcMain,
+      openExternal,
+      requesterWebContents: { id: 42 },
+      sidecarRequest,
+    });
+
+    await expect(harness.invoke(
+      { sender: { id: 42 } },
+      { input: oauthStartInput(), operation: "oauth.start" },
+    )).rejects.toThrow(/OAuth authorization/);
+    expect(openExternal).not.toHaveBeenCalled();
+    expect(sidecarRequest).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ["a different origin", {
+      authorizationOrigin: "https://login.attacker.invalid",
+    }],
+    ["HTTP", {
+      authorizationOrigin: "http://accounts.example.com",
+      authorizationUrl: "http://accounts.example.com/oauth/authorize",
+    }],
+    ["userinfo", {
+      authorizationOrigin: "https://accounts.example.com",
+      authorizationUrl: "https://user:password@accounts.example.com/oauth/authorize",
+    }],
+    ["a fragment", {
+      authorizationUrl: "https://accounts.example.com/oauth/authorize#state=leaked",
+    }],
+    ["an OAuth state response field", {
+      state: "must-not-cross-main-boundary",
+    }],
+  ])("rejects an OAuth start response containing %s without opening it", async (_name, overrides) => {
+    const harness = ipcHarness();
+    const openExternal = vi.fn();
+    const sidecarRequest = vi.fn(async () => new Response(JSON.stringify(oauthStartResponse(overrides))));
+    registerSidecarApiController({
+      ipcMain: harness.ipcMain,
+      openExternal,
+      requesterWebContents: { id: 42 },
+      sidecarRequest,
+    });
+
+    await expect(harness.invoke(
+      { sender: { id: 42 } },
+      { input: oauthStartInput(), operation: "oauth.start" },
+    )).rejects.toThrow(/OAuth authorization|unknown fields/);
+    expect(openExternal).not.toHaveBeenCalled();
+  });
+
+  it("cancels a pending OAuth authorization when the system browser cannot open", async () => {
+    const harness = ipcHarness();
+    const sidecarRequest = vi.fn(async () => new Response(JSON.stringify(oauthStartResponse())));
+    registerSidecarApiController({
+      ipcMain: harness.ipcMain,
+      openExternal: vi.fn(async () => {
+        throw new Error("failed for https://accounts.example.com/?state=server-secret-state");
+      }),
+      requesterWebContents: { id: 42 },
+      sidecarRequest,
+    });
+
+    await expect(harness.invoke(
+      { sender: { id: 42 } },
+      { input: oauthStartInput(), operation: "oauth.start" },
+    )).rejects.toThrow("OAuth authorization could not be opened");
+    await expect(harness.invoke(
+      { sender: { id: 42 } },
+      { input: oauthStartInput(), operation: "oauth.start" },
+    )).rejects.not.toThrow(/server-secret-state/);
+    expect(sidecarRequest).toHaveBeenLastCalledWith(
+      "/host/oauth/authorizations/authorization-1",
+      { method: "DELETE" },
+    );
+  });
+
+  it("rejects unknown OAuth input fields and other renderers before sidecar access", async () => {
+    const harness = ipcHarness();
+    const openExternal = vi.fn();
+    const sidecarRequest = vi.fn();
+    registerSidecarApiController({
+      ipcMain: harness.ipcMain,
+      openExternal,
+      requesterWebContents: { id: 42 },
+      sidecarRequest,
+    });
+
+    await expect(harness.invoke(
+      { sender: { id: 42 } },
+      {
+        input: { ...oauthStartInput(), redirectUri: "https://attacker.invalid/callback" },
+        operation: "oauth.start",
+      },
+    )).rejects.toThrow(/unknown fields/);
+    await expect(harness.invoke(
+      { sender: { id: 7 } },
+      { input: oauthStartInput(), operation: "oauth.start" },
+    )).rejects.toThrow(/requester window/);
+    expect(sidecarRequest).not.toHaveBeenCalled();
+    expect(openExternal).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["an oversized provider identifier", {
+      ...oauthStartInput(),
+      providerId: "p".repeat(129),
+    }, /providerId is invalid/],
+    ["too many connector identifiers", {
+      ...oauthStartInput(),
+      connectorIds: Array.from({ length: 33 }, (_value, index) => `connector-${index}`),
+    }, /connectorIds is invalid/],
+    ["an invalid capability identifier", {
+      ...oauthStartInput(),
+      requestedCapabilities: ["mail.read", "../credential"],
+    }, /requestedCapabilities is invalid/],
+    ["an extra status field", {
+      authorizationId: "authorization-1",
+      providerId: "google-workspace",
+    }, /unknown fields/],
+  ])("rejects OAuth input containing %s before sidecar access", async (_name, input, error) => {
+    const harness = ipcHarness();
+    const openExternal = vi.fn();
+    const sidecarRequest = vi.fn();
+    registerSidecarApiController({
+      ipcMain: harness.ipcMain,
+      openExternal,
+      requesterWebContents: { id: 42 },
+      sidecarRequest,
+    });
+
+    await expect(harness.invoke(
+      { sender: { id: 42 } },
+      {
+        input,
+        operation: _name === "an extra status field" ? "oauth.status" : "oauth.start",
+      },
+    )).rejects.toThrow(error as RegExp);
+    expect(sidecarRequest).not.toHaveBeenCalled();
+    expect(openExternal).not.toHaveBeenCalled();
+  });
+
+  it("maps OAuth status and cancellation to fixed authorization paths", async () => {
+    const harness = ipcHarness();
+    const sidecarRequest = vi.fn(async (_pathname: string, init?: RequestInit) => new Response(
+      JSON.stringify(oauthViewResponse(init?.method === "DELETE" ? "cancelled" : "pending")),
+    ));
+    registerSidecarApiController({
+      ipcMain: harness.ipcMain,
+      openExternal: vi.fn(),
+      requesterWebContents: { id: 42 },
+      sidecarRequest,
+    });
+
+    await expect(harness.invoke(
+      { sender: { id: 42 } },
+      { input: { authorizationId: "authorization-1" }, operation: "oauth.status" },
+    )).resolves.toEqual({
+      authorizationId: "authorization-1",
+      bindings: [],
+      connectorIds: ["google-mail"],
+      createdAt: "2026-07-16T10:00:00Z",
+      errorCode: null,
+      expiresAt: "2026-07-16T10:15:00Z",
+      providerId: "google-workspace",
+      requestedCapabilities: ["mail.read", "mail.send"],
+      status: "pending",
+      updatedAt: "2026-07-16T10:00:00Z",
+    });
+    expect(sidecarRequest).toHaveBeenLastCalledWith(
+      "/host/oauth/authorizations/authorization-1",
+      expect.objectContaining({ method: "GET" }),
+    );
+
+    await expect(harness.invoke(
+      { sender: { id: 42 } },
+      { input: { authorizationId: "authorization-1" }, operation: "oauth.cancel" },
+    )).resolves.toEqual(expect.objectContaining({ status: "cancelled" }));
+    expect(sidecarRequest).toHaveBeenLastCalledWith(
+      "/host/oauth/authorizations/authorization-1",
+      expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+
+  it.each(["authorizationUrl", "code", "credentialId", "state", "token", "verifier"])(
+    "rejects an OAuth status response containing secret-shaped field %s",
+    async (field) => {
+      const harness = ipcHarness();
+      const sidecarRequest = vi.fn(async () => new Response(JSON.stringify({
+        ...oauthViewResponse("pending"),
+        [field]: "must-not-cross-main-boundary",
+      })));
+      registerSidecarApiController({
+        ipcMain: harness.ipcMain,
+        openExternal: vi.fn(),
+        requesterWebContents: { id: 42 },
+        sidecarRequest,
+      });
+
+      let rejection: unknown;
+      try {
+        await harness.invoke(
+          { sender: { id: 42 } },
+          { input: { authorizationId: "authorization-1" }, operation: "oauth.status" },
+        );
+      } catch (error) {
+        rejection = error;
+      }
+      expect(rejection).toBeInstanceOf(Error);
+      expect(String(rejection)).toMatch(/unknown fields/);
+      expect(String(rejection)).not.toContain("must-not-cross-main-boundary");
+    },
+  );
+
   it.each([
     ["invalid task identifier", { input: { id: "../secret" }, operation: "tasks.get" }, /id is invalid/],
     ["oversized title", taskCreate({ title: "x".repeat(1_025) }, "create-1"), /title is invalid/],
@@ -229,6 +623,7 @@ describe("trusted sidecar API controller", () => {
     const sidecarRequest = vi.fn();
     registerSidecarApiController({
       ipcMain: harness.ipcMain,
+      openExternal: vi.fn(),
       requesterWebContents: { id: 42 },
       sidecarRequest,
     });
@@ -242,6 +637,7 @@ describe("trusted sidecar API controller", () => {
     const sidecarRequest = vi.fn();
     registerSidecarApiController({
       ipcMain: harness.ipcMain,
+      openExternal: vi.fn(),
       requesterWebContents: { id: 42 },
       sidecarRequest,
     });
@@ -274,6 +670,43 @@ function taskCreate(overrides: Record<string, unknown>, idempotencyKey: string) 
       idempotencyKey,
     },
     operation: "tasks.create",
+  };
+}
+
+function oauthStartInput() {
+  return {
+    connectorIds: ["google-mail"],
+    providerId: "google-workspace",
+    requestedCapabilities: ["mail.read", "mail.send"],
+  };
+}
+
+function oauthStartResponse(overrides: Record<string, unknown> = {}) {
+  return {
+    authorizationId: "authorization-1",
+    authorizationOrigin: "https://accounts.example.com",
+    authorizationUrl: "https://accounts.example.com/oauth/authorize?state=server-secret-state",
+    connectorIds: ["google-mail"],
+    expiresAt: "2026-07-16T10:15:00Z",
+    providerId: "google-workspace",
+    requestedCapabilities: ["mail.read", "mail.send"],
+    status: "pending",
+    ...overrides,
+  };
+}
+
+function oauthViewResponse(status: "cancelled" | "pending") {
+  return {
+    authorizationId: "authorization-1",
+    bindings: [],
+    connectorIds: ["google-mail"],
+    createdAt: "2026-07-16T10:00:00Z",
+    errorCode: status === "cancelled" ? "authorization_cancelled" : null,
+    expiresAt: "2026-07-16T10:15:00Z",
+    providerId: "google-workspace",
+    requestedCapabilities: ["mail.read", "mail.send"],
+    status,
+    updatedAt: "2026-07-16T10:00:00Z",
   };
 }
 

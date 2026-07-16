@@ -10,6 +10,6 @@
     "packages": [],
     "capabilities": ["approval-engine", "credential-vault", "durable-actions", "host-tools"],
     "runtimeTools": [],
-    "connectors": ["agentweave.connector.calendar/v1"]
+    "connectors": ["agentweave-calendar"]
   }
 }

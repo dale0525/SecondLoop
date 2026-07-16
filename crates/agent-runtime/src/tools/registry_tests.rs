@@ -1,6 +1,40 @@
 use super::*;
+use crate::app_definition::AgentAppRuntimePolicy;
+use crate::app_manifest::AgentAppManifest;
 use crate::skill::SkillRegistry;
 use std::path::PathBuf;
+
+fn app_policy(
+    external_side_effects: &str,
+    network: &str,
+    background_execution: &str,
+    runtime_tools: &[&str],
+    connectors: &[&str],
+) -> AgentAppRuntimePolicy {
+    let manifest = serde_json::json!({
+        "schemaVersion": 1,
+        "appId": "com.example.policy-test",
+        "package": {"id": "com.example.policy-test.app", "version": "0.1.0"},
+        "requires": {
+            "packages": [],
+            "capabilities": [],
+            "runtimeTools": runtime_tools,
+            "connectors": connectors
+        },
+        "features": [],
+        "policy": {
+            "externalSideEffects": external_side_effects,
+            "network": network,
+            "backgroundExecution": background_execution,
+            "memoryPersistence": "disabled",
+            "skillManagement": "disabled"
+        },
+        "branding": {"displayName": "Policy Test"},
+        "instructions": {"system": "prompts/system.md"}
+    });
+    let manifest = AgentAppManifest::parse_json(&serde_json::to_vec(&manifest).unwrap()).unwrap();
+    AgentAppRuntimePolicy::compile(&manifest)
+}
 
 #[test]
 fn tool_definitions_include_source_and_schema_diagnostics() {
@@ -115,6 +149,7 @@ fn runtime_config_defaults_to_command_disabled() {
     assert_eq!(workspace_write.max_tool_calls_per_turn, 16);
     assert_eq!(workspace_write.tool_timeout_ms, 30_000);
     assert_eq!(workspace_write.output_limit_bytes, 64 * 1024);
+    assert_eq!(workspace_write.agent_app_policy, None);
     assert_eq!(
         workspace_write.approval_policy,
         crate::policy::ApprovalPolicy::Never
@@ -129,6 +164,187 @@ fn runtime_config_defaults_to_command_disabled() {
     assert_eq!(read_only.max_tool_calls_per_turn, 16);
     assert_eq!(read_only.tool_timeout_ms, 30_000);
     assert_eq!(read_only.output_limit_bytes, 64 * 1024);
+}
+
+#[tokio::test]
+async fn app_policy_hides_and_rejects_undeclared_tools_and_connectors() {
+    let root = unique_test_dir("app-policy-declarations");
+    std::fs::create_dir_all(&root).unwrap();
+    let config = RuntimeConfig {
+        agent_app_policy: Some(app_policy(
+            "allow_by_policy",
+            "declared_only",
+            "declared_only",
+            &[],
+            &["filesystem"],
+        )),
+        external_tools: vec![crate::tools::discovery::ExternalToolConfig::mcp(
+            "filesystem",
+            "read_file",
+            "Read a file through MCP.",
+            serde_json::json!({ "type": "object" }),
+            crate::tools::discovery::ExternalToolVisibility::Immediate,
+        )],
+        connectors: vec![crate::tools::discovery::ConnectorMetadata {
+            id: "undeclared".into(),
+            name: "Undeclared".into(),
+            description: "Must not be visible".into(),
+            version: "0.1.0".into(),
+            permissions: Vec::new(),
+            auth_state: crate::tools::discovery::ConnectorAuthState::NotRequired,
+            tool_count: 0,
+        }],
+        ..RuntimeConfig::workspace_write(root.clone(), root.clone())
+    };
+    let registry = ToolRegistry::new(SkillRegistry::empty_for_tests(), &config);
+
+    assert!(
+        !registry
+            .definitions()
+            .iter()
+            .any(|tool| tool.name == "mcp__filesystem__read_file")
+    );
+    assert!(registry.discovery().connectors.is_empty());
+    let result = registry
+        .execute(
+            "mcp__filesystem__read_file",
+            "call-policy",
+            serde_json::json!({}),
+        )
+        .await;
+    assert_eq!(result.error.unwrap().code, "permission_denied");
+    remove_test_dir(root).await;
+}
+
+#[tokio::test]
+async fn declared_network_policy_allows_declared_mcp_but_not_runtime_skill_processes() {
+    let root = unique_test_dir("app-policy-network");
+    write_skill(
+        &root,
+        "echoer",
+        "echoer_echo",
+        "process.stdin.resume();\nprocess.stdin.on('data', (chunk) => process.stdout.write(chunk));\n",
+    )
+    .await;
+    let skills = SkillRegistry::load_development(&root).await.unwrap();
+    let config = RuntimeConfig {
+        agent_app_policy: Some(app_policy(
+            "allow_by_policy",
+            "declared_only",
+            "disabled",
+            &["mcp__clock__now", "echoer_echo"],
+            &["clock"],
+        )),
+        external_tools: vec![
+            crate::tools::discovery::ExternalToolConfig::mcp(
+                "clock",
+                "now",
+                "Return a static time.",
+                serde_json::json!({ "type": "object" }),
+                crate::tools::discovery::ExternalToolVisibility::Immediate,
+            )
+            .with_static_result(serde_json::json!({ "time": "12:00" })),
+        ],
+        ..RuntimeConfig::workspace_write(root.clone(), root.clone())
+    };
+    let registry = ToolRegistry::new(skills, &config);
+    let names = registry
+        .definitions()
+        .into_iter()
+        .map(|tool| tool.name)
+        .collect::<Vec<_>>();
+
+    assert!(names.contains(&"mcp__clock__now".to_string()));
+    assert!(!names.contains(&"echoer_echo".to_string()));
+    let denied = registry
+        .execute("echoer_echo", "call-skill", serde_json::json!({}))
+        .await;
+    assert_eq!(denied.error.unwrap().code, "permission_denied");
+    remove_test_dir(root).await;
+}
+
+#[tokio::test]
+async fn app_external_side_effect_policy_denies_or_requires_approval() {
+    let root = unique_test_dir("app-policy-side-effects");
+    std::fs::create_dir_all(&root).unwrap();
+    let mut external = crate::tools::discovery::ExternalToolConfig::mcp(
+        "mail",
+        "send",
+        "Send mail.",
+        serde_json::json!({ "type": "object" }),
+        crate::tools::discovery::ExternalToolVisibility::Immediate,
+    );
+    external.permission = ToolPermission::ExternalWrite;
+    let denied_config = RuntimeConfig {
+        agent_app_policy: Some(app_policy(
+            "deny",
+            "declared_only",
+            "disabled",
+            &["mcp__mail__send"],
+            &["mail"],
+        )),
+        external_tools: vec![external.clone()],
+        ..RuntimeConfig::workspace_write(root.clone(), root.clone())
+    };
+    let denied = ToolRegistry::new(SkillRegistry::empty_for_tests(), &denied_config);
+    assert!(
+        denied
+            .definitions()
+            .iter()
+            .all(|tool| tool.name != "mcp__mail__send")
+    );
+    let result = denied
+        .execute("mcp__mail__send", "call-denied", serde_json::json!({}))
+        .await;
+    assert_eq!(result.error.unwrap().code, "permission_denied");
+
+    let approval_config = RuntimeConfig {
+        agent_app_policy: Some(app_policy(
+            "require_approval",
+            "declared_only",
+            "disabled",
+            &["mcp__mail__send"],
+            &["mail"],
+        )),
+        external_tools: vec![external],
+        ..RuntimeConfig::workspace_write(root.clone(), root.clone())
+    };
+    let approval = ToolRegistry::new(SkillRegistry::empty_for_tests(), &approval_config)
+        .approval_requirement("mcp__mail__send")
+        .unwrap();
+    assert_eq!(approval.permission, ToolPermission::ExternalWrite);
+    assert_eq!(approval.policy, crate::policy::ApprovalPolicy::OnWrites);
+    let approval_registry = ToolRegistry::new(SkillRegistry::empty_for_tests(), &approval_config);
+    let result = approval_registry
+        .execute("mcp__mail__send", "call-approval", serde_json::json!({}))
+        .await;
+    assert_eq!(result.error.unwrap().code, "approval_required");
+    remove_test_dir(root).await;
+}
+
+#[test]
+fn disabled_background_policy_rejects_declared_automation_tools() {
+    let policy = app_policy(
+        "allow_by_policy",
+        "unrestricted",
+        "disabled",
+        &["schedule_create"],
+        &[],
+    );
+    let definition = ToolDefinition {
+        name: "schedule_create".into(),
+        namespace: Some("automation".into()),
+        description: "Create schedule".into(),
+        input_schema: serde_json::json!({"type":"object"}),
+        output_schema: None,
+        permission: ToolPermission::PersistData,
+        persistence: ToolPersistence::for_permission(ToolPermission::PersistData),
+        source: ToolSource::HostCapability {
+            capability: "agentweave.host.automation/v1".into(),
+        },
+    };
+
+    assert!(!app_policy_allows_tool(&policy, &definition));
 }
 
 #[test]

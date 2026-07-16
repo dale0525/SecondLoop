@@ -1,5 +1,5 @@
 use crate::attachments::{AttachmentScope, SqliteAttachmentStore};
-use crate::tools::{ToolDefinition, ToolPermission, ToolSource};
+use crate::tools::{ToolDefinition, ToolPermission, ToolPersistence, ToolSource};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -164,6 +164,7 @@ fn definition(
         input_schema,
         output_schema: None,
         permission,
+        persistence: ToolPersistence::for_permission(permission),
         source: ToolSource::HostCapability {
             capability: "agentweave.host.attachments/v1".into(),
         },
