@@ -216,7 +216,12 @@ function timestamp(value: Record<string, unknown>, name: string): string {
 }
 
 function nullableText(value: Record<string, unknown>, name: string, maximum: number): string | null {
-  if (value[name] === null) return null;
+  const result = value[name];
+  if (result === null || (
+    typeof result === "string"
+    && result.length <= maximum
+    && result.trim().length === 0
+  )) return null;
   return text(value, name, maximum);
 }
 

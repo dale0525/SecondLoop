@@ -10,6 +10,7 @@ import {
   resolveFoundationContacts,
   startWorkspaceOAuth,
 } from "../src/renderer/workspaceApi";
+import { parseWorkspaceReadResponse } from "../src/shared/workspaceFoundation";
 
 afterEach(() => {
   delete window.agentWeave;
@@ -57,6 +58,53 @@ describe("Workspace Renderer API", () => {
       ["oauth.status", { authorizationId: "authorization-1" }],
       ["oauth.cancel", { authorizationId: "authorization-1" }],
     ]);
+  });
+
+  it("normalizes empty optional provider fields to null", () => {
+    const events = parseWorkspaceReadResponse("calendar.events.list", [{
+      content: {
+        attendees: [{ address: "ada@example.test", displayName: "", response: "accepted" }],
+        calendarId: "primary",
+        description: "",
+        end: "2026-07-16T11:00:00Z",
+        location: "",
+        recurrence: "",
+        start: "2026-07-16T10:00:00Z",
+        timezone: "Asia/Shanghai",
+        title: "Planning",
+      },
+      id: "event-1",
+      providerId: "",
+      status: "confirmed",
+      updatedAt: "2026-07-16T09:00:00Z",
+      version: 1,
+    }]);
+    const contacts = parseWorkspaceReadResponse("contacts.resolve", [{
+      displayName: "Ada Lovelace",
+      id: "contact-1",
+      identities: [{ kind: "email", label: "", value: "ada@example.test" }],
+      organization: "",
+      providerId: "",
+      relationship: "",
+      updatedAt: "2026-07-16T09:00:00Z",
+      version: 1,
+    }]);
+
+    expect(events).toMatchObject([{
+      content: {
+        attendees: [{ displayName: null }],
+        description: null,
+        location: null,
+        recurrence: null,
+      },
+      providerId: null,
+    }]);
+    expect(contacts).toMatchObject([{
+      identities: [{ label: null }],
+      organization: null,
+      providerId: null,
+      relationship: null,
+    }]);
   });
 });
 
