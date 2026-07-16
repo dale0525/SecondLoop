@@ -1,3 +1,5 @@
+mod calendar_support;
+
 pub mod credential_source;
 pub mod google_calendar;
 pub mod google_contacts;

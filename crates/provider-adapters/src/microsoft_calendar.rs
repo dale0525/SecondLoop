@@ -1,3 +1,4 @@
+use crate::calendar_support::normalize_provider_event_title;
 use crate::credential_source::ProviderCredentialSource;
 use crate::http::{ProviderHttpClient, ProviderHttpRequest, ProviderHttpResponse};
 use agent_runtime::calendar::{
@@ -495,7 +496,7 @@ fn normalize_event(event: GraphEvent) -> anyhow::Result<CalendarEvent> {
         .transpose()?;
     let content = CalendarEventContent {
         calendar_id: "primary".into(),
-        title: event.subject,
+        title: normalize_provider_event_title(event.subject),
         description: event.body.map(|body| body.content),
         start,
         end,

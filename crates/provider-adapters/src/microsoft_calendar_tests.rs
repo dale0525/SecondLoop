@@ -208,3 +208,36 @@ fn ambiguous_or_nonexistent_local_times_fail_closed() {
     assert!(parse_graph_time(&ambiguous).is_err());
     assert!(parse_graph_time(&nonexistent).is_err());
 }
+
+#[tokio::test]
+async fn untitled_events_keep_the_calendar_listing_representable() {
+    let start = Utc::now();
+    let http = Arc::new(FakeHttp::default());
+    http.responses.lock().unwrap().push_back(ProviderHttpResponse {
+        status: 200,
+        body: serde_json::to_vec(&json!({
+            "value": [{
+                "@odata.etag": "etag-1",
+                "id": "event-1",
+                "start": {"dateTime": start.format("%Y-%m-%dT%H:%M:%S%.3f").to_string(), "timeZone": "UTC"},
+                "end": {"dateTime": (start + chrono::Duration::hours(1)).format("%Y-%m-%dT%H:%M:%S%.3f").to_string(), "timeZone": "UTC"},
+                "isCancelled": false,
+                "originalStartTimeZone": "UTC",
+                "lastModifiedDateTime": start
+            }]
+        }))
+        .unwrap(),
+    });
+    let connector =
+        MicrosoftCalendarConnector::new(http, Arc::new(FakeCredentials), "person@example.test")
+            .unwrap();
+
+    let events = connector
+        .list_events(&scope(), start, start + chrono::Duration::hours(2))
+        .await
+        .unwrap();
+    assert_eq!(
+        events[0].content.title,
+        crate::calendar_support::UNTITLED_EVENT_TITLE
+    );
+}

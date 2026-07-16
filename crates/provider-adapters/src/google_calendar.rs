@@ -1,3 +1,4 @@
+use crate::calendar_support::normalize_provider_event_title;
 use crate::credential_source::ProviderCredentialSource;
 use crate::http::{ProviderHttpClient, ProviderHttpRequest};
 use agent_runtime::calendar::{
@@ -425,7 +426,7 @@ fn normalize_event(calendar_id: &str, event: GoogleEvent) -> anyhow::Result<Cale
         .unwrap_or_else(|| "UTC".into());
     let content = CalendarEventContent {
         calendar_id: calendar_id.into(),
-        title: event.summary,
+        title: normalize_provider_event_title(event.summary),
         description: event.description,
         start,
         end,

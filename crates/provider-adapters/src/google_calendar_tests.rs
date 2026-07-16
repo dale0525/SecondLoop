@@ -129,3 +129,32 @@ fn all_day_events_fail_instead_of_flattening_time_semantics() {
     .unwrap();
     assert!(normalize_event("primary", event).is_err());
 }
+
+#[tokio::test]
+async fn untitled_events_keep_the_calendar_listing_representable() {
+    let start = Utc::now();
+    let http = Arc::new(FakeHttp::default());
+    http.responses.lock().unwrap().push_back(ProviderHttpResponse {
+        status: 200,
+        body: serde_json::to_vec(&json!({
+            "items": [{
+                "id": "event-1",
+                "etag": "etag-1",
+                "start": {"dateTime": start, "timeZone": "Asia/Shanghai"},
+                "end": {"dateTime": start + chrono::Duration::hours(1), "timeZone": "Asia/Shanghai"},
+                "updated": start
+            }]
+        }))
+        .unwrap(),
+    });
+    let connector = GoogleCalendarConnector::new(http, Arc::new(FakeCredentials));
+
+    let events = connector
+        .list_events(&scope(), start, start + chrono::Duration::hours(2))
+        .await
+        .unwrap();
+    assert_eq!(
+        events[0].content.title,
+        crate::calendar_support::UNTITLED_EVENT_TITLE
+    );
+}
