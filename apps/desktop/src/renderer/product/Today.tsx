@@ -93,11 +93,8 @@ export function Today(): JSX.Element {
     } else {
       setSources((current) => ({ ...current, scheduler: "error" }));
     }
-    const fallbackAccountId = mailResult.status === "fulfilled"
-      ? mailResult.value[0]?.id ?? null
-      : null;
-    const calendarAccountId = loadWorkspaceAccountId("agentweave-calendar") ?? fallbackAccountId;
-    const contactsAccountId = loadWorkspaceAccountId("agentweave-contacts") ?? fallbackAccountId;
+    const calendarAccountId = loadWorkspaceAccountId("agentweave-calendar");
+    const contactsAccountId = loadWorkspaceAccountId("agentweave-contacts");
     const range = localDayRange();
     const workspaceResults = await Promise.allSettled([
       calendarAccountId

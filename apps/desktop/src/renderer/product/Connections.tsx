@@ -43,9 +43,8 @@ export function Connections(): JSX.Element {
     setContacts("checking");
     void listMailAccounts()
       .then(async (accounts) => {
-        const fallbackAccountId = accounts[0]?.id ?? null;
-        const calendarAccountId = loadWorkspaceAccountId("agentweave-calendar") ?? fallbackAccountId;
-        const contactsAccountId = loadWorkspaceAccountId("agentweave-contacts") ?? fallbackAccountId;
+        const calendarAccountId = loadWorkspaceAccountId("agentweave-calendar");
+        const contactsAccountId = loadWorkspaceAccountId("agentweave-contacts");
         const start = new Date();
         const end = new Date(start.getTime() + 24 * 60 * 60 * 1_000);
         const [mailState, calendarState, contactsState] = await Promise.all([

@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -17,12 +17,14 @@ class TestResizeObserver implements ResizeObserver {
 
 beforeEach(() => {
   vi.stubGlobal("ResizeObserver", TestResizeObserver);
+  window.localStorage.clear();
 });
 
 describe("SecondLoop product shell", () => {
   afterEach(() => {
     cleanup();
     delete window.agentWeave;
+    window.localStorage.clear();
     window.history.replaceState(null, "", "/");
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
@@ -313,6 +315,7 @@ describe("SecondLoop product shell", () => {
 
   it("shows authoritative Calendar events, tasks, and schedules and completes a task once", async () => {
     installSecondLoopBootstrap();
+    installWorkspaceBindings();
     const fetch = stubTodayWorkflowFetch();
     const user = userEvent.setup();
     render(<App />);
@@ -330,6 +333,42 @@ describe("SecondLoop product shell", () => {
       && init?.method === "POST"
     ))).toBe(true));
     expect(screen.queryByText("Prepare the briefing")).not.toBeInTheDocument();
+  });
+
+  it("does not reuse a Mail account for missing Workspace bindings", async () => {
+    installSecondLoopBootstrap();
+    const mail = stubMailOnboardingFetch({ initialConfiguration: mailConfigurationFixture() });
+    const user = userEvent.setup();
+    const { container } = render(<App />);
+
+    expect(await screen.findByText(
+      "today.sourceMail · today.sourceStatus.ready",
+    )).toBeInTheDocument();
+    expect(screen.getByText(
+      "today.sourceCalendar · today.sourceStatus.missing",
+    )).toBeInTheDocument();
+    expect(screen.getByText(
+      "today.sourceContacts · today.sourceStatus.missing",
+    )).toBeInTheDocument();
+    expect(container.querySelector(".today-error")).not.toBeInTheDocument();
+
+    const connections = container.querySelectorAll<HTMLButtonElement>(
+      ".secondloop-sidebar .secondloop-nav-item",
+    )[4];
+    await user.click(connections);
+    const cards = container.querySelectorAll(".connections-readiness-card");
+    await waitFor(() => {
+      expect(within(cards[1] as HTMLElement).getByText("connections.state.ready"))
+        .toBeInTheDocument();
+      expect(within(cards[2] as HTMLElement).getByText("connections.state.missing"))
+        .toBeInTheDocument();
+      expect(within(cards[3] as HTMLElement).getByText("connections.state.missing"))
+        .toBeInTheDocument();
+    });
+    expect(mail.fetch.mock.calls.some(([input]) => (
+      String(input).includes("/foundation/calendar/events")
+      || String(input).includes("/foundation/contacts")
+    ))).toBe(false);
   });
 
   it("captures one task and one independently scheduled reminder", async () => {
@@ -386,6 +425,21 @@ function installSecondLoopBootstrap(): void {
     },
   };
   installHostBootstrap(discovery);
+}
+
+function installWorkspaceBindings(): void {
+  window.localStorage.setItem("agentweave.workspace.bindings.v1", JSON.stringify({
+    "agentweave-calendar": {
+      accountId: "workspace-account",
+      providerId: "google-workspace",
+      updatedAt: "2026-07-16T00:00:00Z",
+    },
+    "agentweave-contacts": {
+      accountId: "workspace-account",
+      providerId: "google-workspace",
+      updatedAt: "2026-07-16T00:00:00Z",
+    },
+  }));
 }
 
 function stubFoundationFetch(): void {
