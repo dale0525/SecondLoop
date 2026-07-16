@@ -286,6 +286,7 @@
 .action-decision-row .rt-Button { min-height: 34px; padding-inline: 14px; }
 .action-terminal-note,
 .action-error-detail { display: block; margin-top: 22px; }
+.action-unknown-preview { display: block; margin-top: 22px; padding: 12px 14px; border: 1px dashed var(--color-border-strong); border-radius: 8px; line-height: 1.55; }
 
 @keyframes foundation-fade { from { opacity: 0; } }
 @keyframes foundation-rise { from { opacity: 0; transform: translate(-50%, calc(-50% + 10px)); } }

@@ -7,6 +7,8 @@ import type {
 } from "../shared/dataProtection";
 import type {
   FoundationMisfirePolicy,
+  FoundationCalendarMutationPreview,
+  FoundationContactMutationPreview,
   FoundationNotificationRecord,
   FoundationNotificationStatus,
   FoundationQuietHours,
@@ -233,7 +235,7 @@ export type MailSendPreview = {
 export type PendingFoundationAction = {
   approval: FoundationApproval;
   action: FoundationAction;
-  preview?: MailSendPreview | null;
+  preview?: MailSendPreview | FoundationCalendarMutationPreview | FoundationContactMutationPreview | null;
 };
 
 export type FoundationActionResolution = {

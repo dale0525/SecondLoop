@@ -311,7 +311,7 @@ describe("SecondLoop product shell", () => {
     ))).toHaveLength(1);
   });
 
-  it("shows authoritative tasks and schedules and completes a task once", async () => {
+  it("shows authoritative Calendar events, tasks, and schedules and completes a task once", async () => {
     installSecondLoopBootstrap();
     const fetch = stubTodayWorkflowFetch();
     const user = userEvent.setup();
@@ -319,7 +319,10 @@ describe("SecondLoop product shell", () => {
 
     expect(await screen.findByText("Prepare the briefing")).toBeInTheDocument();
     expect(screen.getByText("Morning reminder")).toBeInTheDocument();
+    expect(screen.getByText("Calendar review")).toBeInTheDocument();
     expect(screen.getByText("today.sourceTasks · today.sourceStatus.ready")).toBeInTheDocument();
+    expect(screen.getByText("today.sourceCalendar · today.sourceStatus.ready")).toBeInTheDocument();
+    expect(screen.getByText("today.sourceContacts · today.sourceStatus.ready")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "today.completeTask" }));
 
     await waitFor(() => expect(fetch.mock.calls.some(([input, init]) => (
@@ -414,6 +417,8 @@ function stubVerticalSliceFetch() {
     if (url.endsWith("/foundation/actions")) return jsonResponse([actionFixture()]);
     if (url.includes("/foundation/tasks?")) return jsonResponse({ tasks: [], nextCursor: null });
     if (url.includes("/foundation/schedules?")) return jsonResponse([]);
+    if (url.includes("/foundation/calendar/events?")) return jsonResponse([]);
+    if (url.includes("/foundation/contacts?")) return jsonResponse([]);
     throw new Error(`Unexpected request: ${init?.method ?? "GET"} ${url}`);
   });
   vi.stubGlobal("fetch", fetch);
@@ -488,6 +493,8 @@ function stubMailOnboardingFetch({
     }
     if (url.includes("/foundation/schedules?")) return jsonResponse([]);
     if (url.endsWith("/foundation/actions")) return jsonResponse([]);
+    if (url.includes("/foundation/calendar/events?")) return jsonResponse([]);
+    if (url.includes("/foundation/contacts?")) return jsonResponse([]);
     throw new Error(`Unexpected request: ${init?.method ?? "GET"} ${url}`);
   });
   vi.stubGlobal("fetch", state.fetch);
@@ -517,6 +524,7 @@ function mailConfigurationFixture(): Record<string, unknown> {
 
 function stubTodayWorkflowFetch() {
   const due = new Date(Date.now() + 30 * 60_000).toISOString();
+  const eventEnd = new Date(Date.now() + 60 * 60_000).toISOString();
   const fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input);
     if (url.includes("/foundation/tasks?")) {
@@ -533,11 +541,36 @@ function stubTodayWorkflowFetch() {
       return jsonResponse({ ...scheduleFixture(due), id: "schedule-created" });
     }
     if (url.endsWith("/foundation/actions")) return jsonResponse([]);
-    if (url.endsWith("/foundation/mail/accounts")) return jsonResponse([]);
+    if (url.endsWith("/foundation/mail/accounts")) return jsonResponse([accountFixture()]);
+    if (url.includes("/foundation/calendar/events?")) {
+      return jsonResponse([calendarEventFixture(due, eventEnd)]);
+    }
+    if (url.includes("/foundation/contacts?")) return jsonResponse([]);
     throw new Error(`Unexpected request: ${init?.method ?? "GET"} ${url}`);
   });
   vi.stubGlobal("fetch", fetch);
   return fetch;
+}
+
+function calendarEventFixture(start: string, end: string) {
+  return {
+    content: {
+      attendees: [],
+      calendarId: "primary",
+      description: null,
+      end,
+      location: "Studio",
+      recurrence: null,
+      start,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      title: "Calendar review",
+    },
+    id: "event-1",
+    providerId: "provider-event-1",
+    status: "confirmed",
+    updatedAt: new Date().toISOString(),
+    version: 1,
+  };
 }
 
 function taskFixture(dueAt: string) {

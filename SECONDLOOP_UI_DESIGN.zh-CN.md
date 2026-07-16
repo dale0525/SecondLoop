@@ -99,6 +99,18 @@ Desktop 在 Mail 诊断区上方增加一块账户管理面板。面板标题、
 
 验收状态包括：元数据加载、空账户、新增、编辑轮换、保存中、测试中、连接成功、保存失败、测试失败、删除确认和删除失败。任何响应、错误文案、截图、DOM 文本和 Debug 输出都不得出现密码；关闭 Dialog 或离开 Connections 后，Renderer 不保留密码状态。
 
+#### 4.5.2 Workspace、Calendar 与 Contacts 增补评审
+
+评审状态：通过，可以实现。本增补不增加产品路由，只扩展 Connections、Today 与 Action Center 的既有信息架构。
+
+Connections 在 Desktop 采用 `2 × 2` 就绪卡片，依次覆盖 Model、Mail、Calendar、Contacts。就绪状态只来自真实 Host 读取；Calendar 与 Contacts 没有可信账户绑定时显示缺口，不使用示例数据冒充连接成功。卡片下方增加 Workspace OAuth 区域：Google 可以在一次同意中绑定 Mail、Calendar、Contacts；Microsoft 的 Mail 与 Calendar/Contacts 因资源 scope 不同，必须分开授权。授权状态完整覆盖 opening、pending、exchanging、completed、denied、failed、permission insufficient、expired、cancelled 与 reauthorize。Renderer 只能接收脱敏状态与账户绑定，不能接收 token、PKCE verifier、state 或授权 URL。
+
+`390 × 844` 下四张卡片和两张 Provider 卡均为单列；授权状态可换行，长 account ID 必须断行，所有授权与取消操作至少为 `44 × 44`，页面不得横向滚动。
+
+Today 的来源覆盖增加 Calendar 与 Contacts。Calendar 读取本地当天边界内的真实 confirmed events，并与 Tasks、Schedules 一起进入“今日重点”；事件必须显示时间、可用地点与 Calendar 来源。Contacts 只展示读取就绪状态，不展示或伪造“近期联系人”。Narrow 仍保持“今日重点、等待批准、需要回复、已确认承诺”的既有冻结顺序。
+
+Action Center 按 canonical `action_name` 确定性渲染 Mail send、Calendar create/update/cancel 与 Contacts update。预览展示外部写入所需的账户、资源、版本、时间、参与者或身份信息，以及 preview hash；未知 action 或名称与结构不匹配时，只展示 action name、资源目标、参数 hash 和幂等键，不推测字段。`uncertain` 只显示对账指引，不提供盲目重试。
+
 ### 4.6 设置 `#settings`
 
 Desktop：设置内容按“外观、语言、隐私与数据、通知、关于”分区，最大宽度 760px。模型和 Mail 连接不重复放在设置中，只提供到 Connections 的链接。开发入口只在明确开发策略下出现。

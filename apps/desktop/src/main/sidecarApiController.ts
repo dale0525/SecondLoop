@@ -7,6 +7,11 @@ import {
   type SidecarApiRequest,
 } from "../shared/sidecarApi";
 import type { SidecarRequest } from "./sidecarSupervisor";
+import {
+  describeWorkspaceRead,
+  parseWorkspaceReadResponse,
+  type WorkspaceReadOperation,
+} from "../shared/workspaceFoundation";
 
 const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 const UUID_OR_ID = /^[A-Za-z0-9._-]+$/;
@@ -63,7 +68,8 @@ export function registerSidecarApiController(options: {
     if (event.sender.id !== options.requesterWebContents.id) {
       throw new Error("Sidecar API is restricted to the requester window");
     }
-    const request = describeRequest(parseRequest(value));
+    const parsed = parseRequest(value);
+    const request = describeRequest(parsed);
     const payload = await requestSidecarJson(options.sidecarRequest, request);
     if (request.oauthStartInput) {
       const start = parseOAuthStartResponse(payload, request.oauthStartInput);
@@ -77,6 +83,9 @@ export function registerSidecarApiController(options: {
     }
     if (request.oauthAuthorization) {
       return parseOAuthAuthorizationSummary(payload, request.oauthAuthorization);
+    }
+    if (isWorkspaceReadOperation(parsed.operation)) {
+      return parseWorkspaceReadResponse(parsed.operation, payload);
     }
     return payload;
   });
@@ -113,6 +122,12 @@ function parseRequest(value: unknown): SidecarApiRequest {
 
 function describeRequest(request: SidecarApiRequest): RequestDescription {
   switch (request.operation) {
+    case "calendar.events.get":
+    case "calendar.events.list":
+    case "calendar.freeBusy":
+    case "contacts.get":
+    case "contacts.resolve":
+      return describeWorkspaceRead(request.operation, request.input);
     case "sessions.create":
       return json("POST", "/sessions", {
         title: fieldString(request.input, "title", 256),
@@ -416,6 +431,14 @@ function describeRequest(request: SidecarApiRequest): RequestDescription {
     case "devSkills.delete":
       return { method: "DELETE", pathname: `/dev/skills/${identifier(request.input, "id")}` };
   }
+}
+
+function isWorkspaceReadOperation(operation: SidecarApiOperation): operation is WorkspaceReadOperation {
+  return operation === "calendar.events.get"
+    || operation === "calendar.events.list"
+    || operation === "calendar.freeBusy"
+    || operation === "contacts.get"
+    || operation === "contacts.resolve";
 }
 
 async function requestSidecarJson(
@@ -887,6 +910,11 @@ const OPERATIONS = new Set<SidecarApiOperation>([
   "attachments.delete",
   "attachments.get",
   "attachments.list",
+  "calendar.events.get",
+  "calendar.events.list",
+  "calendar.freeBusy",
+  "contacts.get",
+  "contacts.resolve",
   "devSkills.delete",
   "devSkills.list",
   "devSkills.reload",
