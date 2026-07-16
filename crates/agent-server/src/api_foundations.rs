@@ -49,6 +49,32 @@ impl AppFoundationRuntimes {
 }
 
 impl AppState {
+    pub(crate) fn mail_actions(
+        &self,
+    ) -> Option<agent_runtime::foundation_actions::MailActionService> {
+        self.mail_actions.clone()
+    }
+
+    pub(crate) fn calendar_actions(
+        &self,
+    ) -> Option<agent_runtime::calendar_actions::CalendarActionService> {
+        self.calendar_actions.clone()
+    }
+
+    pub(crate) fn contacts_actions(
+        &self,
+    ) -> Option<agent_runtime::contacts_actions::ContactsActionService> {
+        self.contacts_actions.clone()
+    }
+
+    pub(crate) fn automation(&self) -> Option<&crate::automation_api::AutomationApiState> {
+        self.automation.as_ref()
+    }
+
+    pub fn oauth_broker(&self) -> Option<&agent_runtime::oauth::OAuthBroker> {
+        self.oauth_broker.as_ref()
+    }
+
     pub(crate) fn mail_account_manager(
         &self,
     ) -> Option<std::sync::Arc<agent_runtime::mail_imap_smtp_accounts::ImapSmtpMailAccountManager>>

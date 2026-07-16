@@ -8,6 +8,7 @@ pub mod patch;
 pub mod path;
 pub mod process;
 mod registry_support;
+pub use registry_support::permission_allowed;
 pub mod result;
 pub mod schema;
 pub mod search;
@@ -250,26 +251,6 @@ pub struct ToolDiscovery {
     pub connectors: Vec<ConnectorMetadata>,
 }
 
-pub fn permission_allowed(
-    mode: RuntimeMode,
-    command_mode: CommandMode,
-    permission: ToolPermission,
-) -> bool {
-    match permission {
-        ToolPermission::ReadWorkspace => true,
-        ToolPermission::WriteWorkspace => mode == RuntimeMode::WorkspaceWrite,
-        ToolPermission::ExecuteCommand => {
-            mode == RuntimeMode::WorkspaceWrite && command_mode == CommandMode::Allowed
-        }
-        ToolPermission::ReadSensitive
-        | ToolPermission::PersistData
-        | ToolPermission::ExternalWrite
-        | ToolPermission::DestructiveWrite
-        | ToolPermission::CredentialAccess => true,
-        ToolPermission::ManageSkills => false,
-    }
-}
-
 pub struct ToolRegistry {
     builtins: BuiltInTools,
     built_in_tools_enabled: bool,
@@ -282,6 +263,7 @@ pub struct ToolRegistry {
     memory: Option<crate::memory_tools::MemoryToolRuntime>,
     task_tools: Option<crate::task_tools::TaskToolRuntime>,
     automation_tools: Option<crate::automation_tools::AutomationToolRuntime>,
+    structured_content_tools: Option<crate::structured_content_tools::StructuredContentToolRuntime>,
     attachment_tools: Option<crate::attachment_tools::AttachmentToolRuntime>,
     mail_actions: Option<crate::foundation_actions::MailActionService>,
     foundation_action_context: Option<crate::foundation_actions::FoundationActionTurnContext>,
@@ -309,6 +291,10 @@ impl std::fmt::Debug for ToolRegistry {
             .field("has_memory", &self.memory.is_some())
             .field("has_task_tools", &self.task_tools.is_some())
             .field("has_automation_tools", &self.automation_tools.is_some())
+            .field(
+                "has_structured_content_tools",
+                &self.structured_content_tools.is_some(),
+            )
             .field("has_attachment_tools", &self.attachment_tools.is_some())
             .field("has_mail_actions", &self.mail_actions.is_some())
             .field("has_connector_tools", &self.connector_tools.is_some())
@@ -355,6 +341,7 @@ impl ToolRegistry {
             memory: None,
             task_tools: None,
             automation_tools: None,
+            structured_content_tools: None,
             attachment_tools: None,
             mail_actions: None,
             foundation_action_context: None,
@@ -662,6 +649,12 @@ impl ToolRegistry {
         }
         if let Some(outcome) = self
             .dispatch_automation_tools(name, call_id, &arguments, started)
+            .await
+        {
+            return outcome;
+        }
+        if let Some(outcome) = self
+            .dispatch_structured_content_tools(name, call_id, &arguments, started)
             .await
         {
             return outcome;

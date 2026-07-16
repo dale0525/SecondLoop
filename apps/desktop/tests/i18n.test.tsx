@@ -42,6 +42,16 @@ describe("desktop localization", () => {
 
   it("localizes the developer workbench shell", async () => {
     window.localStorage.setItem("agentweave.localization.locale.v1", "zh-CN");
+    window.agentWeave = {
+      approval: { open: async () => { throw new Error("unavailable"); } },
+      owner: {} as NonNullable<Window["agentWeave"]>["owner"],
+      server: {
+        request: async (operation: string) => {
+          if (operation === "devSkills.list") return { packages: [], root: "/app/packages" };
+          throw new Error(`Unexpected operation: ${operation}`);
+        },
+      },
+    };
     installHostBootstrap();
     window.history.replaceState(null, "", "/#developer");
     render(<App />);

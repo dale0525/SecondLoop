@@ -7,6 +7,12 @@ import {
   type SidecarApiRequest,
 } from "../shared/sidecarApi";
 import type { SidecarRequest } from "./sidecarSupervisor";
+import { describeDevSkillRequest } from "./sidecarDevSkills";
+import {
+  describeStructuredActionRequest,
+  handleStructuredActionResponse,
+} from "./sidecarStructuredActions";
+import { describeSessionRequest } from "./sidecarSessions";
 import {
   describeWorkspaceRead,
   parseWorkspaceReadResponse,
@@ -56,6 +62,7 @@ type RequestDescription = {
     requestedCapabilities: readonly string[];
   };
   pathname: string;
+  structuredAction?: true;
 };
 
 export function registerSidecarApiController(options: {
@@ -71,6 +78,13 @@ export function registerSidecarApiController(options: {
     const parsed = parseRequest(value);
     const request = describeRequest(parsed);
     const payload = await requestSidecarJson(options.sidecarRequest, request);
+    if (request.structuredAction) {
+      return handleStructuredActionResponse({
+        openExternal: options.openExternal,
+        sidecarRequest: options.sidecarRequest,
+        value: payload,
+      });
+    }
     if (request.oauthStartInput) {
       const start = parseOAuthStartResponse(payload, request.oauthStartInput);
       try {
@@ -121,6 +135,12 @@ function parseRequest(value: unknown): SidecarApiRequest {
 }
 
 function describeRequest(request: SidecarApiRequest): RequestDescription {
+  const devSkillRequest = describeDevSkillRequest(request.operation, request.input);
+  if (devSkillRequest) return devSkillRequest;
+  const structuredActionRequest = describeStructuredActionRequest(request.operation, request.input);
+  if (structuredActionRequest) return structuredActionRequest;
+  const sessionRequest = describeSessionRequest(request.operation, request.input);
+  if (sessionRequest) return sessionRequest;
   switch (request.operation) {
     case "calendar.events.get":
     case "calendar.events.list":
@@ -128,49 +148,6 @@ function describeRequest(request: SidecarApiRequest): RequestDescription {
     case "contacts.get":
     case "contacts.resolve":
       return describeWorkspaceRead(request.operation, request.input);
-    case "sessions.create":
-      return json("POST", "/sessions", {
-        title: fieldString(request.input, "title", 256),
-      });
-    case "sessions.list": {
-      const limit = optionalInteger(request.input, "limit", 1, 100) ?? 50;
-      const cursor = optionalString(request.input, "cursor", 2_048);
-      return get(`/sessions?${new URLSearchParams({
-        limit: String(limit),
-        ...(cursor ? { cursor } : {}),
-      })}`);
-    }
-    case "sessions.load":
-      return get(`/sessions/${identifier(request.input, "id")}`);
-    case "sessions.update":
-      return json("PATCH", `/sessions/${identifier(request.input, "id")}`, {
-        title: fieldString(request.input, "title", 256),
-        expectedUpdatedAt: fieldString(request.input, "expectedUpdatedAt", 64),
-      });
-    case "sessions.delete": {
-      const expectedUpdatedAt = fieldString(request.input, "expectedUpdatedAt", 64);
-      return {
-        method: "DELETE",
-        pathname: `/sessions/${identifier(request.input, "id")}?${new URLSearchParams({ expectedUpdatedAt })}`,
-      };
-    }
-    case "turns.events": {
-      const sessionId = identifier(request.input, "sessionId");
-      const turnId = identifier(request.input, "turnId");
-      const after = optionalInteger(request.input, "after", -1, Number.MAX_SAFE_INTEGER) ?? -1;
-      const limit = optionalInteger(request.input, "limit", 1, 100) ?? 100;
-      const waitMs = optionalInteger(request.input, "waitMs", 0, 25_000) ?? 0;
-      return get(`/sessions/${sessionId}/turns/${turnId}/events?${new URLSearchParams({
-        after: String(after),
-        limit: String(limit),
-        waitMs: String(waitMs),
-      })}`);
-    }
-    case "turns.cancel":
-      return {
-        method: "POST",
-        pathname: `/sessions/${identifier(request.input, "sessionId")}/turns/${identifier(request.input, "turnId")}/cancel`,
-      };
     case "memory.list": {
       const query = fieldString(request.input, "query", 4_096, true);
       const limit = fieldInteger(request.input, "limit", 1, 100);
@@ -422,15 +399,8 @@ function describeRequest(request: SidecarApiRequest): RequestDescription {
         { decision },
       );
     }
-    case "devSkills.list":
-      return get("/dev/skills");
-    case "devSkills.validate":
-      return { method: "POST", pathname: "/dev/skills/validate" };
-    case "devSkills.reload":
-      return { method: "POST", pathname: "/dev/skills/reload" };
-    case "devSkills.delete":
-      return { method: "DELETE", pathname: `/dev/skills/${identifier(request.input, "id")}` };
   }
+  throw new Error("Sidecar API operation is not allowed");
 }
 
 function isWorkspaceReadOperation(operation: SidecarApiOperation): operation is WorkspaceReadOperation {
@@ -915,9 +885,12 @@ const OPERATIONS = new Set<SidecarApiOperation>([
   "calendar.freeBusy",
   "contacts.get",
   "contacts.resolve",
+  "devSkills.create",
   "devSkills.delete",
   "devSkills.list",
+  "devSkills.read",
   "devSkills.reload",
+  "devSkills.update",
   "devSkills.validate",
   "mail.connect",
   "mail.configuration.delete",
@@ -942,8 +915,10 @@ const OPERATIONS = new Set<SidecarApiOperation>([
   "schedules.get",
   "schedules.list",
   "schedules.setStatus",
+  "structuredActions.accept",
   "sessions.create",
   "sessions.delete",
+  "sessions.events",
   "sessions.list",
   "sessions.load",
   "sessions.update",

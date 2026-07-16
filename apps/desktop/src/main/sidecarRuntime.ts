@@ -130,6 +130,7 @@ function managedEnvironment(options: {
   env.AGENTWEAVE_CACHE_ROOT = options.cacheRoot;
   env.AGENTWEAVE_DATABASE_URL = `sqlite://${path.join(options.dataRoot, "agentweave.db")}?mode=rwc`;
   env.AGENTWEAVE_MANAGED_SKILLS ??= "1";
+  env.AGENTWEAVE_SCHEDULER_WORKER = "1";
   if (options.isPackaged) {
     env.AGENTWEAVE_APP_ROOT = path.join(options.resourcesPath, "agent-app", "app");
     env.AGENTWEAVE_APP_PACKAGES_ROOT = path.join(options.resourcesPath, "agent-app", "packages");

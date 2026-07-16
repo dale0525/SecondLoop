@@ -49,11 +49,28 @@ export type ToolResultMessage = {
   role: "assistant";
 };
 
+export type StructuredContentActionRequest = {
+  actionId: string;
+  bindingId: string;
+};
+
+export type StructuredContentActionHandler = (
+  request: StructuredContentActionRequest,
+) => void | Promise<void>;
+
+export type StructuredContentMessage = {
+  content: import("./runtimeEvents").StructuredContent;
+  id: string;
+  kind: "structured_content";
+  role: "assistant";
+};
+
 export type ChatMessage =
   | ChatBubbleMessage
   | ReasoningMessage
   | ToolCallMessage
-  | ToolResultMessage;
+  | ToolResultMessage
+  | StructuredContentMessage;
 
 export type EndpointType = "responses" | "chat_completions" | "completion";
 

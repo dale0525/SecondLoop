@@ -59,12 +59,14 @@ async fn cancel_authorization(
     State(state): State<Arc<AppState>>,
 ) -> Result<Response, ApiError> {
     validate_authorization_id(&authorization_id)?;
-    broker(&state)?
-        .cancel(&authorization_id, Utc::now())
+    let now = Utc::now();
+    let view = broker(&state)?
+        .cancel(&authorization_id, now)
         .await
         .map_err(ApiError::Internal)?
-        .map(no_store_json)
-        .ok_or(ApiError::NotFound("OAuth authorization was not found"))
+        .ok_or(ApiError::NotFound("OAuth authorization was not found"))?;
+    publish_authorization_view(&state, &view, now).await;
+    Ok(no_store_json(view))
 }
 
 async fn oauth_callback(
@@ -83,12 +85,37 @@ async fn oauth_callback(
     let Some(broker) = state.oauth_broker() else {
         return callback_page(StatusCode::NOT_FOUND, false);
     };
-    match broker.callback(request, Utc::now()).await {
-        Ok(view) => callback_page(
-            StatusCode::OK,
-            view.status == OAuthAuthorizationStatus::Completed,
-        ),
+    let now = Utc::now();
+    match broker.callback(request, now).await {
+        Ok(view) => {
+            publish_authorization_view(&state, &view, now).await;
+            callback_page(
+                StatusCode::OK,
+                view.status == OAuthAuthorizationStatus::Completed,
+            )
+        }
         Err(_) => callback_page(StatusCode::BAD_REQUEST, false),
+    }
+}
+
+async fn publish_authorization_view(
+    state: &AppState,
+    view: &agent_runtime::oauth::OAuthAuthorizationView,
+    now: chrono::DateTime<Utc>,
+) {
+    match serde_json::to_value(view) {
+        Ok(result) => {
+            if let Err(error) = state
+                .structured_content()
+                .update_oauth_authorization_result(&view.authorization_id, result, now)
+                .await
+            {
+                tracing::warn!(?error, "failed to publish OAuth structured content result");
+            }
+        }
+        Err(error) => {
+            tracing::warn!(?error, "failed to serialize OAuth authorization result");
+        }
     }
 }
 

@@ -58,6 +58,7 @@ pub struct AppState {
     memory_tools: Option<agent_runtime::memory_tools::MemoryToolRuntime>,
     task_tools: Option<agent_runtime::task_tools::TaskToolRuntime>,
     automation_tools: Option<agent_runtime::automation_tools::AutomationToolRuntime>,
+    structured_content_tools: agent_runtime::structured_content_tools::StructuredContentToolRuntime,
     attachment_tools: Option<agent_runtime::attachment_tools::AttachmentToolRuntime>,
     data_protection: Option<crate::data_protection::DataProtectionService>,
     pub(crate) connector_tools: Option<agent_runtime::connector_tools::ConnectorToolRuntime>,
@@ -66,8 +67,8 @@ pub struct AppState {
     pub(crate) contacts_actions: Option<agent_runtime::contacts_actions::ContactsActionService>,
     pub(crate) mail_account_manager:
         Option<Arc<agent_runtime::mail_imap_smtp_accounts::ImapSmtpMailAccountManager>>,
-    automation: Option<crate::automation_api::AutomationApiState>,
-    oauth_broker: Option<agent_runtime::oauth::OAuthBroker>,
+    pub(crate) automation: Option<crate::automation_api::AutomationApiState>,
+    pub(crate) oauth_broker: Option<agent_runtime::oauth::OAuthBroker>,
 }
 
 impl AppState {
@@ -157,6 +158,9 @@ impl AppState {
             runner = runner.with_mail_actions(actions.clone());
         }
         let conversation_scope = ConversationScope::local(&app_prompt.identity.app_id);
+        let structured_content_tools =
+            Self::new_structured_content_tools(&storage, &conversation_scope);
+        runner = runner.with_structured_content_tools(structured_content_tools.clone());
         Self {
             storage,
             agent: Arc::new(runner),
@@ -173,6 +177,7 @@ impl AppState {
             memory_tools,
             task_tools,
             automation_tools,
+            structured_content_tools,
             attachment_tools,
             data_protection: None,
             connector_tools,
@@ -277,6 +282,9 @@ impl AppState {
             runner = runner.with_mail_actions(actions.clone());
         }
         let conversation_scope = ConversationScope::local(&app_prompt.identity.app_id);
+        let structured_content_tools =
+            Self::new_structured_content_tools(&storage, &conversation_scope);
+        runner = runner.with_structured_content_tools(structured_content_tools.clone());
         Self {
             storage,
             agent: Arc::new(runner),
@@ -293,6 +301,7 @@ impl AppState {
             memory_tools,
             task_tools,
             automation_tools,
+            structured_content_tools,
             attachment_tools,
             data_protection: None,
             connector_tools,
@@ -338,6 +347,9 @@ impl AppState {
         agent: Arc<dyn AgentRunner>,
         skill_manager: SkillManager,
     ) -> Self {
+        let conversation_scope = ConversationScope::default();
+        let structured_content_tools =
+            Self::new_structured_content_tools(&storage, &conversation_scope);
         Self {
             storage,
             agent,
@@ -348,12 +360,13 @@ impl AppState {
             owner_management: None,
             app_prompt: AppPromptConfig::default(),
             host_discovery: None,
-            conversation_scope: ConversationScope::default(),
+            conversation_scope,
             conversation_locks: Arc::new(Mutex::new(BTreeMap::new())),
             turn_coordinator: crate::turn_api::TurnCoordinator::default(),
             memory_tools: None,
             task_tools: None,
             automation_tools: None,
+            structured_content_tools,
             attachment_tools: None,
             data_protection: None,
             connector_tools: None,
@@ -580,6 +593,7 @@ pub fn router_for_transport(
         .merge(crate::attachment_api::router())
         .merge(crate::data_protection_api::router())
         .merge(crate::automation_api::router())
+        .merge(crate::structured_content_api::router())
         .merge(crate::oauth_api::protected_router());
     if let Some(owner_routes) = crate::owner_api::router(&state) {
         router = router.merge(owner_routes);
@@ -658,32 +672,6 @@ impl AppState {
 
     pub(crate) fn turn_coordinator(&self) -> &crate::turn_api::TurnCoordinator {
         &self.turn_coordinator
-    }
-
-    pub(crate) fn mail_actions(
-        &self,
-    ) -> Option<agent_runtime::foundation_actions::MailActionService> {
-        self.mail_actions.clone()
-    }
-
-    pub(crate) fn calendar_actions(
-        &self,
-    ) -> Option<agent_runtime::calendar_actions::CalendarActionService> {
-        self.calendar_actions.clone()
-    }
-
-    pub(crate) fn contacts_actions(
-        &self,
-    ) -> Option<agent_runtime::contacts_actions::ContactsActionService> {
-        self.contacts_actions.clone()
-    }
-
-    pub(crate) fn automation(&self) -> Option<&crate::automation_api::AutomationApiState> {
-        self.automation.as_ref()
-    }
-
-    pub fn oauth_broker(&self) -> Option<&agent_runtime::oauth::OAuthBroker> {
-        self.oauth_broker.as_ref()
     }
 }
 
@@ -874,6 +862,7 @@ async fn run_agent_turn_internal(
         if let Some(automation) = &state.automation_tools {
             runner = runner.with_automation_tools(automation.clone());
         }
+        runner = runner.with_structured_content_tools(state.structured_content_tools.clone());
         if let Some(attachments) = &state.attachment_tools {
             runner = runner.with_attachment_tools(attachments.clone());
         }

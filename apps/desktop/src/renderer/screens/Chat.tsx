@@ -2,10 +2,12 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { CircleAlert, Menu, Settings } from "lucide-react";
 
 import {
+  acceptStructuredAction,
   cancelServerTurn,
   createServerSession,
   deleteAttachment,
   deleteServerSession,
+  listServerSessionEvents,
   listServerSessions,
   listServerTurnEvents,
   loadServerSession,
@@ -27,12 +29,22 @@ import { MessageList } from "../components/MessageList";
 import { starterMessages } from "../data/fixtures";
 import { useI18n } from "../i18n/I18nProvider";
 import { loadModelSettings, loadSavedModelSettings } from "../modelSettings";
-import { ChatMessage } from "../types";
+import {
+  createStructuredContentState,
+  mergeStructuredContentMessages,
+  reduceStructuredContentEvents,
+  type StructuredContentState,
+} from "../structuredContentReducer";
+import type {
+  ChatMessage,
+  StructuredContentActionHandler,
+} from "../types";
 
 type ChatProps = {
   attachmentsEnabled?: boolean;
   onOpenConnections?: () => void;
   onOpenSettings?: () => void;
+  onStructuredContentAction?: StructuredContentActionHandler;
   productMode?: boolean;
 };
 
@@ -47,6 +59,7 @@ export function Chat({
   attachmentsEnabled = false,
   onOpenConnections = () => undefined,
   onOpenSettings = () => undefined,
+  onStructuredContentAction,
   productMode = false,
 }: ChatProps): JSX.Element {
   const { t } = useI18n();
@@ -75,6 +88,8 @@ export function Chat({
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const historyLoadedRef = useRef(false);
   const requestGenerationRef = useRef(0);
+  const sessionEventCursorRef = useRef(-1);
+  const structuredContentStateRef = useRef(createStructuredContentState());
 
   useEffect(() => {
     if (!productMode) return;
@@ -94,6 +109,63 @@ export function Chat({
   const localizedStarter = useCallback(() => (
     starterMessages.map((message) => ({ ...message, body: t("chat.starter") }))
   ), [t]);
+
+  useEffect(() => {
+    if (!sessionId || isSending || !window.agentWeave?.server) return;
+    let active = true;
+    const activeSessionId = sessionId;
+    const consume = async () => {
+      while (active) {
+        try {
+          const page = await listServerSessionEvents(
+            activeSessionId,
+            sessionEventCursorRef.current,
+          );
+          if (!active) return;
+          setIsReconnecting(false);
+          sessionEventCursorRef.current = page.nextCursor;
+          if (page.events.length === 0) continue;
+          structuredContentStateRef.current = reduceStructuredContentEvents(
+            structuredContentStateRef.current,
+            page.events.map((event) => event.payload),
+          );
+          const state = structuredContentStateRef.current;
+          setMessages((current) => mergeStructuredContentMessages(current, state));
+        } catch {
+          if (!active) return;
+          const recovered = await recoverManagedSidecar(() => active, setIsReconnecting);
+          if (!recovered) {
+            setIsReconnecting(false);
+            await new Promise((resolve) => window.setTimeout(resolve, 500));
+          }
+        }
+      }
+    };
+    void consume();
+    return () => {
+      active = false;
+    };
+  }, [isSending, sessionId]);
+
+  const handleStructuredContentAction = useCallback<StructuredContentActionHandler>(async (request) => {
+    setApiError(null);
+    try {
+      if (onStructuredContentAction) {
+        await onStructuredContentAction(request);
+        return;
+      }
+      if (!sessionId) throw new Error("Structured action has no active session");
+      await acceptStructuredAction(sessionId, request.bindingId);
+      const detail = await loadServerSession(sessionId);
+      const history = messagesFromHistory(detail, localizedStarter(), t("chat.working"));
+      structuredContentStateRef.current = history.structuredContentState;
+      setMessages(history.messages);
+      setSessions((current) => upsertSession(current, detail.session));
+    } catch (error) {
+      setApiError(t("chat.structuredActionFailed"));
+      throw error;
+    }
+  }, [localizedStarter, onStructuredContentAction, sessionId, t]);
 
   const applyTurnFeedback = useCallback((turn: ServerTurn) => {
     setApiError(null);
@@ -135,10 +207,18 @@ export function Chat({
         if (!isCurrentRequest()) return;
         events = appendUniqueEvents(events, page.events);
         cursor = page.nextCursor;
-        setMessages((current) => replaceTurnMessages(
-          current,
-          turnId,
-          messagesFromTurn(events.map((event) => event.payload), page.turn, t("chat.working")),
+        structuredContentStateRef.current = reduceStructuredContentEvents(
+          structuredContentStateRef.current,
+          events.map((event) => event.payload),
+        );
+        const structuredContentState = structuredContentStateRef.current;
+        setMessages((current) => mergeStructuredContentMessages(
+          replaceTurnMessages(
+            current,
+            turnId,
+            messagesFromTurn(events.map((event) => event.payload), page.turn, t("chat.working")),
+          ),
+          structuredContentState,
         ));
         if (!page.turn.status || page.turn.status === "running") continue;
         applyTurnFeedback(page.turn);
@@ -146,7 +226,9 @@ export function Chat({
           try {
             const detail = await loadServerSession(activeSessionId);
             if (!isCurrentRequest()) return;
-            setMessages(messagesFromHistory(detail, localizedStarter(), t("chat.working")));
+            const history = messagesFromHistory(detail, localizedStarter(), t("chat.working"));
+            structuredContentStateRef.current = history.structuredContentState;
+            setMessages(history.messages);
             setSessions((current) => upsertSession(current, detail.session));
           } catch {
             // Cursor replay already rendered the authoritative terminal event.
@@ -177,8 +259,11 @@ export function Chat({
     try {
       const detail = await loadServerSession(session.id);
       if (requestGenerationRef.current !== requestGeneration) return false;
+      sessionEventCursorRef.current = detail.events.at(-1)?.event_index ?? -1;
       setSessionId(detail.session.id);
-      setMessages(messagesFromHistory(detail, localizedStarter(), t("chat.working")));
+      const history = messagesFromHistory(detail, localizedStarter(), t("chat.working"));
+      structuredContentStateRef.current = history.structuredContentState;
+      setMessages(history.messages);
       setSessions((current) => upsertSession(current, detail.session));
       const latestTurn = detail.turns?.at(-1);
       if (latestTurn) applyTurnFeedback(latestTurn);
@@ -216,7 +301,10 @@ export function Chat({
         const restored = page.items[0]
           ? await loadConversation(page.items[0], false)
           : false;
-        if (!restored) setMessages(localizedStarter());
+        if (!restored) {
+          structuredContentStateRef.current = createStructuredContentState();
+          setMessages(localizedStarter());
+        }
       }
     } catch {
       if (restore) setMessages(localizedStarter());
@@ -242,6 +330,8 @@ export function Chat({
       void cancelServerTurn(activeTurn.sessionId, activeTurn.turnId).catch(() => undefined);
     }
     requestGenerationRef.current += 1;
+    sessionEventCursorRef.current = -1;
+    structuredContentStateRef.current = createStructuredContentState();
     setMessages(localizedStarter());
     setSessionId(null);
     setApiError(null);
@@ -336,6 +426,7 @@ export function Chat({
         const session = await createServerSession(titleFromMessage(text));
         if (!isCurrentRequest()) return;
         activeSessionId = session.id;
+        sessionEventCursorRef.current = -1;
         setSessionId(session.id);
         if (session.updated_at) setSessions((current) => upsertSession(current, session));
       }
@@ -467,7 +558,10 @@ export function Chat({
           </div>
         </section>
       ) : (
-        <MessageList messages={messages} />
+        <MessageList
+          messages={messages}
+          onStructuredContentAction={handleStructuredContentAction}
+        />
       )}
       <Composer
         attachments={attachments}
@@ -497,7 +591,7 @@ function messagesFromHistory(
   detail: ServerSessionDetail,
   fallback: ChatMessage[],
   workingLabel: string,
-): ChatMessage[] {
+): { messages: ChatMessage[]; structuredContentState: StructuredContentState } {
   const turnsByUserMessage = new Map(
     (detail.turns ?? []).map((turn) => [turn.user_message_id, turn]),
   );
@@ -523,7 +617,19 @@ function messagesFromHistory(
       ? turnMessages.filter(isActivityMessage)
       : turnMessages));
   }
-  return history.length > 0 ? history : fallback;
+  const structuredContentState = reduceStructuredContentEvents(
+    createStructuredContentState(),
+    [...detail.events]
+      .sort((left, right) => left.event_index - right.event_index)
+      .map((event) => event.payload),
+  );
+  return {
+    messages: mergeStructuredContentMessages(
+      history.length > 0 ? history : fallback,
+      structuredContentState,
+    ),
+    structuredContentState,
+  };
 }
 
 const ATTACHMENT_REFERENCE_OPEN = "<secondloop_attachment_refs>";

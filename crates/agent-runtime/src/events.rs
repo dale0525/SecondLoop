@@ -95,6 +95,7 @@ pub enum RuntimeEvent {
         content_id: String,
         owner: String,
         revision: u64,
+        audience: crate::structured_content::StructuredContentAudience,
     },
     StructuredContentActionAccepted {
         receipt: crate::structured_content::StructuredActionReceipt,

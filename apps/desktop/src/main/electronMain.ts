@@ -31,6 +31,8 @@ import {
 import { resolveDesktopSidecar } from "./sidecarRuntime";
 import { registerSidecarApiController } from "./sidecarApiController";
 
+configureDevelopmentUserDataRoot();
+
 app.whenReady().then(async () => {
   const rendererBase = process.env.AGENTWEAVE_DESKTOP_URL;
   let dataProtection: DesktopDataProtectionKey | null = null;
@@ -258,6 +260,16 @@ app.whenReady().then(async () => {
   });
   await lifecycle.ensureWindow();
 });
+
+function configureDevelopmentUserDataRoot(): void {
+  if (app.isPackaged) return;
+  const configured = process.env.AGENTWEAVE_DEV_USER_DATA_ROOT;
+  if (!configured) return;
+  if (!path.isAbsolute(configured)) {
+    throw new Error("AGENTWEAVE_DEV_USER_DATA_ROOT must be absolute");
+  }
+  app.setPath("userData", path.normalize(configured));
+}
 
 function onLifecycleEvent(event: DesktopLifecycleEvent, listener: () => void): void {
   switch (event) {

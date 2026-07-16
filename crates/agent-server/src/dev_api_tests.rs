@@ -159,13 +159,10 @@ async fn dev_delete_skill_rejects_unsafe_id() {
     let app = crate::api::router_with_dev_routes(state);
 
     let response = app
-        .oneshot(
-            Request::builder()
-                .method("DELETE")
-                .uri("/dev/skills/..%2Fecho")
-                .body(Body::empty())
-                .unwrap(),
-        )
+        .oneshot(json_delete_request(
+            "/dev/skills/..%2Fecho",
+            json!({ "expectedRevision": "a".repeat(64) }),
+        ))
         .await
         .unwrap();
 
@@ -175,7 +172,7 @@ async fn dev_delete_skill_rejects_unsafe_id() {
 }
 
 #[tokio::test]
-async fn dev_delete_skill_removes_package_and_returns_inventory() {
+async fn dev_delete_skill_rejects_runtime_package_as_read_only() {
     let storage = Storage::connect("sqlite::memory:").await.unwrap();
     let skills_root = development_skills().await;
     let skills = SkillRegistry::load_development(&skills_root).await.unwrap();
@@ -186,20 +183,68 @@ async fn dev_delete_skill_removes_package_and_returns_inventory() {
     let app = crate::api::router_with_dev_routes(state);
 
     let response = app
-        .oneshot(
-            Request::builder()
-                .method("DELETE")
-                .uri("/dev/skills/echo")
-                .body(Body::empty())
-                .unwrap(),
-        )
+        .oneshot(json_delete_request(
+            "/dev/skills/echo",
+            json!({ "expectedRevision": "a".repeat(64) }),
+        ))
         .await
         .unwrap();
 
-    assert_eq!(response.status(), StatusCode::OK);
-    assert!(!skills_root.join("echo").exists());
-    let body = read_json(response).await;
-    assert_eq!(body["packages"].as_array().unwrap().len(), 0);
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(skills_root.join("echo/skill.json").exists());
+    remove_test_dir(skills_root).await;
+}
+
+#[tokio::test]
+async fn dev_delete_skill_requires_current_revision_for_editable_package() {
+    let storage = Storage::connect("sqlite::memory:").await.unwrap();
+    let skills_root = unique_test_dir("delete-editable");
+    write_editable_package(&skills_root, "planning").await;
+    let skills = SkillRegistry::load_development(&skills_root).await.unwrap();
+    let state = Arc::new(
+        crate::api::AppState::new_with_agent_and_skills(storage, Arc::new(TestAgent), skills)
+            .with_skills_root(skills_root.clone()),
+    );
+    let app = crate::api::router_with_dev_routes(state);
+    let source = read_json(
+        app.clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/dev/skills/planning")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap(),
+    )
+    .await;
+
+    let conflict = app
+        .clone()
+        .oneshot(json_delete_request(
+            "/dev/skills/planning",
+            json!({ "expectedRevision": "a".repeat(64) }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(conflict.status(), StatusCode::CONFLICT);
+    assert!(skills_root.join("planning/SKILL.md").exists());
+
+    let deleted = app
+        .oneshot(json_delete_request(
+            "/dev/skills/planning",
+            json!({ "expectedRevision": source["sourceRevision"] }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(deleted.status(), StatusCode::OK);
+    assert!(
+        read_json(deleted).await["packages"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    assert!(!skills_root.join("planning").exists());
     remove_test_dir(skills_root).await;
 }
 
@@ -711,6 +756,31 @@ async fn development_skills() -> PathBuf {
     root
 }
 
+async fn write_editable_package(root: &std::path::Path, directory: &str) {
+    let package = root.join(directory);
+    tokio::fs::create_dir_all(&package).await.unwrap();
+    tokio::fs::write(
+        package.join("agentweave.json"),
+        json!({
+            "schemaVersion": 1,
+            "id": format!("com.example.{directory}"),
+            "version": "0.1.0",
+            "displayName": "Planning",
+            "kind": "instruction_only",
+            "package": {"includeInstructions": true, "includeRuntime": false}
+        })
+        .to_string(),
+    )
+    .await
+    .unwrap();
+    tokio::fs::write(
+        package.join("SKILL.md"),
+        "---\nname: planning\ndescription: Plan bounded work.\n---\n\n# Planning\n",
+    )
+    .await
+    .unwrap();
+}
+
 async fn dynamic_skill_manager(root: &std::path::Path) -> SkillManager {
     SkillManager::new(SkillManagerConfig {
         sources: vec![Arc::new(DirectorySkillSource::new(
@@ -806,6 +876,15 @@ async fn read_json(response: axum::response::Response) -> Value {
 fn json_request(uri: &str, body: Value) -> Request<Body> {
     Request::builder()
         .method("POST")
+        .uri(uri)
+        .header("content-type", "application/json")
+        .body(Body::from(body.to_string()))
+        .unwrap()
+}
+
+fn json_delete_request(uri: &str, body: Value) -> Request<Body> {
+    Request::builder()
+        .method("DELETE")
         .uri(uri)
         .header("content-type", "application/json")
         .body(Body::from(body.to_string()))

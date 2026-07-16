@@ -1,0 +1,4 @@
+interface:
+  display_name: "Foundation Structured Content"
+  short_description: "Publish safe interactive chat cards and actions"
+  default_prompt: "Use $foundation-structured-content to present this workflow as a safe, actionable chat card."

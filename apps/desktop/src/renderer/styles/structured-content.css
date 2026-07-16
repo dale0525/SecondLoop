@@ -1,0 +1,215 @@
+.message-bubble-structured {
+  width: min(680px, 86%);
+  overflow: hidden;
+}
+
+.structured-content-card {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--color-primary) 7%, transparent), transparent 48%),
+    var(--color-surface);
+}
+
+.structured-content-blocks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 14px;
+}
+
+.structured-content-text,
+.structured-content-list {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.structured-content-text-heading {
+  color: var(--color-text);
+  font-size: 15px;
+  font-weight: 680;
+  letter-spacing: -0.01em;
+  line-height: 21px;
+}
+
+.structured-content-text-body {
+  color: var(--color-text-muted);
+  font-size: 14px;
+  line-height: 20px;
+  white-space: pre-wrap;
+}
+
+.structured-content-text-caption {
+  color: var(--color-text-subtle);
+  font-size: 12px;
+  line-height: 17px;
+}
+
+.structured-content-field {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  padding: 9px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--color-surface-muted) 74%, transparent);
+}
+
+.structured-content-field span {
+  color: var(--color-text-subtle);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.035em;
+  line-height: 15px;
+  text-transform: uppercase;
+}
+
+.structured-content-field strong {
+  overflow-wrap: anywhere;
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 560;
+  line-height: 18px;
+}
+
+.structured-content-list {
+  display: grid;
+  gap: 5px;
+  padding-left: 19px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  line-height: 19px;
+}
+
+.structured-content-status {
+  display: inline-flex;
+  grid-column: 1 / -1;
+  width: fit-content;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+.structured-content-status-info {
+  color: var(--color-primary-text);
+}
+
+.structured-content-status-success {
+  color: var(--color-success, #68b989);
+}
+
+.structured-content-status-warning {
+  color: var(--color-warning, #d89a52);
+}
+
+.structured-content-status-danger {
+  color: var(--color-danger);
+}
+
+.structured-content-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border);
+}
+
+.structured-content-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 0 13px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 620;
+}
+
+.structured-content-action-spinner {
+  animation: structured-content-spin 900ms linear infinite;
+}
+
+.structured-content-action-error {
+  margin: -4px 0 0;
+  color: var(--color-danger);
+  font-size: 12px;
+  line-height: 17px;
+}
+
+@keyframes structured-content-spin {
+  to { transform: rotate(360deg); }
+}
+
+.structured-content-action-primary {
+  border-color: var(--color-primary-fill);
+  background: var(--color-primary-fill);
+  color: var(--color-primary-fill-text);
+}
+
+.structured-content-action-danger {
+  border-color: color-mix(in srgb, var(--color-danger) 65%, var(--color-border));
+  color: var(--color-danger);
+}
+
+.structured-content-action:hover:not(:disabled) {
+  border-color: var(--color-primary);
+}
+
+.structured-content-action:focus-visible {
+  outline: 0;
+  box-shadow: var(--shadow-focus);
+}
+
+.structured-content-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.structured-content-fallback {
+  padding: 11px 12px;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 640px) {
+  .message-bubble-structured {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .structured-content-card {
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .structured-content-blocks {
+    grid-template-columns: 1fr;
+    gap: 9px;
+  }
+
+  .structured-content-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .structured-content-action {
+    width: 100%;
+    min-height: 44px;
+  }
+}

@@ -16,6 +16,7 @@ type ToolResultEnvelope = {
   call_id?: unknown;
   data?: unknown;
   error?: unknown;
+  error_code?: unknown;
   ok?: unknown;
   tool?: unknown;
 };
@@ -160,13 +161,22 @@ export function buildAssistantTurnMessages(
         syntheticToolIndex += event.call_id ? 0 : 1;
         const callId = event.call_id ?? `tool-call-${syntheticToolIndex}`;
         const result = asResultEnvelope(event.result);
+        const resultMetadata = asResultEnvelope(event.result_metadata);
         const call = callsById.get(callId);
-        const ok = typeof result?.ok === "boolean" ? result.ok : undefined;
+        const ok = typeof result?.ok === "boolean"
+          ? result.ok
+          : typeof resultMetadata?.ok === "boolean"
+            ? resultMetadata.ok
+            : undefined;
         const status = ok === false ? "failed" : "completed";
         updateToolCallStatus(messages, callId, status);
         const row: ToolResultMessage = {
           callId,
-          content: toolResultContent(result, event.result),
+          content: result
+            ? toolResultContent(result, event.result)
+            : ok === false && typeof resultMetadata?.error_code === "string"
+              ? resultMetadata.error_code
+              : "",
           id: createId(),
           kind: "tool_result",
           name: toolResultName(event, result, call),

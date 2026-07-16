@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
+import { listDevSkills, type DevSkillInventory } from "./api";
 import { AppearanceProvider } from "./appearance/AppearanceProvider";
 import { HostBootstrapProvider, useHostBootstrap } from "./hostBootstrap";
 import type { DesktopHostFeatures } from "./hostFeatures";
@@ -10,7 +11,7 @@ import {
   getOwnerPolicy
 } from "./ownerBridge";
 import { Chat } from "./screens/Chat";
-import { DeveloperTools } from "./screens/DeveloperTools";
+import { DeveloperTools, type DevApiProbeStatus } from "./screens/DeveloperTools";
 import { OwnerSkills } from "./screens/OwnerSkills";
 import { Settings } from "./screens/Settings";
 import { Accounts } from "./screens/Accounts";
@@ -21,6 +22,10 @@ import { SecondLoopShell, type SecondLoopView } from "./product/SecondLoopShell"
 import { Today } from "./product/Today";
 
 type AppView = "today" | "chat" | "settings" | "developer" | "owner-skills" | "accounts" | "connections" | "memory" | "actions";
+type DevApiProbe = {
+  inventory: DevSkillInventory | null;
+  status: "idle" | DevApiProbeStatus;
+};
 
 function getViewFromHash(): AppView {
   if (typeof window !== "undefined") {
@@ -61,6 +66,11 @@ export default function App(): JSX.Element {
 function AppContent(): JSX.Element {
   const [view, setView] = useState<AppView>(getViewFromHash);
   const [ownerPolicy, setOwnerPolicy] = useState<OwnerPolicy | null>(null);
+  const [devApiProbe, setDevApiProbe] = useState<DevApiProbe>({
+    inventory: null,
+    status: "idle",
+  });
+  const devApiProbeStarted = useRef(false);
   const bootstrap = useHostBootstrap();
   const { t } = useI18n();
   const secondLoop = bootstrap.discovery?.identity.appId === "com.secondloop.secretary";
@@ -68,6 +78,27 @@ function AppContent(): JSX.Element {
     && bootstrap.discovery?.requirements.capabilities.includes("attachments") === true
     && bootstrap.discovery.requirements.runtimeTools.includes("attachment_read")
     && bootstrap.discovery.requirements.runtimeTools.includes("attachment_get");
+
+  useEffect(() => {
+    if ((view !== "settings" && view !== "developer") || devApiProbeStarted.current) return;
+    devApiProbeStarted.current = true;
+    if (!window.agentWeave?.server) {
+      setDevApiProbe({ inventory: null, status: "unavailable" });
+      return;
+    }
+    setDevApiProbe({ inventory: null, status: "loading" });
+    void listDevSkills()
+      .then((inventory) => {
+        setDevApiProbe({ inventory, status: "available" });
+      })
+      .catch(() => {
+        setDevApiProbe({ inventory: null, status: "unavailable" });
+      });
+  }, [view]);
+
+  const handleDevInventoryChange = useCallback((inventory: DevSkillInventory) => {
+    setDevApiProbe({ inventory, status: "available" });
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -121,13 +152,19 @@ function AppContent(): JSX.Element {
   useEffect(() => {
     if (
       bootstrap.status !== "loading"
-      && !isViewAllowed(view, bootstrap.features, ownerPolicy, secondLoop)
+      && !isViewAllowed(view, bootstrap.features, ownerPolicy, secondLoop, devApiProbe.status)
     ) {
       navigate("settings");
     }
-  }, [bootstrap.features, bootstrap.status, ownerPolicy, secondLoop, view]);
+  }, [bootstrap.features, bootstrap.status, devApiProbe.status, ownerPolicy, secondLoop, view]);
 
-  const activeView = isViewAllowed(view, bootstrap.features, ownerPolicy, secondLoop)
+  const activeView = isViewAllowed(
+    view,
+    bootstrap.features,
+    ownerPolicy,
+    secondLoop,
+    devApiProbe.status,
+  )
     ? view
     : "settings";
 
@@ -141,6 +178,7 @@ function AppContent(): JSX.Element {
           />
         ) : (
           <Settings
+            developerToolsAvailable={devApiProbe.status === "available"}
             onBack={() => navigate("chat")}
             onOpenDeveloperTools={() => navigate("developer")}
             onOpenOwnerSkills={() => navigate("owner-skills")}
@@ -151,7 +189,12 @@ function AppContent(): JSX.Element {
           />
         )
       ) : activeView === "developer" ? (
-        <DeveloperTools onBack={() => navigate("settings")} />
+        <DeveloperTools
+          initialInventory={devApiProbe.inventory}
+          initialStatus={devApiProbe.status === "idle" ? "loading" : devApiProbe.status}
+          onBack={() => navigate("settings")}
+          onInventoryChange={handleDevInventoryChange}
+        />
       ) : activeView === "accounts" ? (
         <Accounts onBack={() => navigate("settings")} />
       ) : activeView === "connections" ? (
@@ -162,6 +205,7 @@ function AppContent(): JSX.Element {
         <FoundationActions embedded={secondLoop} onBack={() => navigate(secondLoop ? "today" : "settings")} />
       ) : activeView === "settings" ? (
         <Settings
+          developerToolsAvailable={devApiProbe.status === "available"}
           onBack={() => navigate(secondLoop ? "today" : "chat")}
           onOpenDeveloperTools={() => navigate("developer")}
           onOpenOwnerSkills={() => navigate("owner-skills")}
@@ -203,13 +247,14 @@ function isViewAllowed(
   features: DesktopHostFeatures,
   ownerPolicy: OwnerPolicy | null,
   secondLoop: boolean,
+  devApiStatus: DevApiProbe["status"] = "unavailable",
 ): boolean {
   if (view === "today") return secondLoop;
   if (view === "connections") return secondLoop;
   if (view === "accounts") return features.accounts;
   if (view === "memory") return features.memory;
   if (view === "actions") return features.actions;
-  if (view === "developer") return features.skillManagement;
+  if (view === "developer") return devApiStatus !== "unavailable";
   if (view === "owner-skills") {
     return features.skillManagement && canInspectOwnerSkills(ownerPolicy);
   }

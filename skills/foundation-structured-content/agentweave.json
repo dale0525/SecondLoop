@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "agentweave.foundation.structured-content",
+  "version": "0.1.0",
+  "displayName": "Structured Content",
+  "kind": "host_tools_only",
+  "package": { "includeInstructions": true, "includeRuntime": false },
+  "compatibility": { "platforms": ["desktop", "server"] },
+  "requires": {
+    "packages": [],
+    "capabilities": ["host-tools"],
+    "runtimeTools": [
+      "structured_content_publish",
+      "structured_content_get",
+      "structured_content_delete"
+    ],
+    "connectors": []
+  }
+}

@@ -5,19 +5,26 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import "katex/dist/katex.min.css";
 
-import { MessageAttachment } from "../../types";
+import type { StructuredContent } from "../../runtimeEvents";
+import type {
+  MessageAttachment,
+  StructuredContentActionHandler,
+} from "../../types";
 import { AttachmentChip, MediaFileChip } from "./AttachmentChip";
 import {
   describeMediaSrc,
   splitMediaSegments,
   MediaToken
 } from "./mediaSegments";
+import { StructuredContentView } from "./StructuredContentView";
 
 type MessageContentProps = {
   attachments?: MessageAttachment[];
   body: string;
   isStreaming?: boolean;
+  onStructuredContentAction?: StructuredContentActionHandler;
   role: "assistant" | "user";
+  structuredContent?: StructuredContent;
 };
 
 type CodeProps = {
@@ -114,8 +121,18 @@ export function MessageContent({
   attachments,
   body,
   isStreaming = false,
-  role
+  onStructuredContentAction,
+  role,
+  structuredContent,
 }: MessageContentProps): JSX.Element {
+  if (structuredContent) {
+    return (
+      <StructuredContentView
+        content={structuredContent}
+        onAction={onStructuredContentAction}
+      />
+    );
+  }
   const segments =
     role === "assistant" ? splitMediaSegments(body) : [{ start: 0, type: "text" as const, value: body }];
 

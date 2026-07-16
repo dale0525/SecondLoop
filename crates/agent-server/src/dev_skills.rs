@@ -1,14 +1,14 @@
 use agent_runtime::{
     skill::{SkillManifest, SkillRegistry},
     skill_catalog::SkillCatalog,
-    skill_package::SkillPackageKind,
+    skill_package::{SkillPackageId, SkillPackageKind},
 };
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeSet, HashMap},
     fmt,
-    path::{Component, Path, PathBuf},
+    path::{Path, PathBuf},
 };
 
 const PACKAGE_METADATA_FILE: &str = "agentweave.json";
@@ -44,6 +44,10 @@ pub struct DevSkillPackage {
     instruction_skill_name: Option<String>,
     #[serde(skip)]
     declared_kind: Option<SkillPackageKind>,
+    #[serde(skip)]
+    declared_package_id: Option<String>,
+    #[serde(skip)]
+    required_package_ids: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
@@ -68,6 +72,8 @@ pub struct DevSkillValidation {
 #[serde(rename_all = "camelCase")]
 pub struct DevSkillPackageMetadata {
     #[serde(default)]
+    pub id: Option<SkillPackageId>,
+    #[serde(default)]
     pub kind: Option<SkillPackageKind>,
     #[serde(default)]
     pub package: DevSkillPackageTargets,
@@ -85,6 +91,10 @@ pub struct DevSkillPackageTargets {
 #[derive(Clone, Debug, Serialize, Deserialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct DevSkillPackageRequirements {
+    #[serde(default)]
+    pub packages: Vec<SkillPackageId>,
+    #[serde(default)]
+    pub capabilities: Vec<String>,
     #[serde(default)]
     pub runtime_tools: Vec<String>,
     #[serde(default)]
@@ -138,17 +148,7 @@ impl std::error::Error for SkillPackageReleaseError {}
 pub async fn scan_skill_packages(root: impl AsRef<Path>) -> anyhow::Result<DevSkillInventory> {
     let root = root.as_ref();
     let canonical_root = ensure_skills_root(root).await?;
-    let mut packages = Vec::new();
-    let mut entries = tokio::fs::read_dir(&canonical_root).await?;
-
-    while let Some(entry) = entries.next_entry().await? {
-        let package_path = entry.path();
-        if !is_safe_package_entry_for_scan(&canonical_root, &package_path).await? {
-            continue;
-        }
-        packages.push(scan_one_package(&canonical_root, package_path).await);
-    }
-
+    let mut packages = scan_skill_packages_raw(&canonical_root).await?;
     packages.sort_by(|left, right| left.id.cmp(&right.id));
     apply_duplicate_diagnostics(&mut packages);
 
@@ -156,6 +156,59 @@ pub async fn scan_skill_packages(root: impl AsRef<Path>) -> anyhow::Result<DevSk
         root: canonical_root.display().to_string(),
         packages,
     })
+}
+
+pub(crate) async fn scan_skill_packages_with_candidate(
+    root: impl AsRef<Path>,
+    directory: &str,
+    candidate: &Path,
+    replaces_existing: bool,
+) -> anyhow::Result<DevSkillInventory> {
+    let root = root.as_ref();
+    let canonical_root = ensure_skills_root(root).await?;
+    let canonical_candidate = tokio::fs::canonicalize(candidate)
+        .await
+        .context("failed to resolve candidate skill package")?;
+    anyhow::ensure!(
+        canonical_candidate.parent() == Some(canonical_root.as_path()),
+        "unsafe candidate skill package path"
+    );
+
+    let mut packages = scan_skill_packages_raw(&canonical_root).await?;
+    if replaces_existing {
+        packages.retain(|package| package.id != directory);
+    }
+    let mut candidate_package = scan_one_package(&canonical_root, canonical_candidate).await;
+    candidate_package.id = directory.to_string();
+    candidate_package.path = directory.to_string();
+    packages.push(candidate_package);
+    packages.sort_by(|left, right| left.id.cmp(&right.id));
+    apply_duplicate_diagnostics(&mut packages);
+    Ok(DevSkillInventory {
+        root: canonical_root.display().to_string(),
+        packages,
+    })
+}
+
+async fn scan_skill_packages_raw(root: &Path) -> anyhow::Result<Vec<DevSkillPackage>> {
+    let mut packages = Vec::new();
+    let mut entries = tokio::fs::read_dir(root).await?;
+
+    while let Some(entry) = entries.next_entry().await? {
+        let package_path = entry.path();
+        if entry
+            .file_name()
+            .to_string_lossy()
+            .starts_with(".agentweave-")
+        {
+            continue;
+        }
+        if !is_safe_package_entry_for_scan(root, &package_path).await? {
+            continue;
+        }
+        packages.push(scan_one_package(root, package_path).await);
+    }
+    Ok(packages)
 }
 
 pub async fn check_skill_packages(
@@ -173,22 +226,6 @@ pub async fn check_skill_packages(
     } else {
         Err(SkillPackageReleaseError::not_ready(inventory))
     }
-}
-
-#[allow(dead_code)]
-pub async fn delete_skill_package(
-    root: impl AsRef<Path>,
-    id: &str,
-) -> anyhow::Result<DevSkillInventory> {
-    let root = root.as_ref();
-    let canonical_root = ensure_skills_root(root).await?;
-    validate_package_id(id)?;
-    let target = canonical_root.join(id);
-    match classify_package_entry_for_delete(&canonical_root, &target, id).await? {
-        PackageEntryKind::Directory => tokio::fs::remove_dir_all(&target).await?,
-        PackageEntryKind::Symlink => tokio::fs::remove_file(&target).await?,
-    }
-    scan_skill_packages(&canonical_root).await
 }
 
 async fn ensure_skills_root(root: &Path) -> anyhow::Result<PathBuf> {
@@ -233,42 +270,6 @@ async fn is_safe_package_entry_for_scan(root: &Path, package_path: &Path) -> any
         .unwrap_or(false))
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum PackageEntryKind {
-    Directory,
-    Symlink,
-}
-
-async fn classify_package_entry_for_delete(
-    root: &Path,
-    target: &Path,
-    id: &str,
-) -> anyhow::Result<PackageEntryKind> {
-    let metadata = tokio::fs::symlink_metadata(target)
-        .await
-        .with_context(|| format!("failed to read skill package entry {}", target.display()))?;
-    let file_type = metadata.file_type();
-    if !file_type.is_dir() && !file_type.is_symlink() {
-        anyhow::bail!("skill package is not a directory: {id}");
-    }
-
-    let canonical_target = tokio::fs::canonicalize(target)
-        .await
-        .with_context(|| format!("failed to resolve skill package {}", target.display()))?;
-    if !canonical_target.starts_with(root) {
-        anyhow::bail!("unsafe skill package path: {id}");
-    }
-    if !tokio::fs::metadata(&canonical_target).await?.is_dir() {
-        anyhow::bail!("skill package is not a directory: {id}");
-    }
-
-    if file_type.is_symlink() {
-        Ok(PackageEntryKind::Symlink)
-    } else {
-        Ok(PackageEntryKind::Directory)
-    }
-}
-
 async fn scan_one_package(root: &Path, package_path: PathBuf) -> DevSkillPackage {
     let relative_path = package_path
         .strip_prefix(root)
@@ -296,6 +297,18 @@ async fn scan_one_package(root: &Path, package_path: PathBuf) -> DevSkillPackage
     let package_kind = compute_package_kind(has_skill_md, has_runtime_manifest, ok);
     let required_runtime_tools = metadata.package_metadata.requires.runtime_tools.clone();
     let required_connectors = metadata.package_metadata.requires.connectors.clone();
+    let declared_package_id = metadata
+        .package_metadata
+        .id
+        .as_ref()
+        .map(|id| id.as_str().to_string());
+    let required_package_ids = metadata
+        .package_metadata
+        .requires
+        .packages
+        .iter()
+        .map(|id| id.as_str().to_string())
+        .collect();
 
     DevSkillPackage {
         id: id.clone(),
@@ -319,12 +332,15 @@ async fn scan_one_package(root: &Path, package_path: PathBuf) -> DevSkillPackage
         validation: metadata.validation,
         instruction_skill_name: metadata.instruction_skill_name,
         declared_kind: metadata.package_metadata.kind,
+        declared_package_id,
+        required_package_ids,
     }
 }
 
 fn apply_duplicate_diagnostics(packages: &mut [DevSkillPackage]) {
     let mut runtime_tools = HashMap::<String, Vec<usize>>::new();
     let mut instruction_names = HashMap::<String, Vec<usize>>::new();
+    let mut package_ids = HashMap::<String, Vec<usize>>::new();
 
     for (index, package) in packages.iter().enumerate() {
         for tool_name in &package.runtime_tools {
@@ -336,6 +352,12 @@ fn apply_duplicate_diagnostics(packages: &mut [DevSkillPackage]) {
         if let Some(skill_name) = package.instruction_skill_name.as_ref() {
             instruction_names
                 .entry(skill_name.clone())
+                .or_default()
+                .push(index);
+        }
+        if let Some(package_id) = package.declared_package_id.as_ref() {
+            package_ids
+                .entry(package_id.clone())
                 .or_default()
                 .push(index);
         }
@@ -365,7 +387,33 @@ fn apply_duplicate_diagnostics(packages: &mut [DevSkillPackage]) {
         }
     }
 
+    for (package_id, owners) in package_ids {
+        if owners.len() < 2 {
+            continue;
+        }
+        for index in owners {
+            packages[index]
+                .validation
+                .errors
+                .push(format!("duplicate package id: {package_id}"));
+        }
+    }
+
     apply_readiness(packages);
+}
+
+pub(crate) fn ensure_package_is_not_required(
+    inventory: &DevSkillInventory,
+    package_id: &str,
+) -> anyhow::Result<()> {
+    anyhow::ensure!(
+        !inventory.packages.iter().any(|package| package
+            .required_package_ids
+            .iter()
+            .any(|required| required == package_id)),
+        "skill inventory validation failed: package {package_id} is still required"
+    );
+    Ok(())
 }
 
 fn apply_readiness(packages: &mut [DevSkillPackage]) {
@@ -439,25 +487,6 @@ fn apply_readiness(packages: &mut [DevSkillPackage]) {
         package.bundle_ready = release_ready;
         package.readiness_issues = readiness_issues;
     }
-}
-
-#[allow(dead_code)]
-fn validate_package_id(id: &str) -> anyhow::Result<()> {
-    if id.is_empty() {
-        anyhow::bail!("skill package id must not be empty");
-    }
-    if id.contains('/') || id.contains('\\') {
-        anyhow::bail!("skill package id must be a single path segment: {id}");
-    }
-
-    let mut components = Path::new(id).components();
-    let Some(Component::Normal(component)) = components.next() else {
-        anyhow::bail!("skill package id must be a single path segment: {id}");
-    };
-    if component != std::ffi::OsStr::new(id) || components.next().is_some() {
-        anyhow::bail!("skill package id must be a single path segment: {id}");
-    }
-    Ok(())
 }
 
 fn compute_package_kind(
@@ -769,6 +798,18 @@ mod tests {
         write_runtime_skill(&root, "runtime-b", "runtime-b", "shared_tool").await;
         write_instruction_skill(&root, "instruction-a", "shared", "First.").await;
         write_instruction_skill(&root, "instruction-b", "shared", "Second.").await;
+        write_package_metadata(
+            &root,
+            "instruction-a",
+            json!({"id":"com.example.shared","requires":{}}),
+        )
+        .await;
+        write_package_metadata(
+            &root,
+            "instruction-b",
+            json!({"id":"com.example.shared","requires":{}}),
+        )
+        .await;
 
         let inventory = scan_skill_packages(&root).await.unwrap();
         let packages = packages_by_id(&inventory);
@@ -786,6 +827,13 @@ mod tests {
                 .errors
                 .iter()
                 .any(|error| error.contains("duplicate instruction skill name: shared"))
+        );
+        assert!(
+            packages["instruction-a"]
+                .validation
+                .errors
+                .iter()
+                .any(|error| error.contains("duplicate package id: com.example.shared"))
         );
         remove_test_dir(root).await;
     }
@@ -815,32 +863,7 @@ mod tests {
 
     #[cfg(unix)]
     #[tokio::test]
-    async fn delete_symlinked_package_removes_link_only() {
-        let root = unique_test_dir("delete-safe-symlink");
-        let storage_root = root.join("storage");
-        write_runtime_skill(&storage_root, "target-package", "target-package", "echo").await;
-        create_dir_symlink(
-            storage_root.join("target-package"),
-            root.join("linked-package"),
-        );
-
-        let inventory = delete_skill_package(&root, "linked-package").await.unwrap();
-        let packages = packages_by_id(&inventory);
-
-        assert!(!packages.contains_key("linked-package"));
-        assert!(!root.join("linked-package").exists());
-        assert!(
-            root.join("storage")
-                .join("target-package")
-                .join("skill.json")
-                .exists()
-        );
-        remove_test_dir(root).await;
-    }
-
-    #[cfg(unix)]
-    #[tokio::test]
-    async fn symlink_escape_is_not_scanned_or_deleted() {
+    async fn symlink_escape_is_not_scanned() {
         let root = unique_test_dir("scan-escape-symlink");
         let outside_root = unique_test_dir("scan-escape-target");
         write_runtime_skill(&outside_root, "outside-package", "outside-package", "echo").await;
@@ -853,11 +876,6 @@ mod tests {
         let inventory = scan_skill_packages(&root).await.unwrap();
         let packages = packages_by_id(&inventory);
         assert!(!packages.contains_key("escape-package"));
-
-        let error = delete_skill_package(&root, "escape-package")
-            .await
-            .unwrap_err();
-        assert!(error.to_string().contains("unsafe skill package path"));
         assert!(root.join("escape-package").exists());
         assert!(
             outside_root
