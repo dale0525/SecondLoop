@@ -775,7 +775,12 @@ async fn resolve_foundation_action(
             .map(Json)
             .map_err(ApiError::Internal);
     }
-    if let Some(service) = state.mail_actions() {
+    if let Some(service) = state.mail_actions()
+        && service
+            .handles_approval(&approval_id)
+            .await
+            .map_err(ApiError::Internal)?
+    {
         return service
             .resolve(
                 &approval_id,
@@ -787,7 +792,7 @@ async fn resolve_foundation_action(
             .map(Json)
             .map_err(ApiError::Internal);
     }
-    Err(ApiError::NotFound("Foundation action service is disabled"))
+    Err(ApiError::NotFound("Foundation action was not found"))
 }
 
 async fn execute_mail_read(

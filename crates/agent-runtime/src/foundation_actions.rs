@@ -249,6 +249,15 @@ impl MailActionService {
         Ok(actions)
     }
 
+    pub async fn handles_approval(&self, approval_id: &str) -> anyhow::Result<bool> {
+        let Some(approval) = self.store.get_approval(approval_id).await? else {
+            return Ok(false);
+        };
+        Ok(approval.binding.app_id == self.scope.app_id
+            && approval.binding.actor_id == self.scope.user_id
+            && is_mail_send_action_kind(&approval.binding.action_name))
+    }
+
     pub async fn resolve(
         &self,
         approval_id: &str,
@@ -271,10 +280,7 @@ impl MailActionService {
             "approval actor mismatch"
         );
         anyhow::ensure!(
-            matches!(
-                current.binding.action_name.as_str(),
-                MAIL_SEND_ACTION_KIND | LEGACY_MAIL_SEND_ACTION
-            ),
+            is_mail_send_action_kind(&current.binding.action_name),
             "approval is not a Mail send action"
         );
         let resolved = self
@@ -593,10 +599,11 @@ fn preview_from_action(action: &DurableAction) -> anyhow::Result<SendPreview> {
 }
 
 fn is_mail_send_action(action: &DurableAction) -> bool {
-    matches!(
-        action.action_name.as_str(),
-        MAIL_SEND_ACTION_KIND | LEGACY_MAIL_SEND_ACTION
-    )
+    is_mail_send_action_kind(&action.action_name)
+}
+
+fn is_mail_send_action_kind(action_name: &str) -> bool {
+    matches!(action_name, MAIL_SEND_ACTION_KIND | LEGACY_MAIL_SEND_ACTION)
 }
 
 fn preview_idempotency_key(arguments: &Value) -> anyhow::Result<&str> {

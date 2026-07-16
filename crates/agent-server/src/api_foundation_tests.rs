@@ -241,6 +241,15 @@ async fn foundation_mail_approval_api_resumes_exactly_once() {
     }
     assert_eq!(mail.provider_submission_count(), 1);
     assert_eq!(mail.logical_delivery_count(), 1);
+
+    let missing = app
+        .oneshot(json_request(
+            "/foundation/actions/unknown-approval",
+            json!({"decision": "approve_once"}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(missing.status(), StatusCode::NOT_FOUND);
 }
 
 fn test_mail_account() -> MailAccount {
