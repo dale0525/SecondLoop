@@ -18,6 +18,7 @@
       "agentweave.foundation.tasks",
       "agentweave.foundation.scheduler",
       "agentweave.foundation.notifications",
+      "agentweave.foundation.structured-content",
       "agentweave.foundation.calendar",
       "agentweave.foundation.contacts"
     ],
@@ -41,6 +42,9 @@
       "notification_get",
       "notification_enqueue",
       "notification_cancel",
+      "structured_content_publish",
+      "structured_content_get",
+      "structured_content_delete",
       "calendar_event_get",
       "calendar_events_list",
       "calendar_free_busy",

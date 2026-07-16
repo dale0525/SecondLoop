@@ -6,11 +6,6 @@ export type SidecarApiOperation =
   | "attachments.delete"
   | "attachments.get"
   | "attachments.list"
-  | "calendar.events.get"
-  | "calendar.events.list"
-  | "calendar.freeBusy"
-  | "contacts.get"
-  | "contacts.resolve"
   | "devSkills.delete"
   | "devSkills.create"
   | "devSkills.list"
@@ -221,77 +216,4 @@ export type OAuthAuthorizationView = OAuthAuthorizationSummary & Readonly<{
   errorCode: string | null;
   requestedCapabilities: readonly string[];
   updatedAt: string;
-}>;
-
-export type FoundationCalendarAttendee = Readonly<{
-  address: string;
-  displayName: string | null;
-  response: string;
-}>;
-
-export type FoundationCalendarEventContent = Readonly<{
-  attendees: readonly FoundationCalendarAttendee[];
-  calendarId: string;
-  description: string | null;
-  end: string;
-  location: string | null;
-  recurrence: string | null;
-  start: string;
-  timezone: string;
-  title: string;
-}>;
-
-export type FoundationCalendarEvent = Readonly<{
-  content: FoundationCalendarEventContent;
-  id: string;
-  providerId: string | null;
-  status: "cancelled" | "confirmed";
-  updatedAt: string;
-  version: number;
-}>;
-
-export type FoundationBusyInterval = Readonly<{
-  end: string;
-  eventId: string | null;
-  start: string;
-}>;
-
-export type FoundationContactIdentity = Readonly<{
-  kind: string;
-  label: string | null;
-  value: string;
-}>;
-
-export type FoundationContactRecord = Readonly<{
-  displayName: string;
-  id: string;
-  identities: readonly FoundationContactIdentity[];
-  organization: string | null;
-  providerId: string | null;
-  relationship: string | null;
-  updatedAt: string;
-  version: number;
-}>;
-
-export type FoundationCalendarMutationPreview = Readonly<{
-  accountId: string;
-  attendeeVisible: boolean;
-  conflicts: readonly FoundationBusyInterval[];
-  content: FoundationCalendarEventContent | null;
-  eventId: string | null;
-  expectedVersion: number | null;
-  idempotencyKey: string;
-  kind: "cancel" | "create" | "update";
-  previewHash: string;
-  previewId: string;
-}>;
-
-export type FoundationContactMutationPreview = Readonly<{
-  accountId: string;
-  contactId: string;
-  expectedVersion: number;
-  idempotencyKey: string;
-  previewHash: string;
-  previewId: string;
-  replacement: FoundationContactRecord;
 }>;

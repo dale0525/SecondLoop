@@ -24,14 +24,6 @@
         "version": "=0.1.0"
       },
       {
-        "id": "agentweave.foundation.calendar",
-        "version": "=0.1.0"
-      },
-      {
-        "id": "agentweave.foundation.contacts",
-        "version": "=0.1.0"
-      },
-      {
         "id": "com.example.secretary.routines",
         "version": "=0.1.0"
       }
@@ -45,8 +37,6 @@
       "approval-engine",
       "credential-vault",
       "mail-connector",
-      "calendar-connector",
-      "contacts-connector",
       "host-tools"
     ],
     "runtimeTools": [
@@ -79,32 +69,16 @@
       "mail_draft_delete",
       "mail_send_preview",
       "mail_send",
-      "mail_delivery_status",
-      "calendar_event_get",
-      "calendar_events_list",
-      "calendar_free_busy",
-      "calendar_event_create_preview",
-      "calendar_event_update_preview",
-      "calendar_event_cancel_preview",
-      "calendar_event_apply",
-      "contacts_resolve",
-      "contact_get",
-      "contact_update_preview",
-      "contact_update_apply"
+      "mail_delivery_status"
     ],
     "connectors": [
-      "agentweave-mail",
-      "agentweave-calendar",
-      "agentweave-contacts"
+      "agentweave-mail"
     ]
   },
   "features": [
     "action-center",
     "memory-management",
-    "mail-workflows",
-    "calendar-workflows",
-    "contact-resolution",
-    "workspace-oauth"
+    "mail-workflows"
   ],
   "policy": {
     "externalSideEffects": "require_approval",
@@ -116,7 +90,7 @@
   "branding": {
     "displayName": "私人秘书",
     "shortName": "秘书",
-    "description": "由 AgentWeave Framework 组合 Mail、Calendar、Contacts、Memory 与应用自定义 Skill 的参考 Agent App。",
+    "description": "由 AgentWeave Framework 组合 Mail、Memory 与应用自定义 Skill 的参考 Agent App。",
     "accentColor": "#315C49"
   },
   "appearance": {

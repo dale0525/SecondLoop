@@ -42,6 +42,10 @@
         "version": "=0.1.0"
       },
       {
+        "id": "agentweave.foundation.structured-content",
+        "version": "=0.1.0"
+      },
+      {
         "id": "agentweave.foundation.documents",
         "version": "=0.2.0"
       },
@@ -123,6 +127,9 @@
       "notification_get",
       "notification_enqueue",
       "notification_cancel",
+      "structured_content_publish",
+      "structured_content_get",
+      "structured_content_delete",
       "attachment_list",
       "attachment_get",
       "attachment_read",
@@ -137,16 +144,7 @@
   "features": [
     "action-center",
     "memory-management",
-    "mail-workflows",
-    "calendar-workflows",
-    "contact-resolution",
-    "workspace-oauth",
-    "task-workflows",
-    "local-notifications",
-    "attachments",
-    "data-protection",
-    "secondloop-navigation",
-    "today-dashboard"
+    "mail-workflows"
   ],
   "policy": {
     "externalSideEffects": "require_approval",

@@ -1,0 +1,7 @@
+{
+  "app.name": "SecondLoop",
+  "app.tagline": "A private secretary that keeps every action accountable.",
+  "chat.ariaLabel": "SecondLoop conversation",
+  "chat.starter": "What would you like to move forward today?",
+  "composer.message": "Message SecondLoop"
+}

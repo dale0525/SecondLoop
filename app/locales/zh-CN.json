@@ -1,0 +1,7 @@
+{
+  "app.name": "SecondLoop",
+  "app.tagline": "一位让每次行动都可核对的私人秘书。",
+  "chat.ariaLabel": "SecondLoop 对话",
+  "chat.starter": "今天想先推进哪件事？",
+  "composer.message": "给 SecondLoop 发消息"
+}
