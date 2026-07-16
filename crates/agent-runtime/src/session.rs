@@ -160,6 +160,13 @@ pub struct ConversationTurnEventPage {
     pub has_more: bool,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct ConversationSessionEventPage {
+    pub events: Vec<ConversationEventRecord>,
+    pub next_cursor: i64,
+    pub has_more: bool,
+}
+
 pub fn messages_to_model_history(messages: &[Message]) -> anyhow::Result<Vec<serde_json::Value>> {
     messages
         .iter()

@@ -23,16 +23,6 @@ AgentWeave 是一个 **Agent App Framework**，不是面向某个固定领域的
 - 不得把 Prompt 约束当成权限或安全边界。外部副作用、凭据访问、持久写入和高风险操作必须由 runtime/host 的确定性机制约束。
 - 评估第三方能力时，区分“可复用的框架协议或状态模型”“可选领域包”“特定产品实现”，避免把完整产品架构直接并入核心。
 
-## 上游优先的变更流程
-
-- 开始实现前，必须先判断变更的权威归属。凡是能被多个 Agent App 复用，或涉及 runtime、Agent turn loop、Skill/Plugin 生命周期、Connector Host、Host Tool、凭据、权限审批、持久执行、后台任务、事件协议、跨平台宿主、测试夹具、打包和发布契约的变更，原则上都属于 AgentWeave 上游基建。
-- 属于上游基建的变更，必须先从最新的 `upstream/main` 创建独立分支，在 AgentWeave 仓库完成实现、测试、文档和兼容性说明，并以 Pull Request 形式提交上游。不得先在 SecondLoop 产品主线维护一份长期平行实现。
-- 上游 Pull Request 被采纳并合并后，才将对应权威提交同步到 SecondLoop，再实现或调整下游产品集成。等待上游合并期间如确需联调，只能使用明确标记的临时 integration 分支；临时实现不得直接进入产品 `main`。
-- 同时包含通用基建和产品行为的任务必须拆分：先提交领域无关的上游契约与实现，再在上游合并后提交 SecondLoop 下游集成。上游 Pull Request 不得混入 SecondLoop 品牌、专属 Prompt、产品文案或只服务单一路由的交互。
-- SecondLoop 下游负责产品身份、品牌、Prompt、启用的能力集合、默认策略、私人秘书 routines、Today 等专属工作流、产品 onboarding 和产品界面。只有这些无法合理抽象为多 App 共用契约的部分，才直接在当前产品层实现。
-- 典型的上游候选包括：邮件审批桥接和持久 Action 契约、sidecar 生命周期与后台通知、Connector/OAuth Host 契约、跨 Host 安全边界、可复用 E2E fixture、打包签名与升级基础设施。典型的下游变更包括：SecondLoop 的 Today 信息编排、品牌化连接引导、私人秘书文案、产品路由和视觉设计。
-- 若归属存在疑问，先记录该能力对其他 Agent App 的适用性、稳定契约、安全边界和测试方式。能够形成领域无关扩展点时优先走上游；不得以交付速度为由在下游永久 fork 核心能力。
-
 # Repository Instructions
 
 - 禁止将 `docs/` 目录中的文档添加到 Git 追踪中。`docs/` 内容只保留在本地，不得对该目录使用 `git add -f` 或其他绕过 `.gitignore` 的方式。

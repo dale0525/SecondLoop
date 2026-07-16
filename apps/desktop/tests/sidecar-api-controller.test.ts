@@ -62,6 +62,18 @@ describe("trusted sidecar API controller", () => {
     await harness.invoke(
       { sender: { id: 42 } },
       {
+        input: { after: 11, limit: 100, sessionId: "session-1", waitMs: 20000 },
+        operation: "sessions.events",
+      },
+    );
+    expect(sidecarRequest).toHaveBeenLastCalledWith(
+      "/sessions/session-1/events?after=11&limit=100&waitMs=20000",
+      expect.objectContaining({ method: "GET" }),
+    );
+
+    await harness.invoke(
+      { sender: { id: 42 } },
+      {
         input: { sessionId: "session-1", turnId: "turn-1" },
         operation: "turns.cancel",
       },
@@ -70,6 +82,139 @@ describe("trusted sidecar API controller", () => {
       "/sessions/session-1/turns/turn-1/cancel",
       expect.objectContaining({ method: "POST" }),
     );
+  });
+
+  it("maps bounded Dev Skill authoring operations to the current App packages API", async () => {
+    const harness = ipcHarness();
+    const sidecarRequest = vi.fn(async () => new Response(JSON.stringify({ ok: true })));
+    registerSidecarApiController({
+      ipcMain: harness.ipcMain,
+      openExternal: vi.fn(),
+      requesterWebContents: { id: 42 },
+      sidecarRequest,
+    });
+    const manifest = {
+      id: "com.example.briefing",
+      name: "Briefing",
+      version: "0.1.0",
+    };
+
+    await harness.invoke(
+      { sender: { id: 42 } },
+      {
+        input: { directory: "briefing", manifest, skillMd: "# Briefing\n\nPrepare a briefing." },
+        operation: "devSkills.create",
+      },
+    );
+    expect(sidecarRequest).toHaveBeenLastCalledWith(
+      "/dev/skills",
+      expect.objectContaining({
+        body: JSON.stringify({
+          directory: "briefing",
+          manifest,
+          skillMd: "# Briefing\n\nPrepare a briefing.",
+        }),
+        method: "POST",
+      }),
+    );
+
+    await harness.invoke(
+      { sender: { id: 42 } },
+      { input: { directory: "briefing" }, operation: "devSkills.read" },
+    );
+    expect(sidecarRequest).toHaveBeenLastCalledWith(
+      "/dev/skills/briefing",
+      expect.objectContaining({ method: "GET" }),
+    );
+
+    const expectedRevision = "a".repeat(64);
+    await harness.invoke(
+      { sender: { id: 42 } },
+      {
+        input: {
+          directory: "briefing",
+          expectedRevision,
+          manifest,
+          skillMd: "# Briefing\n\nPrepare the daily briefing.",
+        },
+        operation: "devSkills.update",
+      },
+    );
+    expect(sidecarRequest).toHaveBeenLastCalledWith(
+      "/dev/skills/briefing",
+      expect.objectContaining({
+        body: JSON.stringify({
+          expectedRevision,
+          manifest,
+          skillMd: "# Briefing\n\nPrepare the daily briefing.",
+        }),
+        method: "PUT",
+      }),
+    );
+
+    await harness.invoke(
+      { sender: { id: 42 } },
+      {
+        input: { expectedRevision, id: "briefing" },
+        operation: "devSkills.delete",
+      },
+    );
+    expect(sidecarRequest).toHaveBeenLastCalledWith(
+      "/dev/skills/briefing",
+      expect.objectContaining({
+        body: JSON.stringify({ expectedRevision }),
+        method: "DELETE",
+      }),
+    );
+  });
+
+  it.each([
+    ["a traversal directory", {
+      input: { directory: "../secret" },
+      operation: "devSkills.read",
+    }, /directory is invalid/],
+    ["an invalid revision", {
+      input: {
+        directory: "briefing",
+        expectedRevision: "stale",
+        manifest: {},
+        skillMd: "# Briefing",
+      },
+      operation: "devSkills.update",
+    }, /expectedRevision is invalid/],
+    ["a delete without a revision", {
+      input: { id: "briefing" },
+      operation: "devSkills.delete",
+    }, /expectedRevision is invalid/],
+    ["an unknown create field", {
+      input: {
+        directory: "briefing",
+        manifest: {},
+        path: "/tmp/secret",
+        skillMd: "# Briefing",
+      },
+      operation: "devSkills.create",
+    }, /unknown fields/],
+    ["an oversized manifest", {
+      input: {
+        directory: "briefing",
+        manifest: { description: "x".repeat(65 * 1_024) },
+        skillMd: "# Briefing",
+      },
+      operation: "devSkills.create",
+    }, /manifest is invalid/],
+  ])("rejects Dev Skill input containing %s before sidecar access", async (_name, request, error) => {
+    const harness = ipcHarness();
+    const sidecarRequest = vi.fn();
+    registerSidecarApiController({
+      ipcMain: harness.ipcMain,
+      openExternal: vi.fn(),
+      requesterWebContents: { id: 42 },
+      sidecarRequest,
+    });
+
+    await expect(harness.invoke({ sender: { id: 42 } }, request)).rejects.toThrow(error as RegExp);
+    expect(sidecarRequest).not.toHaveBeenCalled();
   });
 
   it("maps every task operation to the fixed Foundation Tasks API", async () => {
@@ -654,6 +799,13 @@ describe("trusted sidecar API controller", () => {
       { sender: { id: 42 } },
       { input: { id: ".." }, operation: "memory.get" },
     )).rejects.toThrow(/id is invalid/);
+    await expect(harness.invoke(
+      { sender: { id: 42 } },
+      {
+        input: { after: -1, providerId: "attacker", sessionId: "session-1" },
+        operation: "sessions.events",
+      },
+    )).rejects.toThrow(/invalid/);
     expect(sidecarRequest).not.toHaveBeenCalled();
   });
 });

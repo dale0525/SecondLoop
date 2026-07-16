@@ -88,34 +88,6 @@ describe("Foundation host screens", () => {
       })
     );
   });
-
-  it("renders canonical Calendar and Contacts previews and fences unknown actions", async () => {
-    const fetch = mockFetch([jsonResponse([
-      calendarAction(),
-      contactAction(),
-      unknownAction(),
-    ])]);
-    const user = userEvent.setup();
-
-    render(<FoundationActions onBack={() => undefined} />);
-
-    expect(await screen.findByRole("heading", { name: "Board review" })).toBeVisible();
-    expect(screen.getByText("Create event")).toBeVisible();
-    expect(screen.getByText("Asia/Shanghai")).toBeVisible();
-    expect(screen.getByText("Ada <ada@example.test>")).toBeVisible();
-
-    await user.click(screen.getByRole("button", { name: /Ada Lovelace/ }));
-    expect(await screen.findByRole("heading", { name: "Ada Lovelace" })).toBeVisible();
-    expect(screen.getByText("work: ada@example.test")).toBeVisible();
-    expect(screen.getByText("Analytical Engine")).toBeVisible();
-
-    await user.click(screen.getByRole("button", { name: /custom\.external\.write/ }));
-    expect(await screen.findByRole("heading", { name: "custom.external.write" })).toBeVisible();
-    expect(screen.getByText(/Only its immutable binding is shown/)).toBeVisible();
-    expect(screen.getByText(/Approval is unavailable/)).toBeVisible();
-    expect(screen.queryByRole("button", { name: "Approve once" })).not.toBeInTheDocument();
-    expect(fetch).toHaveBeenCalledTimes(1);
-  });
 });
 
 function account() {
@@ -190,104 +162,6 @@ function foundationAction() {
       attachments: [],
       previewHash: "c".repeat(64)
     }
-  };
-}
-
-function calendarAction() {
-  return actionWith({
-    actionName: "calendar.event.create",
-    id: "calendar",
-    preview: {
-      accountId: "acct.primary",
-      attendeeVisible: true,
-      conflicts: [],
-      content: {
-        attendees: [{ address: "ada@example.test", displayName: "Ada", response: "needs_action" }],
-        calendarId: "primary",
-        description: null,
-        end: "2026-07-16T11:00:00Z",
-        location: "Studio",
-        recurrence: null,
-        start: "2026-07-16T10:00:00Z",
-        timezone: "Asia/Shanghai",
-        title: "Board review",
-      },
-      eventId: null,
-      expectedVersion: null,
-      idempotencyKey: "calendar-create-1",
-      kind: "create",
-      previewHash: "d".repeat(64),
-      previewId: "calendar-preview-1",
-    },
-    resourceTarget: "calendar:primary",
-  });
-}
-
-function contactAction() {
-  return actionWith({
-    actionName: "contacts.contact.update",
-    id: "contact",
-    preview: {
-      accountId: "acct.primary",
-      contactId: "contact-1",
-      expectedVersion: 2,
-      idempotencyKey: "contact-update-1",
-      previewHash: "e".repeat(64),
-      previewId: "contact-preview-1",
-      replacement: {
-        displayName: "Ada Lovelace",
-        id: "contact-1",
-        identities: [{ kind: "email", label: "work", value: "ada@example.test" }],
-        organization: "Analytical Engine",
-        providerId: "people/ada",
-        relationship: "Collaborator",
-        updatedAt: "2026-07-16T00:00:00Z",
-        version: 3,
-      },
-    },
-    resourceTarget: "contact:contact-1",
-  });
-}
-
-function unknownAction() {
-  return actionWith({
-    actionName: "custom.external.write",
-    id: "unknown",
-    preview: { subject: "Fields must not be guessed" },
-    resourceTarget: "custom:resource-1",
-  });
-}
-
-function actionWith({ actionName, id, preview, resourceTarget }: {
-  actionName: string;
-  id: string;
-  preview: unknown;
-  resourceTarget: string;
-}) {
-  return {
-    action: {
-      action_id: `${id}-action`,
-      action_name: actionName,
-      arguments_sha256: "a".repeat(64),
-      idempotency_key: `${id}-idempotency`,
-      last_error: null,
-      resource_target: resourceTarget,
-      result: null,
-      status: "waiting_approval",
-    },
-    approval: {
-      approval_id: `${id}-approval`,
-      binding: {
-        action_name: actionName,
-        arguments_sha256: "a".repeat(64),
-        expires_at: "2026-07-16T12:00:00Z",
-        resource_target: resourceTarget,
-        risk: "external_write",
-        risk_summary: `Review ${actionName}`,
-      },
-      status: "pending",
-    },
-    preview,
   };
 }
 

@@ -17,7 +17,9 @@ const endpointOptions: Array<{ labelKey: string; value: EndpointType }> = [
   { labelKey: "model.completion", value: "completion" }
 ];
 
-type ConnectionStatus = { key: string; values?: TranslationValues };
+type ConnectionStatus =
+  | { key: string; values?: TranslationValues }
+  | { raw: string };
 
 export function SettingsModel(): JSX.Element {
   const { t } = useI18n();
@@ -36,12 +38,10 @@ export function SettingsModel(): JSX.Element {
         setSettings(snapshot.settings);
         setApiKeyConfigured(snapshot.apiKeyConfigured);
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (cancelled) return;
-        setConnectionStatus({
-          key: "model.storageFailed",
-          values: { message: t("common.unknownError") },
-        });
+        const message = error instanceof Error ? error.message : "Unknown error";
+        setConnectionStatus({ key: "model.storageFailed", values: { message } });
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);
@@ -63,11 +63,9 @@ export function SettingsModel(): JSX.Element {
     try {
       const snapshot = await saveModelSettings(nextSettings);
       setApiKeyConfigured(snapshot.apiKeyConfigured);
-    } catch {
-      setConnectionStatus({
-        key: "model.storageFailed",
-        values: { message: t("common.unknownError") },
-      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      setConnectionStatus({ key: "model.storageFailed", values: { message } });
     } finally {
       setIsSaving(false);
     }
@@ -81,15 +79,15 @@ export function SettingsModel(): JSX.Element {
       const snapshot = await saveModelSettings(settings);
       setApiKeyConfigured(snapshot.apiKeyConfigured);
       const response = await testModelConnection(settings);
-      setConnectionStatus(response.ok
-        ? { key: "model.connectionSucceeded" }
-        : { key: "model.failed", values: { message: t("common.unknownError") } });
+      setConnectionStatus(
+        response.message === "Connection succeeded"
+          ? { key: "model.connectionSucceeded" }
+          : { raw: response.message }
+      );
       if (settings.apiKey) setSettings({ ...settings, apiKey: "" });
-    } catch {
-      setConnectionStatus({
-        key: "model.failed",
-        values: { message: t("common.unknownError") },
-      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      setConnectionStatus({ key: "model.failed", values: { message } });
     } finally {
       setIsTestingConnection(false);
     }
@@ -102,11 +100,9 @@ export function SettingsModel(): JSX.Element {
       setApiKeyConfigured(snapshot.apiKeyConfigured);
       setSettings(snapshot.settings);
       setConnectionStatus({ key: "model.keyCleared" });
-    } catch {
-      setConnectionStatus({
-        key: "model.storageFailed",
-        values: { message: t("common.unknownError") },
-      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      setConnectionStatus({ key: "model.storageFailed", values: { message } });
     } finally {
       setIsSaving(false);
     }
@@ -208,7 +204,9 @@ export function SettingsModel(): JSX.Element {
         </p>
         <p className="settings-status">
           {t("model.connection", {
-            status: t(connectionStatus.key, connectionStatus.values)
+            status: "raw" in connectionStatus
+              ? connectionStatus.raw
+              : t(connectionStatus.key, connectionStatus.values)
           })}
         </p>
       </div>

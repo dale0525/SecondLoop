@@ -4,12 +4,11 @@ on:
   pull_request:
     paths:
       - ".github/workflows/macos-desktop-package.yml"
+      - "app/**"
       - "apps/desktop/**"
       - "crates/**"
       - "examples/**"
       - "products/**"
-      - "catalog/**"
-      - "skills/**"
       - "scripts/**"
       - "Cargo.lock"
       - "Cargo.toml"
@@ -27,13 +26,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - app: minimal-agent
-            input: examples/minimal-agent
-          - app: secretary-agent
-            input: examples/secretary-agent
-          - app: secondloop
-            input: products/secondloop
+        app:
+          - minimal-agent
+          - secretary-agent
     steps:
       - uses: actions/checkout@v4
       - uses: prefix-dev/setup-pixi@v0.9.0
@@ -44,7 +39,7 @@ jobs:
       - name: Build development package
         run: >-
           pixi run package-macos
-          --input ${{ matrix.input }}
+          --input examples/${{ matrix.app }}
           --output dist/macos/${{ matrix.app }}
           --overwrite
       - name: Locate App bundle

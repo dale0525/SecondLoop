@@ -95,6 +95,37 @@ describe("rich message content", () => {
     expect(screen.getByText("2 matches")).toBeInTheDocument();
   });
 
+  it("marks metadata-only tool results complete after the finished event", () => {
+    render(
+      <MessageList
+        messages={[
+          {
+            args: "{}",
+            callId: "call-publish",
+            id: "tool-call-publish",
+            kind: "tool_call",
+            name: "structured_content_publish",
+            role: "assistant",
+            status: "completed"
+          },
+          {
+            callId: "call-publish",
+            content: "",
+            id: "tool-result-publish",
+            kind: "tool_result",
+            name: "structured_content_publish",
+            ok: undefined,
+            role: "assistant"
+          }
+        ] as ChatMessage[]}
+      />
+    );
+
+    expect(
+      screen.getByRole("button", { name: /Structured content publish Completed/i })
+    ).toBeInTheDocument();
+  });
+
   it("renders assistant markdown, math, and code as structured content", () => {
     render(
       <MessageList

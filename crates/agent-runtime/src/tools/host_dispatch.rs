@@ -75,6 +75,36 @@ impl ToolRegistry {
         )
     }
 
+    pub(super) async fn dispatch_structured_content_tools(
+        &self,
+        name: &str,
+        call_id: &str,
+        arguments: &Value,
+        started: Instant,
+    ) -> Option<ToolDispatchOutcome> {
+        let structured = self.structured_content_tools.as_ref()?;
+        if !structured.handles(name) {
+            return None;
+        }
+        Some(
+            self.dispatch_scoped_host_tool(
+                HostDispatchCall {
+                    name,
+                    call_id,
+                    arguments,
+                    started,
+                },
+                HostDispatchSpec {
+                    definitions: structured.definitions(),
+                    label: "Structured content",
+                    error_code: "structured_content_error",
+                },
+                |arguments| structured.execute(name, arguments),
+            )
+            .await,
+        )
+    }
+
     pub(super) async fn dispatch_attachment_tools(
         &self,
         name: &str,

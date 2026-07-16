@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "id": "com.secondloop.routines",
+  "version": "0.1.0",
+  "displayName": "SecondLoop Routines",
+  "kind": "host_tools_only",
+  "package": {
+    "includeInstructions": true,
+    "includeRuntime": false
+  },
+  "compatibility": {
+    "platforms": [
+      "desktop"
+    ]
+  },
+  "requires": {
+    "packages": [
+      "agentweave.foundation.tasks",
+      "agentweave.foundation.scheduler",
+      "agentweave.foundation.notifications",
+      "agentweave.foundation.structured-content",
+      "agentweave.foundation.calendar",
+      "agentweave.foundation.contacts"
+    ],
+    "capabilities": [
+      "task-provider",
+      "scheduler",
+      "host-tools"
+    ],
+    "runtimeTools": [
+      "task_list",
+      "task_get",
+      "task_create",
+      "task_update",
+      "task_set_status",
+      "task_delete",
+      "schedule_list",
+      "schedule_get",
+      "schedule_create",
+      "schedule_set_status",
+      "notification_list",
+      "notification_get",
+      "notification_enqueue",
+      "notification_cancel",
+      "structured_content_publish",
+      "structured_content_get",
+      "structured_content_delete",
+      "calendar_event_get",
+      "calendar_events_list",
+      "calendar_free_busy",
+      "calendar_event_create_preview",
+      "calendar_event_update_preview",
+      "calendar_event_cancel_preview",
+      "calendar_event_apply",
+      "contacts_resolve",
+      "contact_get",
+      "contact_update_preview",
+      "contact_update_apply"
+    ],
+    "connectors": ["agentweave-calendar", "agentweave-contacts"]
+  }
+}

@@ -7,9 +7,9 @@ import { MemoryRecord, exportMemories, forgetMemory, listMemories } from "../api
 import { useI18n } from "../i18n/I18nProvider";
 import { FoundationHeader } from "./Accounts";
 
-type MemoryProps = { embedded?: boolean; onBack: () => void };
+type MemoryProps = { onBack: () => void };
 
-export function Memory({ embedded = false, onBack }: MemoryProps): JSX.Element {
+export function Memory({ onBack }: MemoryProps): JSX.Element {
   const { locale, t } = useI18n();
   const [records, setRecords] = useState<MemoryRecord[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -19,7 +19,6 @@ export function Memory({ embedded = false, onBack }: MemoryProps): JSX.Element {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const Root = embedded ? "section" : "main";
 
   const selected = useMemo(
     () => records.find((record) => record.id === selectedId) ?? null,
@@ -77,13 +76,13 @@ export function Memory({ embedded = false, onBack }: MemoryProps): JSX.Element {
   };
 
   return (
-    <Root className="foundation-screen" aria-label={t("foundation.memory.title")}>
-      {embedded ? <header className="product-page-header"><Text className="foundation-kicker" size="1" weight="bold">{t("foundation.memory.eyebrow")}</Text><Heading as="h1">{t("nav.memory")}</Heading><Text color="gray" size="2">{t("foundation.memory.subtitle")}</Text></header> : <FoundationHeader
+    <main className="foundation-screen" aria-label={t("foundation.memory.title")}>
+      <FoundationHeader
         eyebrow={t("foundation.memory.eyebrow")}
         onBack={onBack}
         subtitle={t("foundation.memory.subtitle")}
         title={t("foundation.memory.title")}
-      />}
+      />
       <div className="memory-toolbar">
         <form onSubmit={submitSearch} role="search">
           <TextField.Root aria-label={t("foundation.memory.searchLabel")} onChange={(event) => setQuery(event.target.value)} placeholder={t("foundation.memory.searchPlaceholder")} value={query}>
@@ -92,11 +91,7 @@ export function Memory({ embedded = false, onBack }: MemoryProps): JSX.Element {
         </form>
         <Button onClick={() => void exportLedger()} variant="soft"><Download aria-hidden="true" size={15} /> {t("foundation.memory.export")}</Button>
       </div>
-      {error ? (
-        <div className="memory-error" role="alert">
-          <ShieldAlert size={16} /> {embedded ? t("memory.requestFailed") : error}
-        </div>
-      ) : null}
+      {error ? <div className="memory-error" role="alert"><ShieldAlert size={16} /> {error}</div> : null}
       <div className="foundation-page-shell memory-layout">
         <section className="foundation-list-column memory-list" aria-label={t("foundation.memory.committedMemories")}>
           <div className="foundation-column-heading"><Text color="gray" size="1" weight="bold">{t("foundation.memory.ledger")}</Text><Badge color="gray" radius="full">{records.length}</Badge></div>
@@ -113,28 +108,16 @@ export function Memory({ embedded = false, onBack }: MemoryProps): JSX.Element {
           ))}
         </section>
         <section className="foundation-detail-column memory-detail" aria-live="polite">
-          {selected ? (
-            <MemoryDetail onForget={() => setConfirmOpen(true)} record={selected} />
-          ) : (
-            <Card className="foundation-detail-card foundation-detail-placeholder" size="4">
-              <Brain aria-hidden="true" size={24} />
-              <Heading as="h2" size="4">{t("memory.detailEmptyTitle")}</Heading>
-              <Text color="gray" size="2">{t("memory.detailEmptyDescription")}</Text>
-            </Card>
-          )}
+          {selected ? <MemoryDetail onForget={() => setConfirmOpen(true)} record={selected} /> : null}
         </section>
       </div>
       <Dialog.Root onOpenChange={setDetailOpen} open={detailOpen}>
         <Dialog.Portal>
           <Dialog.Overlay className="foundation-dialog-overlay memory-mobile-detail" />
           <Dialog.Content className="foundation-dialog-content memory-mobile-detail memory-mobile-detail-content">
-            <div className="mobile-detail-header">
-              <Dialog.Title className="foundation-dialog-title">{t("foundation.memory.details")}</Dialog.Title>
-              <Dialog.Close asChild><button aria-label={t("foundation.memory.closeDetails")} className="dialog-close mobile-detail-close" type="button"><X size={16} /></button></Dialog.Close>
-            </div>
-            <div className="mobile-detail-body">
-              {selected ? <MemoryDetail onForget={() => { setDetailOpen(false); setConfirmOpen(true); }} record={selected} /> : null}
-            </div>
+            <Dialog.Title className="sr-only">{t("foundation.memory.details")}</Dialog.Title>
+            <Dialog.Close asChild><button aria-label={t("foundation.memory.closeDetails")} className="dialog-close mobile-detail-close" type="button"><X size={16} /></button></Dialog.Close>
+            {selected ? <MemoryDetail onForget={() => { setDetailOpen(false); setConfirmOpen(true); }} record={selected} /> : null}
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
@@ -148,7 +131,7 @@ export function Memory({ embedded = false, onBack }: MemoryProps): JSX.Element {
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
-    </Root>
+    </main>
   );
 }
 

@@ -1,4 +1,5 @@
 import { ModelSettings } from "./types";
+import type { RuntimeEvent } from "./runtimeEvents";
 import type { AttachmentMetadata } from "../shared/attachments";
 import type {
   BackupExportReceipt,
@@ -7,8 +8,6 @@ import type {
 } from "../shared/dataProtection";
 import type {
   FoundationMisfirePolicy,
-  FoundationCalendarMutationPreview,
-  FoundationContactMutationPreview,
   FoundationNotificationRecord,
   FoundationNotificationStatus,
   FoundationQuietHours,
@@ -108,21 +107,22 @@ export type TurnEventsResponse = {
   turn: ServerTurn;
 };
 
+export type SessionEventsResponse = {
+  events: ServerConversationEvent[];
+  hasMore: boolean;
+  nextCursor: number;
+};
+
 export type CancelTurnResponse = {
   accepted: boolean;
   turn: ServerTurn;
 };
 
-export type RuntimeEvent = {
-  arguments?: unknown;
-  call_id?: string;
-  message?: string;
-  name?: string;
-  result?: unknown;
-  text?: string;
-  turn_id?: string;
-  type: string;
-};
+export type {
+  RuntimeEvent,
+  StructuredContent,
+  StructuredContentAudience,
+} from "./runtimeEvents";
 
 export type ServerMessage = {
   id: string;
@@ -235,7 +235,7 @@ export type MailSendPreview = {
 export type PendingFoundationAction = {
   approval: FoundationApproval;
   action: FoundationAction;
-  preview?: MailSendPreview | FoundationCalendarMutationPreview | FoundationContactMutationPreview | null;
+  preview?: MailSendPreview | null;
 };
 
 export type FoundationActionResolution = {
@@ -353,52 +353,15 @@ export type OwnerSkillMutationReport = {
   generation?: number;
 };
 
-export type DevSkillPackageKind =
-  | "runtime"
-  | "instruction"
-  | "combined"
-  | "empty"
-  | "invalid";
-
-export type DevSkillValidation = {
-  ok: boolean;
-  errors: string[];
-  warnings: string[];
-};
-
-export type DevSkillPackage = {
-  id: string;
-  path: string;
-  name: string;
-  description: string;
-  hasSkillMd: boolean;
-  hasRuntimeManifest: boolean;
-  runtimeTools: string[];
-  packageKind: DevSkillPackageKind;
-  bundleReady: boolean;
-  runtimeReady: boolean;
-  instructionReady: boolean;
-  releaseReady: boolean;
-  readinessIssues: string[];
-  requiredRuntimeTools: string[];
-  requiredConnectors: string[];
-  hasPackageMetadata: boolean;
-  validation: DevSkillValidation;
-};
-
-export type DevSkillInventory = {
-  root: string;
-  packages: DevSkillPackage[];
-};
-
-export type DevSkillReloadResponse = {
-  inventory: DevSkillInventory;
-  previousGeneration: number;
-  activeGeneration: number;
-  activePackages: number;
-  inactivePackages: number;
-  reloadStatus: "published";
-};
+export type {
+  DevSkillInventory,
+  DevSkillMutationResponse,
+  DevSkillPackage,
+  DevSkillPackageKind,
+  DevSkillReloadResponse,
+  DevSkillSource,
+  DevSkillValidation,
+} from "./devSkillsApi";
 
 export async function createServerSession(title: string): Promise<ServerSession> {
   return requestServer<ServerSession>("sessions.create", { title }, "/sessions", {
@@ -515,6 +478,24 @@ export async function listServerTurnEvents(
     "turns.events",
     { after, limit: 100, sessionId, turnId, waitMs },
     `/sessions/${encodeURIComponent(sessionId)}/turns/${encodeURIComponent(turnId)}/events?${params}`,
+    { method: "GET" },
+  );
+}
+
+export async function listServerSessionEvents(
+  sessionId: string,
+  after = -1,
+  waitMs = 20_000,
+): Promise<SessionEventsResponse> {
+  const params = new URLSearchParams({
+    after: String(after),
+    limit: "100",
+    waitMs: String(waitMs),
+  });
+  return requestServer<SessionEventsResponse>(
+    "sessions.events",
+    { after, limit: 100, sessionId, waitMs },
+    `/sessions/${encodeURIComponent(sessionId)}/events?${params}`,
     { method: "GET" },
   );
 }
@@ -860,26 +841,27 @@ export async function resolveFoundationAction(
   );
 }
 
-export async function listDevSkills(): Promise<DevSkillInventory> {
-  return requestServer<DevSkillInventory>("devSkills.list", undefined, "/dev/skills", { method: "GET" });
-}
+export {
+  createDevSkill,
+  deleteDevSkill,
+  listDevSkills,
+  readDevSkill,
+  reloadDevSkills,
+  updateDevSkill,
+  validateDevSkills,
+} from "./devSkillsApi";
 
-export async function validateDevSkills(): Promise<DevSkillInventory> {
-  return requestServer<DevSkillInventory>("devSkills.validate", undefined, "/dev/skills/validate", {
-    method: "POST"
-  });
-}
-
-export async function reloadDevSkills(): Promise<DevSkillReloadResponse> {
-  return requestServer<DevSkillReloadResponse>("devSkills.reload", undefined, "/dev/skills/reload", {
-    method: "POST"
-  });
-}
-
-export async function deleteDevSkill(id: string): Promise<DevSkillInventory> {
-  return requestServer<DevSkillInventory>("devSkills.delete", { id }, `/dev/skills/${encodeURIComponent(id)}`, {
-    method: "DELETE"
-  });
+export async function acceptStructuredAction(
+  sessionId: string,
+  bindingId: string,
+  input: Record<string, unknown> = {},
+): Promise<unknown> {
+  return requestServer(
+    "structuredActions.accept",
+    { bindingId, input, sessionId },
+    `/sessions/${encodeURIComponent(sessionId)}/structured-actions/${encodeURIComponent(bindingId)}/accept`,
+    { body: JSON.stringify({ input }), method: "POST" },
+  );
 }
 
 export function extractAssistantText(response: PostMessageResponse): string {

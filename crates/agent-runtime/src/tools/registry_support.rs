@@ -1,5 +1,25 @@
 use super::*;
 
+pub fn permission_allowed(
+    mode: RuntimeMode,
+    command_mode: CommandMode,
+    permission: ToolPermission,
+) -> bool {
+    match permission {
+        ToolPermission::ReadWorkspace => true,
+        ToolPermission::WriteWorkspace => mode == RuntimeMode::WorkspaceWrite,
+        ToolPermission::ExecuteCommand => {
+            mode == RuntimeMode::WorkspaceWrite && command_mode == CommandMode::Allowed
+        }
+        ToolPermission::ReadSensitive
+        | ToolPermission::PersistData
+        | ToolPermission::ExternalWrite
+        | ToolPermission::DestructiveWrite
+        | ToolPermission::CredentialAccess => true,
+        ToolPermission::ManageSkills => false,
+    }
+}
+
 impl ToolRegistry {
     pub fn try_with_memory_tools(
         mut self,
@@ -22,6 +42,14 @@ impl ToolRegistry {
         automation: crate::automation_tools::AutomationToolRuntime,
     ) -> anyhow::Result<Self> {
         self.automation_tools = Some(automation);
+        self.validate()
+    }
+
+    pub fn try_with_structured_content_tools(
+        mut self,
+        structured_content: crate::structured_content_tools::StructuredContentToolRuntime,
+    ) -> anyhow::Result<Self> {
+        self.structured_content_tools = Some(structured_content);
         self.validate()
     }
 
@@ -67,6 +95,13 @@ impl ToolRegistry {
             return true;
         }
         if self
+            .structured_content_tools
+            .as_ref()
+            .is_some_and(|structured| structured.parallel_safe(name))
+        {
+            return true;
+        }
+        if self
             .attachment_tools
             .as_ref()
             .is_some_and(|attachments| attachments.parallel_safe(name))
@@ -104,6 +139,10 @@ impl ToolRegistry {
                 .automation_tools
                 .as_ref()
                 .is_some_and(|automation| automation.handles(name))
+            || self
+                .structured_content_tools
+                .as_ref()
+                .is_some_and(|structured| structured.handles(name))
             || self
                 .attachment_tools
                 .as_ref()
@@ -149,6 +188,10 @@ impl ToolRegistry {
                 .automation_tools
                 .as_ref()
                 .is_some_and(|automation| automation.handles(name))
+            || self
+                .structured_content_tools
+                .as_ref()
+                .is_some_and(|structured| structured.handles(name))
             || self
                 .attachment_tools
                 .as_ref()

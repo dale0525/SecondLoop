@@ -192,11 +192,29 @@ fn first_party_tool_names() -> impl Iterator<Item = String> {
         .into_iter()
         .chain(agent_runtime::task_tools::TASK_TOOL_NAMES)
         .chain(agent_runtime::automation_tools::AUTOMATION_TOOL_NAMES)
+        .chain(agent_runtime::structured_content_tools::STRUCTURED_CONTENT_TOOL_NAMES)
         .chain(agent_runtime::attachment_tools::ATTACHMENT_TOOL_NAMES)
         .chain(MAIL_TOOL_NAMES)
         .chain(CALENDAR_TOOL_NAMES)
         .chain(CONTACTS_TOOL_NAMES)
         .map(str::to_string)
+}
+
+#[cfg(test)]
+mod runtime_inventory_tests {
+    use super::*;
+
+    #[test]
+    fn first_party_inventory_advertises_structured_content_tools() {
+        let tools = first_party_tool_names().collect::<BTreeSet<_>>();
+
+        for name in agent_runtime::structured_content_tools::STRUCTURED_CONTENT_TOOL_NAMES {
+            assert!(
+                tools.contains(name),
+                "missing structured content tool {name}"
+            );
+        }
+    }
 }
 
 pub(super) async fn resolve_memory_tools(

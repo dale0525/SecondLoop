@@ -5,6 +5,7 @@ use chrono::{DateTime, Datelike, Duration, TimeZone, Timelike, Utc};
 use chrono_tz::Tz;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use sqlx::{Row, SqlitePool};
 use std::time::Duration as StdDuration;
 use tokio_util::sync::CancellationToken;
@@ -619,7 +620,10 @@ impl ScheduledRunExecutor for DeclarativeScheduledRunExecutor {
                     channel: notification.channel,
                     title: notification.title,
                     body: notification.body,
-                    dedupe_key: notification.dedupe_key,
+                    dedupe_key: scheduled_notification_dedupe_key(
+                        &notification.dedupe_key,
+                        &claim.run_id,
+                    ),
                     not_before: notification.not_before,
                     quiet_hours: notification.quiet_hours,
                     data: notification.data,
@@ -627,6 +631,14 @@ impl ScheduledRunExecutor for DeclarativeScheduledRunExecutor {
                 .collect(),
         })
     }
+}
+
+fn scheduled_notification_dedupe_key(seed: &str, run_id: &str) -> String {
+    let mut digest = Sha256::new();
+    digest.update(seed.as_bytes());
+    digest.update([0]);
+    digest.update(run_id.as_bytes());
+    format!("scheduled:{:x}", digest.finalize())
 }
 
 pub struct SchedulerRunner<E> {

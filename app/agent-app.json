@@ -1,0 +1,200 @@
+{
+  "schemaVersion": 1,
+  "appId": "com.secondloop.secretary",
+  "package": {
+    "id": "com.secondloop.app",
+    "version": "0.1.0"
+  },
+  "compatibility": {
+    "runtime": ">=0.1.0, <0.2.0",
+    "platforms": [
+      "desktop"
+    ]
+  },
+  "requires": {
+    "packages": [
+      {
+        "id": "agentweave.foundation.memory",
+        "version": "=0.1.0"
+      },
+      {
+        "id": "agentweave.foundation.mail",
+        "version": "=0.1.0"
+      },
+      {
+        "id": "agentweave.foundation.calendar",
+        "version": "=0.1.0"
+      },
+      {
+        "id": "agentweave.foundation.contacts",
+        "version": "=0.1.0"
+      },
+      {
+        "id": "agentweave.foundation.tasks",
+        "version": "=0.1.0"
+      },
+      {
+        "id": "agentweave.foundation.scheduler",
+        "version": "=0.1.0"
+      },
+      {
+        "id": "agentweave.foundation.notifications",
+        "version": "=0.1.0"
+      },
+      {
+        "id": "agentweave.foundation.structured-content",
+        "version": "=0.1.0"
+      },
+      {
+        "id": "agentweave.foundation.documents",
+        "version": "=0.2.0"
+      },
+      {
+        "id": "com.secondloop.routines",
+        "version": "=0.1.0"
+      }
+    ],
+    "capabilities": [
+      "memory-provider",
+      "provenance",
+      "retention-policy",
+      "reversible-history",
+      "durable-actions",
+      "approval-engine",
+      "credential-vault",
+      "mail-connector",
+      "calendar-connector",
+      "contacts-connector",
+      "task-provider",
+      "scheduler",
+      "host-tools",
+      "attachments",
+      "data-protection"
+    ],
+    "runtimeTools": [
+      "memory_search",
+      "memory_get",
+      "memory_propose",
+      "memory_confirm",
+      "memory_update",
+      "memory_forget",
+      "memory_export",
+      "mail_accounts_list",
+      "mail_account_status",
+      "mail_account_connect",
+      "mail_account_disconnect",
+      "mailboxes_list",
+      "mail_threads_list",
+      "mail_thread_get",
+      "mail_search",
+      "mail_message_get",
+      "mail_body_read",
+      "mail_attachment_read",
+      "mail_mark_read",
+      "mail_archive",
+      "mail_move",
+      "mail_draft_create",
+      "mail_reply_draft",
+      "mail_forward_draft",
+      "mail_draft_get",
+      "mail_draft_update",
+      "mail_draft_delete",
+      "mail_send_preview",
+      "mail_send",
+      "mail_delivery_status",
+      "calendar_event_get",
+      "calendar_events_list",
+      "calendar_free_busy",
+      "calendar_event_create_preview",
+      "calendar_event_update_preview",
+      "calendar_event_cancel_preview",
+      "calendar_event_apply",
+      "contacts_resolve",
+      "contact_get",
+      "contact_update_preview",
+      "contact_update_apply",
+      "task_list",
+      "task_get",
+      "task_create",
+      "task_update",
+      "task_set_status",
+      "task_delete",
+      "schedule_list",
+      "schedule_get",
+      "schedule_create",
+      "schedule_set_status",
+      "notification_list",
+      "notification_get",
+      "notification_enqueue",
+      "notification_cancel",
+      "structured_content_publish",
+      "structured_content_get",
+      "structured_content_delete",
+      "attachment_list",
+      "attachment_get",
+      "attachment_read",
+      "attachment_delete"
+    ],
+    "connectors": [
+      "agentweave-mail",
+      "agentweave-calendar",
+      "agentweave-contacts"
+    ]
+  },
+  "features": [
+    "action-center",
+    "memory-management",
+    "mail-workflows"
+  ],
+  "policy": {
+    "externalSideEffects": "require_approval",
+    "network": "declared_only",
+    "backgroundExecution": "declared_only",
+    "memoryPersistence": "local_only",
+    "skillManagement": "disabled"
+  },
+  "branding": {
+    "displayName": "SecondLoop",
+    "shortName": "SecondLoop",
+    "description": "一位本地优先、边界清晰、每一步都可核对的私人秘书。",
+    "accentColor": "#6FA68B"
+  },
+  "appearance": {
+    "defaultTheme": "com.secondloop.night",
+    "themes": {
+      "builtins": [
+        "vscode.dark-2026",
+        "vscode.light-2026",
+        "vscode.high-contrast-dark",
+        "vscode.high-contrast-light"
+      ],
+      "custom": [
+        {
+          "id": "com.secondloop.night",
+          "label": "SecondLoop Night",
+          "path": "themes/secondloop-night.jsonc"
+        }
+      ]
+    }
+  },
+  "localization": {
+    "defaultLocale": "zh-CN",
+    "locales": [
+      {
+        "id": "zh-CN",
+        "label": "简体中文",
+        "resource": "locales/zh-CN.json"
+      },
+      {
+        "id": "en",
+        "label": "English",
+        "resource": "locales/en.json"
+      }
+    ]
+  },
+  "instructions": {
+    "system": "prompts/system.md",
+    "developer": "prompts/developer.md",
+    "additional": []
+  }
+}

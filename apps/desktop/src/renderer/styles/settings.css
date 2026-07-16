@@ -22,10 +22,6 @@
   padding: 28px var(--space-page);
 }
 
-.product-settings-shell {
-  width: min(100%, 760px);
-}
-
 .settings-panel {
   display: grid;
   flex: 0 0 auto;
@@ -116,7 +112,7 @@
 }
 
 .settings-field input {
-  min-height: 44px;
+  min-height: 40px;
   padding: 8px 10px;
 }
 
@@ -162,79 +158,6 @@
   background: var(--color-primary-fill-hover);
 }
 
-.data-protection-status-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.data-protection-status-fact {
-  display: grid;
-  align-content: start;
-  gap: 8px;
-  min-width: 0;
-  min-height: 82px;
-  padding: 12px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-control);
-  background: var(--color-surface-muted);
-}
-
-.data-protection-status-fact .rt-Badge {
-  max-width: 100%;
-  height: auto;
-  min-height: 24px;
-  white-space: normal;
-}
-
-.data-protection-actions .rt-Button,
-.data-protection-dialog-actions .rt-Button {
-  min-height: 44px;
-}
-
-.settings-info-row {
-  min-height: 60px;
-  padding: 10px 0;
-  border-top: 1px solid var(--color-border);
-}
-
-.settings-info-icon {
-  display: grid;
-  width: 38px;
-  height: 38px;
-  flex: 0 0 auto;
-  place-items: center;
-  border-radius: 10px;
-  background: var(--color-primary-soft);
-  color: var(--color-primary-text);
-}
-
-.settings-about-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.settings-about-fact {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 9px;
-  padding: 12px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-control);
-  background: var(--color-surface-muted);
-}
-
-.settings-about-fact > span {
-  color: var(--color-primary-text);
-}
-
-.settings-about-fact > div {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
 @media (max-width: 640px) {
   .settings-shell {
     padding: 18px var(--space-page-mobile);
@@ -245,9 +168,7 @@
   }
 
   .endpoint-selector,
-  .settings-form-grid,
-  .data-protection-status-grid,
-  .settings-about-grid {
+  .settings-form-grid {
     grid-template-columns: 1fr;
   }
 

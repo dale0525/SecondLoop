@@ -13,9 +13,9 @@ import {
 import { AppIconButton } from "../components/AppIconButton";
 import { useI18n } from "../i18n/I18nProvider";
 
-type AccountsProps = { embedded?: boolean; onBack: () => void };
+type AccountsProps = { onBack: () => void };
 
-export function Accounts({ embedded = false, onBack }: AccountsProps): JSX.Element {
+export function Accounts({ onBack }: AccountsProps): JSX.Element {
   const { t } = useI18n();
   const [accounts, setAccounts] = useState<MailAccount[]>([]);
   const [statuses, setStatuses] = useState<Record<string, MailAccountStatus>>({});
@@ -23,7 +23,6 @@ export function Accounts({ embedded = false, onBack }: AccountsProps): JSX.Eleme
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const Root = embedded ? "section" : "main";
 
   const load = async () => {
     setLoading(true);
@@ -67,13 +66,13 @@ export function Accounts({ embedded = false, onBack }: AccountsProps): JSX.Eleme
   };
 
   return (
-    <Root className="foundation-screen" aria-label={t("foundation.accounts.title")}>
-      {!embedded ? <FoundationHeader
+    <main className="foundation-screen" aria-label={t("foundation.accounts.title")}>
+      <FoundationHeader
         eyebrow={t("foundation.accounts.eyebrow")}
         onBack={onBack}
         subtitle={t("foundation.accounts.subtitle")}
         title={t("foundation.accounts.title")}
-      /> : null}
+      />
       <div className="foundation-page-shell accounts-layout">
         <aside className="foundation-list-column" aria-label={t("foundation.accounts.available")}>
           <div className="foundation-column-heading">
@@ -106,12 +105,7 @@ export function Accounts({ embedded = false, onBack }: AccountsProps): JSX.Eleme
           })}
         </aside>
         <section className="foundation-detail-column" aria-live="polite">
-          {error ? (
-            <ErrorCard
-              message={embedded ? t("connections.requestFailed") : error}
-              onRetry={() => void load()}
-            />
-          ) : null}
+          {error ? <ErrorCard message={error} onRetry={() => void load()} /> : null}
           {!error && selected && status ? (
             <Card className="foundation-detail-card" size="4">
               <Flex align="start" justify="between" gap="4" wrap="wrap">
@@ -132,11 +126,7 @@ export function Accounts({ embedded = false, onBack }: AccountsProps): JSX.Eleme
                 <Fact label={t("foundation.accounts.credentialAccess")} value={t("foundation.accounts.hostVaultOnly")} />
                 <Fact label={t("foundation.accounts.sendPolicy")} value={t("foundation.accounts.exactPreviewApproval")} />
               </dl>
-              {status.detail ? (
-                <Text className="foundation-note" size="2">
-                  {embedded ? t("connections.mailDiagnostic") : status.detail}
-                </Text>
-              ) : null}
+              {status.detail ? <Text className="foundation-note" size="2">{status.detail}</Text> : null}
               <Flex align="center" justify="between" gap="3" mt="5" wrap="wrap">
                 <Text color="gray" size="2">{t("foundation.accounts.hostChangeNotice")}</Text>
                 <Button
@@ -153,16 +143,9 @@ export function Accounts({ embedded = false, onBack }: AccountsProps): JSX.Eleme
               </Flex>
             </Card>
           ) : null}
-          {!error && !selected && !loading ? (
-            <Card className="foundation-detail-card foundation-detail-placeholder" size="4">
-              <Mail aria-hidden="true" size={24} />
-              <Heading as="h2" size="4">{t("connections.mailDetailEmptyTitle")}</Heading>
-              <Text color="gray" size="2">{t("connections.mailDetailEmptyDescription")}</Text>
-            </Card>
-          ) : null}
         </section>
       </div>
-    </Root>
+    </main>
   );
 }
 

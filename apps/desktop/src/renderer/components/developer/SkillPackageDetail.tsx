@@ -1,4 +1,4 @@
-import { Copy, RefreshCw, ShieldAlert, Sparkles, Trash2 } from "lucide-react";
+import { Copy, Pencil, RefreshCw, Sparkles, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { DevSkillInventory, DevSkillPackage, DevSkillPackageKind } from "../../api";
@@ -54,6 +54,10 @@ export function SkillPackageDetail({
     skillPackage.validation.errors.length + skillPackage.validation.warnings.length;
   const hasBlockingDiagnostics = packageHasBlockingDiagnostics(skillPackage);
   const validationHeading = packageValidationHeading(skillPackage, t);
+  const editable = skillPackage.hasSkillMd
+    && skillPackage.hasPackageMetadata
+    && !skillPackage.hasRuntimeManifest
+    && skillPackage.packageKind !== "invalid";
 
   const copyPrompt = async () => {
     try {
@@ -164,11 +168,12 @@ export function SkillPackageDetail({
       <div className="developer-detail-actions">
         <button
           className="developer-primary-button"
+          disabled={!editable || isBusy}
           onClick={() => onModify(skillPackage)}
           type="button"
         >
-          <ShieldAlert aria-hidden="true" size={16} />
-          <span>{t("developer.modify")}</span>
+          <Pencil aria-hidden="true" size={16} />
+          <span>{t(editable ? "developer.edit" : "developer.sourceReadOnly")}</span>
         </button>
         <button className="developer-secondary-button" onClick={() => void copyPrompt()} type="button">
           <Copy aria-hidden="true" size={16} />
@@ -192,7 +197,7 @@ export function SkillPackageDetail({
         </div>
         <button
           className="developer-danger-button"
-          disabled={isBusy}
+          disabled={!editable || isBusy}
           onClick={() => onDelete(skillPackage)}
           type="button"
         >

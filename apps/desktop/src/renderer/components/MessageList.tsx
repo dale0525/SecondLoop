@@ -2,6 +2,8 @@ import {
   ChatBubbleMessage,
   ChatMessage,
   ReasoningMessage,
+  StructuredContentActionHandler,
+  StructuredContentMessage,
   ToolCallMessage,
   ToolResultMessage
 } from "../types";
@@ -10,6 +12,7 @@ import { MessageContent } from "./messageContent/MessageContent";
 
 type MessageListProps = {
   messages: ChatMessage[];
+  onStructuredContentAction?: StructuredContentActionHandler;
 };
 
 function isBubble(message: ChatMessage): message is ChatBubbleMessage {
@@ -34,7 +37,16 @@ function isToolRow(
   );
 }
 
-export function MessageList({ messages }: MessageListProps): JSX.Element {
+function isStructuredContent(
+  message: ChatMessage
+): message is StructuredContentMessage {
+  return "kind" in message && message.kind === "structured_content";
+}
+
+export function MessageList({
+  messages,
+  onStructuredContentAction,
+}: MessageListProps): JSX.Element {
   const rows: JSX.Element[] = [];
 
   for (let index = 0; index < messages.length; index += 1) {
@@ -62,6 +74,24 @@ export function MessageList({ messages }: MessageListProps): JSX.Element {
           items={group}
           key={`tool-activity-${group[0]?.id ?? start}`}
         />
+      );
+      continue;
+    }
+
+    if (isStructuredContent(message)) {
+      rows.push(
+        <article
+          aria-label="Assistant message"
+          className="message-bubble message-bubble-assistant message-bubble-structured"
+          key={message.id}
+        >
+          <MessageContent
+            body={message.content.fallback_text}
+            onStructuredContentAction={onStructuredContentAction}
+            role="assistant"
+            structuredContent={message.content}
+          />
+        </article>
       );
       continue;
     }

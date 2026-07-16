@@ -20,4 +20,8 @@ requests omit scope and inherit App, tenant, and user exclusively from that
 claim. A payload that attempts to provide scope is invalid and cannot enqueue a
 notification.
 
+For declarative notifications, `dedupeKey` is a stable seed. The Host combines
+that seed with the durable run ID, so retries of one run stay idempotent while
+separate recurrences can each produce exactly one notification.
+
 Misfire policy is explicit: skip with grace, fire once, or bounded catch-up. The host owns persistence, worker lifecycle, concurrency, and audit.

@@ -373,6 +373,7 @@ async fn list_turn_events(
         return Err(ApiError::BadRequest("turn event query is invalid"));
     }
     let deadline = tokio::time::Instant::now() + Duration::from_millis(query.wait_ms);
+    let mut after = query.after;
     loop {
         let page = state
             .storage()
@@ -380,21 +381,24 @@ async fn list_turn_events(
                 state.conversation_scope(),
                 &session_id,
                 &turn_id,
-                query.after,
+                after,
                 query.limit,
             )
             .await
             .map_err(ApiError::Internal)?
             .ok_or(ApiError::NotFound("turn not found"))?;
-        if !page.events.is_empty()
+        after = page.next_cursor;
+        let events = crate::event_visibility::user_visible_events(page.events);
+        if !events.is_empty()
+            || page.has_more
             || page.turn.status.is_terminal()
             || query.wait_ms == 0
             || tokio::time::Instant::now() >= deadline
         {
             return Ok(Json(TurnEventsResponse {
                 turn: page.turn,
-                events: page.events,
-                next_cursor: page.next_cursor,
+                events,
+                next_cursor: after,
                 has_more: page.has_more,
             }));
         }
