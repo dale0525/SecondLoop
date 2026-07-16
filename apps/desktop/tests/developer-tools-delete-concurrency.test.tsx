@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -37,6 +37,7 @@ describe("DeveloperTools delete concurrency", () => {
     const fetchMock = mockFetch([
       jsonResponse(inventoryWith("echo", "planning")),
       pendingReload.promise,
+      jsonResponse(instructionSource("echo")),
       jsonResponse(inventoryWith("planning"))
     ]);
     render(<DeveloperTools onBack={() => undefined} />);
@@ -57,9 +58,10 @@ describe("DeveloperTools delete concurrency", () => {
     expect(screen.getByText("Active snapshot 6")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Confirm delete echo" }));
-    expect(await screen.findByText("skills/planning")).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText("skills/echo")).not.toBeInTheDocument());
+    expect(screen.getByText("skills/planning")).toBeInTheDocument();
     expect(screen.getByText("Active snapshot 6")).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
     expectWorkbenchBusy(false);
   });
 
@@ -68,6 +70,7 @@ describe("DeveloperTools delete concurrency", () => {
     const pendingDelete = deferred<Response>();
     const fetchMock = mockFetch([
       jsonResponse(inventoryWith("echo", "planning")),
+      jsonResponse(instructionSource("echo")),
       pendingDelete.promise,
       jsonResponse(reloadResponse(7, inventoryWith("planning")))
     ]);
@@ -81,13 +84,13 @@ describe("DeveloperTools delete concurrency", () => {
       reloadButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
     await settleDeferred(pendingDelete, jsonResponse(inventoryWith("planning")));
     expect(await screen.findByText("skills/planning")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Reload diagnostics" }));
     expect(await screen.findByText("Active snapshot 7")).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
     expectWorkbenchBusy(false);
   });
 });
@@ -99,9 +102,9 @@ function skillPackage(id: string): DevSkillPackage {
     name: id,
     description: `${id} package.`,
     hasSkillMd: true,
-    hasRuntimeManifest: true,
-    runtimeTools: [`${id}_tool`],
-    packageKind: "combined",
+    hasRuntimeManifest: false,
+    runtimeTools: [],
+    packageKind: "instruction",
     bundleReady: true,
     runtimeReady: true,
     instructionReady: true,
@@ -111,6 +114,22 @@ function skillPackage(id: string): DevSkillPackage {
     requiredConnectors: [],
     hasPackageMetadata: true,
     validation: { ok: true, errors: [], warnings: [] }
+  };
+}
+
+function instructionSource(id: string) {
+  return {
+    directory: id,
+    sourceRevision: "a".repeat(64),
+    manifest: {
+      schemaVersion: 1,
+      id: `com.example.${id}`,
+      version: "0.1.0",
+      displayName: id,
+      kind: "instruction_only",
+      package: { includeInstructions: true, includeRuntime: false }
+    },
+    skillMd: `---\nname: ${id}\ndescription: ${id} instructions.\n---\n\n# ${id}\n`
   };
 }
 

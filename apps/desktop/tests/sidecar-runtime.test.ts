@@ -97,6 +97,7 @@ describe("desktop sidecar runtime resolution", () => {
       AGENTWEAVE_CACHE_ROOT: "/user/AgentWeave/sidecar/cache",
       AGENTWEAVE_DATABASE_URL: "sqlite:///user/AgentWeave/sidecar/data/agentweave.db?mode=rwc",
       AGENTWEAVE_MANAGED_SKILLS: "1",
+      AGENTWEAVE_SCHEDULER_WORKER: "1",
       AGENTWEAVE_SKILLS_ROOT: "/app/resources/skills",
       AGENTWEAVE_WORKSPACE_ROOT: "/user/AgentWeave/sidecar/workspace",
       PATH: "/usr/bin",

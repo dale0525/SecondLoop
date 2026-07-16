@@ -1,6 +1,25 @@
 use super::*;
 
 impl AppState {
+    pub(super) fn new_structured_content_tools(
+        storage: &Storage,
+        scope: &ConversationScope,
+    ) -> agent_runtime::structured_content_tools::StructuredContentToolRuntime {
+        let service = agent_runtime::structured_content_store::StructuredContentService::new(
+            storage.clone(),
+            scope.clone(),
+            scope.agent_id.clone(),
+        )
+        .expect("App conversation scope must support structured content");
+        agent_runtime::structured_content_tools::StructuredContentToolRuntime::new(service)
+    }
+
+    pub(crate) fn structured_content(
+        &self,
+    ) -> agent_runtime::structured_content_store::StructuredContentService {
+        self.structured_content_tools.service()
+    }
+
     pub fn with_data_protection(
         mut self,
         database_path: impl Into<std::path::PathBuf>,
@@ -77,6 +96,8 @@ impl AppState {
         if let Some(automation) = &self.automation_tools {
             registry = registry.try_with_automation_tools(automation.clone())?;
         }
+        registry =
+            registry.try_with_structured_content_tools(self.structured_content_tools.clone())?;
         if let Some(attachments) = &self.attachment_tools {
             registry = registry.try_with_attachment_tools(attachments.clone())?;
         }

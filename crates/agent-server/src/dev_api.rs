@@ -10,12 +10,17 @@ use axum::{
     Json, Router,
     extract::{Path, State},
     http::StatusCode,
-    routing::{delete, get, post},
+    routing::{get, post},
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 use crate::api::AppState;
+use crate::dev_skill_authoring::{
+    DevSkillCreateRequest, DevSkillDeleteRequest, DevSkillMutationResponse, DevSkillSource,
+    DevSkillUpdateRequest,
+};
+use crate::dev_skill_authoring_error::{DevSkillAuthoringError, DevSkillAuthoringErrorKind};
 use crate::dev_skills::DevSkillInventory;
 
 #[derive(Debug, Serialize)]
@@ -60,10 +65,13 @@ pub(crate) fn routes() -> Router<Arc<AppState>> {
         .route("/dev/tools", get(list_tools))
         .route("/dev/tool-discovery", get(discover_tools))
         .route("/dev/instructions/preview", post(preview_instructions))
-        .route("/dev/skills", get(list_skills))
+        .route("/dev/skills", get(list_skills).post(create_skill))
         .route("/dev/skills/validate", post(validate_skills))
         .route("/dev/skills/reload", post(reload_skills))
-        .route("/dev/skills/{skill_id}", delete(delete_skill))
+        .route(
+            "/dev/skills/{skill_id}",
+            get(read_skill).put(update_skill).delete(delete_skill),
+        )
 }
 
 async fn list_tools(
@@ -193,30 +201,69 @@ async fn reload_skills(
     }))
 }
 
+async fn read_skill(
+    Path(skill_id): Path<String>,
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<DevSkillSource>, StatusCode> {
+    let _guard = state.dev_skill_mutations().lock().await;
+    let root = state.skills_root().ok_or(StatusCode::NOT_FOUND)?;
+    crate::dev_skill_authoring::read_skill_source(&root, &skill_id)
+        .await
+        .map(Json)
+        .map_err(dev_skill_authoring_status)
+}
+
+async fn create_skill(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<DevSkillCreateRequest>,
+) -> Result<(StatusCode, Json<DevSkillMutationResponse>), StatusCode> {
+    let _guard = state.dev_skill_mutations().lock().await;
+    let root = state
+        .skills_root()
+        .ok_or(StatusCode::UNPROCESSABLE_ENTITY)?;
+    crate::dev_skill_authoring::create_skill(&root, request)
+        .await
+        .map(|response| (StatusCode::CREATED, Json(response)))
+        .map_err(dev_skill_authoring_status)
+}
+
+async fn update_skill(
+    Path(skill_id): Path<String>,
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<DevSkillUpdateRequest>,
+) -> Result<Json<DevSkillMutationResponse>, StatusCode> {
+    let _guard = state.dev_skill_mutations().lock().await;
+    let root = state
+        .skills_root()
+        .ok_or(StatusCode::UNPROCESSABLE_ENTITY)?;
+    crate::dev_skill_authoring::update_skill(&root, &skill_id, request)
+        .await
+        .map(Json)
+        .map_err(dev_skill_authoring_status)
+}
+
 async fn delete_skill(
     Path(skill_id): Path<String>,
     State(state): State<Arc<AppState>>,
+    Json(request): Json<DevSkillDeleteRequest>,
 ) -> Result<Json<DevSkillInventory>, StatusCode> {
     let _guard = state.dev_skill_mutations().lock().await;
     let root = state.skills_root().ok_or(StatusCode::NOT_FOUND)?;
-    crate::dev_skills::delete_skill_package(root, &skill_id)
+    crate::dev_skill_authoring::delete_skill(&root, &skill_id, request)
         .await
         .map(Json)
-        .map_err(dev_skill_delete_status)
+        .map_err(dev_skill_authoring_status)
 }
 
-fn dev_skill_delete_status(error: anyhow::Error) -> StatusCode {
-    let message = error.to_string();
-    if message.contains("unsafe")
-        || message.contains("invalid")
-        || message.contains("single path segment")
-        || message.contains("must not be empty")
-    {
-        StatusCode::BAD_REQUEST
-    } else if message.contains("No such file") || message.contains("not found") {
-        StatusCode::NOT_FOUND
-    } else {
-        StatusCode::INTERNAL_SERVER_ERROR
+fn dev_skill_authoring_status(error: anyhow::Error) -> StatusCode {
+    let Some(classified) = error.downcast_ref::<DevSkillAuthoringError>() else {
+        return StatusCode::INTERNAL_SERVER_ERROR;
+    };
+    match classified.kind() {
+        DevSkillAuthoringErrorKind::BadRequest => StatusCode::BAD_REQUEST,
+        DevSkillAuthoringErrorKind::NotFound => StatusCode::NOT_FOUND,
+        DevSkillAuthoringErrorKind::Conflict => StatusCode::CONFLICT,
+        DevSkillAuthoringErrorKind::Unprocessable => StatusCode::UNPROCESSABLE_ENTITY,
     }
 }
 

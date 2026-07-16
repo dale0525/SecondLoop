@@ -62,6 +62,7 @@ pub struct TurnRunner<C> {
     memory_candidate_extractor: Option<Arc<dyn crate::memory_lifecycle::MemoryCandidateExtractor>>,
     task_tools: Option<crate::task_tools::TaskToolRuntime>,
     automation_tools: Option<crate::automation_tools::AutomationToolRuntime>,
+    structured_content_tools: Option<crate::structured_content_tools::StructuredContentToolRuntime>,
     attachment_tools: Option<crate::attachment_tools::AttachmentToolRuntime>,
     connector_tools: Option<crate::connector_tools::ConnectorToolRuntime>,
     mail_actions: Option<crate::foundation_actions::MailActionService>,
@@ -114,6 +115,7 @@ where
             memory_candidate_extractor: None,
             task_tools: None,
             automation_tools: None,
+            structured_content_tools: None,
             attachment_tools: None,
             connector_tools: None,
             mail_actions: None,
@@ -169,6 +171,14 @@ where
         automation_tools: crate::automation_tools::AutomationToolRuntime,
     ) -> Self {
         self.automation_tools = Some(automation_tools);
+        self
+    }
+
+    pub fn with_structured_content_tools(
+        mut self,
+        structured_content: crate::structured_content_tools::StructuredContentToolRuntime,
+    ) -> Self {
+        self.structured_content_tools = Some(structured_content);
         self
     }
 
@@ -247,6 +257,16 @@ where
         }
         if let Some(automation) = &self.automation_tools {
             tools = tools.try_with_automation_tools(automation.clone())?;
+        }
+        if let (Some(structured), Some(session_id)) = (
+            &self.structured_content_tools,
+            request.session_id.as_deref(),
+        ) {
+            let context = crate::structured_content_tools::StructuredContentTurnContext::new(
+                session_id, &turn_id,
+            )?;
+            tools = tools
+                .try_with_structured_content_tools(structured.clone().with_turn_context(context))?;
         }
         if let Some(attachments) = &self.attachment_tools {
             tools = tools.try_with_attachment_tools(attachments.clone())?;

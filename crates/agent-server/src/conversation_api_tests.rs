@@ -1,6 +1,8 @@
 use super::*;
 use crate::api;
 use agent_runtime::storage::Storage;
+use agent_runtime::structured_content::StructuredContentAudience;
+use agent_runtime::structured_content_store::PublishStructuredContentRequest;
 use axum::{
     body::{Body, to_bytes},
     http::{Request, StatusCode},
@@ -132,6 +134,137 @@ async fn session_contract_rejects_invalid_bounds_and_cursors() {
         let response = app.clone().oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
+}
+
+#[tokio::test]
+async fn session_event_cursor_is_scoped_paginated_and_long_poll_safe() {
+    let storage = Storage::connect("sqlite::memory:").await.unwrap();
+    let state = Arc::new(AppState::new(storage.clone()));
+    let session = storage
+        .create_scoped_session(state.conversation_scope(), "Events")
+        .await
+        .unwrap();
+    state
+        .structured_content()
+        .publish(
+            &session.id,
+            None,
+            PublishStructuredContentRequest {
+                content_id: Some("private-card".into()),
+                expected_revision: None,
+                mime_type: "application/vnd.agentweave.card+json".into(),
+                schema_version: "1".into(),
+                payload: json!({"title":"Owner-only status"}),
+                fallback_text: "Owner-only status".into(),
+                audience: StructuredContentAudience::Owner,
+                bindings: Vec::new(),
+            },
+            Utc::now(),
+        )
+        .await
+        .unwrap();
+    state
+        .structured_content()
+        .publish(
+            &session.id,
+            None,
+            PublishStructuredContentRequest {
+                content_id: Some("status-card".into()),
+                expected_revision: None,
+                mime_type: "application/vnd.agentweave.card+json".into(),
+                schema_version: "1".into(),
+                payload: json!({"title":"Background status"}),
+                fallback_text: "Background status".into(),
+                audience: StructuredContentAudience::User,
+                bindings: Vec::new(),
+            },
+            Utc::now(),
+        )
+        .await
+        .unwrap();
+    let app = api::router(state.clone());
+
+    let loaded = read_json(
+        app.clone()
+            .oneshot(empty_request("GET", &format!("/sessions/{}", session.id)))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(loaded["events"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        loaded["events"][0]["payload"]["content"]["content_id"],
+        "status-card"
+    );
+
+    let first = app
+        .clone()
+        .oneshot(empty_request(
+            "GET",
+            &format!("/sessions/{}/events?after=-1&limit=1&waitMs=0", session.id),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(first.status(), StatusCode::OK);
+    let first = read_json(first).await;
+    assert_eq!(first["events"], json!([]));
+    assert_eq!(first["nextCursor"], 0);
+    assert_eq!(first["hasMore"], true);
+
+    let visible = read_json(
+        app.clone()
+            .oneshot(empty_request(
+                "GET",
+                &format!("/sessions/{}/events?after=0&limit=1&waitMs=0", session.id),
+            ))
+            .await
+            .unwrap(),
+    )
+    .await;
+    assert_eq!(visible["events"][0]["kind"], "structured_content_published");
+    assert_eq!(visible["nextCursor"], 1);
+    assert_eq!(visible["hasMore"], false);
+
+    let empty = app
+        .clone()
+        .oneshot(empty_request(
+            "GET",
+            &format!("/sessions/{}/events?after=1&limit=100&waitMs=5", session.id),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(empty.status(), StatusCode::OK);
+    assert_eq!(read_json(empty).await["events"], json!([]));
+
+    let foreign_scope = agent_runtime::session::ConversationScope::local("com.example.foreign");
+    let foreign = storage
+        .create_scoped_session(&foreign_scope, "Foreign")
+        .await
+        .unwrap();
+    let denied = app
+        .clone()
+        .oneshot(empty_request(
+            "GET",
+            &format!(
+                "/sessions/{}/events?after=-1&limit=100&waitMs=0",
+                foreign.id
+            ),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(denied.status(), StatusCode::NOT_FOUND);
+
+    let invalid = app
+        .oneshot(empty_request(
+            "GET",
+            &format!(
+                "/sessions/{}/events?after=-2&limit=100&waitMs=0",
+                session.id
+            ),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(invalid.status(), StatusCode::BAD_REQUEST);
 }
 
 fn json_request(method: &str, uri: &str, body: Value) -> Request<Body> {

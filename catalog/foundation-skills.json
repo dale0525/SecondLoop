@@ -795,6 +795,71 @@
       }
     },
     {
+      "id": "agentweave.foundation.structured-content",
+      "version": "0.1.0",
+      "displayName": "Structured Content",
+      "description": "Safe declarative chat cards, persisted revisions, and opaque trusted action workflows.",
+      "audience": [
+        "consumer",
+        "developer"
+      ],
+      "consumerDefault": false,
+      "stability": "preview",
+      "wave": "available",
+      "platforms": [
+        "desktop",
+        "server"
+      ],
+      "dependencies": {
+        "packages": [],
+        "runtimeFeatures": [
+          "structured-content",
+          "trusted-action-bindings",
+          "session-events"
+        ],
+        "runtimeCapabilities": [
+          "host-tools"
+        ],
+        "connectors": [],
+        "hostTools": [
+          "structured_content_publish",
+          "structured_content_get",
+          "structured_content_delete"
+        ]
+      },
+      "permissions": {
+        "required": [],
+        "conditional": [
+          "structured-content.publish",
+          "structured-content.delete",
+          "structured-action.accept"
+        ]
+      },
+      "dataSensitivity": {
+        "level": "sensitive",
+        "categories": [
+          "interaction_state",
+          "action_receipts",
+          "account_metadata"
+        ]
+      },
+      "replacementContract": {
+        "id": "agentweave.foundation.structured-content",
+        "majorVersion": 1,
+        "replaceable": true,
+        "canDisable": true,
+        "requirements": [
+          "Keep public display state separate from trusted action parameters.",
+          "Persist revisions, tombstones, bindings, and action receipts.",
+          "Render only allowlisted declarative components with plain-text fallback."
+        ]
+      },
+      "localPackage": {
+        "path": "skills/foundation-structured-content",
+        "manifest": "agentweave.json"
+      }
+    },
+    {
       "id": "agentweave.foundation.notes",
       "version": "0.1.0",
       "displayName": "Notes and Knowledge",

@@ -36,8 +36,8 @@ use server_skill_startup::{
 use server_skill_startup::{ManagedSkillsConfig, load_skill_manager};
 use server_tenant_startup::{
     apply_connector_foundation, apply_storage_protection, build_managed_tenant_registry,
-    build_tenant_app_state, open_storage, runtime_config_from_env, skills_root_from_env,
-    sqlite_database_path,
+    build_tenant_app_state, dev_skills_root_from_env, open_storage, runtime_config_from_env,
+    skills_root_from_env, sqlite_database_path,
 };
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -49,6 +49,12 @@ async fn main() -> anyhow::Result<()> {
     let credential_vault_key = transport.take_credential_vault_key().map(Arc::new);
 
     let skills_root = skills_root_from_env();
+    let dev_api_enabled = std::env::var("AGENTWEAVE_DEV_API").as_deref() == Ok("1");
+    let dev_skills_root = if dev_api_enabled {
+        dev_skills_root_from_env(&skills_root)?
+    } else {
+        skills_root.clone()
+    };
     let managed_skills = managed_skills_config_from_lookup(|name| std::env::var_os(name))?;
     let builtin_mode = builtin_skills_mode_from_lookup(|name| std::env::var_os(name))?;
     let owner_host = owner_host_config_from_lookup(|name| std::env::var_os(name))?;
@@ -180,12 +186,8 @@ async fn main() -> anyhow::Result<()> {
         state
     };
     let state = apply_storage_protection(state, &database_path, &data_protection_key)?;
-    let state = Arc::new(state.with_skills_root(skills_root.clone()));
-    let app = api::router_for_transport(
-        state,
-        std::env::var("AGENTWEAVE_DEV_API").as_deref() == Ok("1"),
-        transport.auth(),
-    );
+    let state = Arc::new(state.with_skills_root(dev_skills_root));
+    let app = api::router_for_transport(state, dev_api_enabled, transport.auth());
     let addr = transport.address();
     let listener = transport.into_listener();
     let scheduler_cancellation = tokio_util::sync::CancellationToken::new();

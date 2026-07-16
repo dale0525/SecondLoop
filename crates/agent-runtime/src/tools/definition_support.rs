@@ -96,6 +96,11 @@ pub(super) fn app_policy_allows_tool(
             policy.background_execution()
                 != crate::app_manifest::BackgroundExecutionPolicy::Disabled
         }
+        ToolSource::HostCapability { capability }
+            if capability == "agentweave.host.structured-content/v1" =>
+        {
+            true
+        }
         ToolSource::HostCapability { capability } => {
             policy.network() == AppNetworkPolicy::Unrestricted
                 || matches!(
@@ -151,6 +156,9 @@ impl ToolRegistry {
         }
         if let Some(automation) = &self.automation_tools {
             definitions.extend(automation.definitions());
+        }
+        if let Some(structured) = &self.structured_content_tools {
+            definitions.extend(structured.definitions());
         }
         if let Some(attachments) = &self.attachment_tools {
             definitions.extend(attachments.definitions());

@@ -12,11 +12,13 @@ use axum::{
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use std::time::Duration;
 
 const DEFAULT_PAGE_LIMIT: usize = 50;
 const MAX_PAGE_LIMIT: usize = 100;
 const MAX_CURSOR_BYTES: usize = 2_048;
 const MAX_TITLE_BYTES: usize = 256;
+const MAX_EVENT_WAIT_MS: u64 = 25_000;
 
 pub(crate) fn routes() -> Router<Arc<AppState>> {
     Router::new()
@@ -27,6 +29,7 @@ pub(crate) fn routes() -> Router<Arc<AppState>> {
                 .patch(update_session_title)
                 .delete(delete_session),
         )
+        .route("/sessions/{session_id}/events", get(list_session_events))
         .route("/sessions/{session_id}/messages", get(get_messages))
 }
 
@@ -57,6 +60,25 @@ struct SessionDetailResponse {
     messages: Vec<Message>,
     events: Vec<ConversationEventRecord>,
     turns: Vec<ConversationTurn>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SessionEventsQuery {
+    #[serde(default = "default_event_cursor")]
+    after: i64,
+    #[serde(default = "default_event_limit")]
+    limit: usize,
+    #[serde(default)]
+    wait_ms: u64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SessionEventsResponse {
+    events: Vec<ConversationEventRecord>,
+    next_cursor: i64,
+    has_more: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -135,6 +157,7 @@ async fn load_session(
         .storage()
         .list_conversation_events(state.conversation_scope(), &session_id)
         .await
+        .map(crate::event_visibility::user_visible_events)
         .map_err(ApiError::Internal)?;
     let turns = state
         .storage()
@@ -147,6 +170,48 @@ async fn load_session(
         events,
         turns,
     }))
+}
+
+async fn list_session_events(
+    Path(session_id): Path<String>,
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<SessionEventsQuery>,
+) -> Result<Json<SessionEventsResponse>, ApiError> {
+    if query.after < -1
+        || !(1..=MAX_PAGE_LIMIT).contains(&query.limit)
+        || query.wait_ms > MAX_EVENT_WAIT_MS
+    {
+        return Err(ApiError::BadRequest("session event query is invalid"));
+    }
+    let deadline = tokio::time::Instant::now() + Duration::from_millis(query.wait_ms);
+    let mut after = query.after;
+    loop {
+        let page = state
+            .storage()
+            .list_scoped_session_events_page(
+                state.conversation_scope(),
+                &session_id,
+                after,
+                query.limit,
+            )
+            .await
+            .map_err(ApiError::Internal)?
+            .ok_or(ApiError::NotFound("session not found"))?;
+        after = page.next_cursor;
+        let events = crate::event_visibility::user_visible_events(page.events);
+        if !events.is_empty()
+            || page.has_more
+            || query.wait_ms == 0
+            || tokio::time::Instant::now() >= deadline
+        {
+            return Ok(Json(SessionEventsResponse {
+                events,
+                next_cursor: after,
+                has_more: page.has_more,
+            }));
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
 }
 
 async fn get_messages(
@@ -253,6 +318,14 @@ fn validate_title(value: &str) -> Result<String, ApiError> {
         return Err(ApiError::BadRequest("session title is invalid"));
     }
     Ok(title.to_string())
+}
+
+fn default_event_cursor() -> i64 {
+    -1
+}
+
+fn default_event_limit() -> usize {
+    100
 }
 
 fn encode_cursor(cursor: &SessionPageCursor) -> Result<String, ApiError> {

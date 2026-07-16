@@ -4,12 +4,36 @@ use serde::{Deserialize, Deserializer, Serialize, de};
 use sha2::{Digest, Sha256};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
+use tokio::io::AsyncReadExt;
 
 pub const SKILL_PACKAGE_SCHEMA_VERSION: u32 = 1;
 const MAX_SKILL_PACKAGE_ID_LENGTH: usize = 128;
 const LEGACY_LOSSLESS_ID_PREFIX: &str = "legacy.local.";
 const LEGACY_LOSSY_ID_PREFIX: &str = "legacy.lossy.";
 const LEGACY_PACKAGE_HASH_LENGTH: usize = 12;
+
+pub async fn read_package_regular_file_nofollow(
+    package_root: &Path,
+    relative: &Path,
+    maximum_bytes: usize,
+) -> anyhow::Result<Vec<u8>> {
+    anyhow::ensure!(maximum_bytes > 0, "package file size limit is invalid");
+    let (file, declared_bytes, _) =
+        crate::skill_store_fs::open_regular_file_nofollow(package_root, relative).await?;
+    anyhow::ensure!(
+        declared_bytes <= u64::try_from(maximum_bytes)?,
+        "package source file is too large"
+    );
+    let mut bytes = Vec::with_capacity(usize::try_from(declared_bytes)?);
+    file.take(u64::try_from(maximum_bytes)? + 1)
+        .read_to_end(&mut bytes)
+        .await?;
+    anyhow::ensure!(
+        bytes.len() <= maximum_bytes,
+        "package source file is too large"
+    );
+    Ok(bytes)
+}
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SkillPackageId(String);

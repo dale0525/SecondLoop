@@ -3,9 +3,7 @@ import { ArrowLeft, ShieldCheck } from "lucide-react";
 import { AppIconButton } from "../components/AppIconButton";
 import { SettingsAppearance } from "../components/SettingsAppearance";
 import { SettingsDeveloperTools } from "../components/SettingsDeveloperTools";
-import { SettingsDataProtection } from "../components/SettingsDataProtection";
 import { SettingsModel } from "../components/SettingsModel";
-import { SettingsAbout, SettingsNotifications } from "../components/SettingsProductInfo";
 import { SettingsFoundation } from "../components/SettingsFoundation";
 import { SettingsHostBootstrap } from "../components/SettingsHostBootstrap";
 import { useHostBootstrap } from "../hostBootstrap";
@@ -14,6 +12,7 @@ import { useI18n } from "../i18n/I18nProvider";
 import { OwnerPolicy, canInspectOwnerSkills } from "../ownerBridge";
 
 type SettingsProps = {
+  developerToolsAvailable: boolean;
   onBack: () => void;
   onOpenDeveloperTools: () => void;
   onOpenOwnerSkills: () => void;
@@ -21,24 +20,23 @@ type SettingsProps = {
   onOpenMemory: () => void;
   onOpenActions: () => void;
   ownerPolicy: OwnerPolicy | null;
-  productMode?: boolean;
 };
 
 export function Settings({
+  developerToolsAvailable,
   onBack,
   onOpenDeveloperTools,
   onOpenOwnerSkills,
   onOpenAccounts,
   onOpenMemory,
   onOpenActions,
-  ownerPolicy,
-  productMode = false,
+  ownerPolicy
 }: SettingsProps): JSX.Element {
   const { t } = useI18n();
   const bootstrap = useHostBootstrap();
   return (
     <main className="settings-screen" aria-label={t("settings.title")}>
-      {!productMode ? <header className="top-bar settings-top-bar">
+      <header className="top-bar settings-top-bar">
         <AppIconButton label={t("common.backToChat")} onClick={onBack}>
           <ArrowLeft size={18} aria-hidden="true" />
         </AppIconButton>
@@ -46,22 +44,18 @@ export function Settings({
           <h1>{t("settings.title")}</h1>
         </div>
         <span className="top-bar-spacer" aria-hidden="true" />
-      </header> : null}
-      {productMode ? <header className="product-page-header settings-product-header"><p className="foundation-kicker">{t("settings.productEyebrow")}</p><h1>{t("settings.title")}</h1></header> : null}
-      <div className={`settings-shell${productMode ? " product-settings-shell" : ""}`}>
+      </header>
+      <div className="settings-shell">
         <SettingsHostBootstrap />
         <SettingsAppearance />
         <SettingsLanguage />
-        {productMode ? <SettingsDataProtection /> : null}
-        {productMode ? <SettingsNotifications /> : null}
-        {productMode ? <SettingsAbout /> : null}
-        {!productMode ? <SettingsFoundation
+        <SettingsFoundation
           features={bootstrap.features}
           onOpenAccounts={onOpenAccounts}
           onOpenActions={onOpenActions}
           onOpenMemory={onOpenMemory}
-        /> : null}
-        {!productMode ? <SettingsModel /> : null}
+        />
+        <SettingsModel />
         {bootstrap.features.skillManagement && canInspectOwnerSkills(ownerPolicy) ? (
           <section className="settings-panel" aria-labelledby="settings-owner-title">
             <div className="settings-panel-heading">
@@ -77,12 +71,10 @@ export function Settings({
             </button>
           </section>
         ) : null}
-        {!productMode ? (
-          <SettingsDeveloperTools
-            enabled={bootstrap.features.skillManagement}
-            onOpenDeveloperTools={onOpenDeveloperTools}
-          />
-        ) : null}
+        <SettingsDeveloperTools
+          enabled={developerToolsAvailable}
+          onOpenDeveloperTools={onOpenDeveloperTools}
+        />
       </div>
     </main>
   );

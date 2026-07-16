@@ -9,6 +9,11 @@ use agent_runtime::{
         OAuthTokenGrant,
     },
     storage::Storage,
+    structured_content::{
+        StructuredActionBindingRequest, StructuredActionConstraints, StructuredActionIntent,
+        StructuredContentAudience,
+    },
+    structured_content_store::PublishStructuredContentRequest,
 };
 use async_trait::async_trait;
 use axum::{body::Body, http::Request};
@@ -88,6 +93,10 @@ impl OAuthProvider for FakeProvider {
 }
 
 async fn oauth_app() -> axum::Router {
+    api::router(oauth_state().await)
+}
+
+async fn oauth_state() -> Arc<AppState> {
     let storage = Storage::connect("sqlite::memory:").await.unwrap();
     let metadata = SqliteCredentialMetadataStore::from_storage(&storage)
         .await
@@ -99,9 +108,9 @@ async fn oauth_app() -> axum::Router {
     let broker = agent_runtime::oauth::OAuthBroker::new(
         &storage,
         CredentialScope {
-            app_id: "com.example.oauth-api".to_string(),
+            app_id: "dev.agentweave.default".to_string(),
             tenant_id: "local".to_string(),
-            user_id: "user".to_string(),
+            user_id: "local-user".to_string(),
         },
         "http://127.0.0.1:49152/oauth/callback",
         vault,
@@ -109,7 +118,7 @@ async fn oauth_app() -> axum::Router {
     )
     .await
     .unwrap();
-    api::router(Arc::new(AppState::new(storage).with_oauth_broker(broker)))
+    Arc::new(AppState::new(storage).with_oauth_broker(broker))
 }
 
 #[tokio::test]
@@ -359,6 +368,188 @@ async fn callback_rejects_an_unissued_high_entropy_state_without_echoing_it() {
     assert!(!body.contains("private-provider-code"));
 }
 
+#[tokio::test]
+async fn callback_publishes_the_next_structured_content_revision_without_secrets() {
+    let state = oauth_state().await;
+    let session = state
+        .storage()
+        .create_scoped_session(state.conversation_scope(), "OAuth card")
+        .await
+        .unwrap();
+    let now = Utc::now();
+    let published = state
+        .structured_content()
+        .publish(
+            &session.id,
+            Some("turn-oauth"),
+            oauth_card_request(now, "oauth-card", "oauth-card-1"),
+            now,
+        )
+        .await
+        .unwrap();
+    let binding_id = &published.bindings[0].binding_id;
+    let app = api::router(state.clone());
+    let accepted = app
+        .clone()
+        .oneshot(json_request(
+            "POST",
+            &format!(
+                "/sessions/{}/structured-actions/{binding_id}/accept",
+                session.id
+            ),
+            json!({"input":{}}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(accepted.status(), StatusCode::OK);
+    let accepted = read_json(accepted).await;
+    let authorization_id = accepted["hostDirective"]["authorization_id"]
+        .as_str()
+        .unwrap();
+    let authorization_url = accepted["hostDirective"]["url"].as_str().unwrap();
+    let oauth_state = Url::parse(authorization_url)
+        .unwrap()
+        .query_pairs()
+        .find_map(|(key, value)| (key == "state").then(|| value.into_owned()))
+        .unwrap();
+    let before_callback = state
+        .storage()
+        .list_conversation_events(state.conversation_scope(), &session.id)
+        .await
+        .unwrap();
+    let callback_cursor = before_callback.last().unwrap().event_index;
+
+    let callback = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/oauth/callback?state={oauth_state}&code=provider-code"
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(callback.status(), StatusCode::OK);
+    let callback_body = String::from_utf8(
+        axum::body::to_bytes(callback.into_body(), 16 * 1024)
+            .await
+            .unwrap()
+            .to_vec(),
+    )
+    .unwrap();
+    for secret in [&oauth_state, "provider-code", "access-token"] {
+        assert!(!callback_body.contains(secret));
+    }
+
+    let events = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!(
+                    "/sessions/{}/events?after={callback_cursor}&limit=100&waitMs=0",
+                    session.id
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(events.status(), StatusCode::OK);
+    let events = read_json(events).await;
+    assert_eq!(events["events"].as_array().unwrap().len(), 1);
+    assert_eq!(events["events"][0]["payload"]["content"]["revision"], 3);
+    assert_eq!(
+        events["events"][0]["payload"]["content"]["payload"]["status"]["label"],
+        "Completed"
+    );
+    assert_eq!(
+        events["events"][0]["payload"]["content"]["payload"]["fields"][1]["label"],
+        "Capabilities"
+    );
+    let serialized = events.to_string();
+    for secret in [
+        &oauth_state,
+        "provider-code",
+        "access-token",
+        "refresh-token",
+        "credentialId",
+    ] {
+        assert!(!serialized.contains(secret));
+    }
+
+    let status = app
+        .oneshot(
+            Request::builder()
+                .uri(format!("/host/oauth/authorizations/{authorization_id}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(read_json(status).await["status"], "completed");
+}
+
+#[tokio::test]
+async fn host_cancellation_advances_the_structured_card_after_browser_open_failure() {
+    let state = oauth_state().await;
+    let session = state
+        .storage()
+        .create_scoped_session(state.conversation_scope(), "OAuth cancellation")
+        .await
+        .unwrap();
+    let now = Utc::now();
+    let published = state
+        .structured_content()
+        .publish(
+            &session.id,
+            None,
+            oauth_card_request(now, "cancel-card", "cancel-card-1"),
+            now,
+        )
+        .await
+        .unwrap();
+    let app = api::router(state.clone());
+    let accepted = read_json(
+        app.clone()
+            .oneshot(json_request(
+                "POST",
+                &format!(
+                    "/sessions/{}/structured-actions/{}/accept",
+                    session.id, published.bindings[0].binding_id
+                ),
+                json!({"input":{}}),
+            ))
+            .await
+            .unwrap(),
+    )
+    .await;
+    let authorization_id = accepted["hostDirective"]["authorization_id"]
+        .as_str()
+        .unwrap();
+
+    let cancelled = app
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri(format!("/host/oauth/authorizations/{authorization_id}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(cancelled.status(), StatusCode::OK);
+    let content = state
+        .structured_content()
+        .get(&session.id, "cancel-card")
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(content.revision, 3);
+    assert_eq!(content.payload["status"]["label"], "Cancelled");
+}
+
 #[test]
 fn callback_query_rejects_low_entropy_duplicates_and_malformed_escapes() {
     for query in [
@@ -384,6 +575,48 @@ fn callback_query_rejects_low_entropy_duplicates_and_malformed_escapes() {
         parse_callback_query(Some(&oversized)),
         Err(CallbackQueryError::TooLarge)
     ));
+}
+
+fn oauth_card_request(
+    now: chrono::DateTime<Utc>,
+    content_id: &str,
+    idempotency_key: &str,
+) -> PublishStructuredContentRequest {
+    PublishStructuredContentRequest {
+        content_id: Some(content_id.into()),
+        expected_revision: None,
+        mime_type: "application/vnd.agentweave.card+json".into(),
+        schema_version: "1".into(),
+        payload: json!({
+            "title":"Connect calendar",
+            "status":{"label":"Authorization required","tone":"info"},
+            "actions":[{"id":"authorize","label":"Continue","style":"primary"}]
+        }),
+        fallback_text: "Connect calendar".into(),
+        audience: StructuredContentAudience::User,
+        bindings: vec![StructuredActionBindingRequest {
+            action_id: "authorize".into(),
+            intent: StructuredActionIntent::OauthStart,
+            idempotency_key: idempotency_key.into(),
+            expires_at: now + ChronoDuration::minutes(10),
+            parameters: json!({
+                "providerId":"workspace",
+                "connectorIds":["calendar"],
+                "requestedCapabilities":["read"]
+            }),
+            input_schema: json!({
+                "type":"object",
+                "properties":{},
+                "required":[],
+                "additionalProperties":false
+            }),
+            constraints: StructuredActionConstraints {
+                provider_ids: vec!["workspace".into()],
+                connector_ids: vec!["calendar".into()],
+                capabilities: vec!["read".into()],
+            },
+        }],
+    }
 }
 
 fn json_request(method: &str, uri: &str, value: Value) -> Request<Body> {

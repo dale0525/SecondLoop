@@ -105,6 +105,47 @@ async fn scheduled_execution_and_notification_delivery_are_independent_and_exact
 }
 
 #[tokio::test]
+async fn declarative_recurring_notifications_are_idempotent_per_run_not_per_schedule() {
+    let now = Utc::now();
+    let claim = |run_id: &str| ScheduledClaim {
+        claim_id: format!("claim-{run_id}"),
+        job_id: "job-1".into(),
+        run_id: run_id.into(),
+        app_id: "app".into(),
+        tenant_id: "tenant".into(),
+        user_id: "user".into(),
+        due_at: now,
+        claimed_by: "worker".into(),
+        claim_until: now + Duration::minutes(1),
+        payload: json!({
+            "notifications":[{
+                "channel":"desktop",
+                "title":"Daily reminder",
+                "body":"Review priorities",
+                "dedupeKey":"daily-reminder",
+                "notBefore":now,
+                "quietHours":null,
+                "data":{}
+            }]
+        }),
+    };
+    let executor = DeclarativeScheduledRunExecutor;
+    let first = executor.execute(&claim("run-1")).await.unwrap();
+    let retry = executor.execute(&claim("run-1")).await.unwrap();
+    let second = executor.execute(&claim("run-2")).await.unwrap();
+
+    assert_eq!(
+        first.notifications[0].dedupe_key,
+        retry.notifications[0].dedupe_key
+    );
+    assert_ne!(
+        first.notifications[0].dedupe_key,
+        second.notifications[0].dedupe_key
+    );
+    assert!(first.notifications[0].dedupe_key.starts_with("scheduled:"));
+}
+
+#[tokio::test]
 async fn expired_scheduler_claim_is_recovered_with_the_same_run_identity() {
     let storage = Storage::connect("sqlite::memory:").await.unwrap();
     let scheduler = SchedulerStore::from_storage(&storage).await.unwrap();

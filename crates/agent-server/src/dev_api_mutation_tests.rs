@@ -61,14 +61,11 @@ async fn dev_reload_serializes_delete_across_routers_sharing_app_state() {
     let workspace = unique_test_dir("reload-delete-serialization");
     let skills_root = workspace.join("skills");
     let package_root = skills_root.join("dynamic");
-    write_combined_package(
-        &package_root,
-        "com.example.dynamic",
-        "dynamic_tool",
-        "dynamic",
-        "Dynamic body",
-    )
-    .await;
+    write_editable_package(&package_root, "dynamic", "Dynamic body").await;
+    let expected_revision = crate::dev_skill_authoring::read_skill_source(&skills_root, "dynamic")
+        .await
+        .unwrap()
+        .source_revision;
     let reload_started = Arc::new(Notify::new());
     let release_reload = Arc::new(Notify::new());
     let source = Arc::new(BlockingDirectorySource {
@@ -101,7 +98,7 @@ async fn dev_reload_serializes_delete_across_routers_sharing_app_state() {
     reload_started.notified().await;
     let mut delete_task = tokio::spawn(async move {
         delete_app
-            .oneshot(delete_request("/dev/skills/dynamic"))
+            .oneshot(delete_request("/dev/skills/dynamic", &expected_revision))
             .await
             .unwrap()
     });
@@ -129,21 +126,15 @@ async fn dev_reload_serializes_delete_across_routers_sharing_app_state() {
     );
     assert_eq!(manager.current_snapshot().generation(), 2);
     assert!(!package_root.exists());
-
-    let tools = read_json(
-        snapshot_app
-            .oneshot(get_request("/dev/tools"))
-            .await
-            .unwrap(),
-    )
-    .await;
     assert!(
-        tools["tools"]
-            .as_array()
-            .unwrap()
+        manager
+            .current_snapshot()
+            .catalog()
+            .summaries()
             .iter()
-            .any(|tool| tool["name"] == "dynamic_tool")
+            .any(|summary| summary.name == "dynamic")
     );
+    drop(snapshot_app);
     remove_test_dir(workspace).await;
 }
 
@@ -332,6 +323,35 @@ async fn write_combined_package(
     .unwrap();
 }
 
+async fn write_editable_package(package_root: &Path, instruction_name: &str, body: &str) {
+    tokio::fs::create_dir_all(package_root).await.unwrap();
+    tokio::fs::write(
+        package_root.join("agentweave.json"),
+        json!({
+            "schemaVersion": 1,
+            "id": format!("com.example.{instruction_name}"),
+            "version": "1.0.0",
+            "displayName": instruction_name,
+            "kind": "instruction_only",
+            "package": {
+                "includeInstructions": true,
+                "includeRuntime": false
+            }
+        })
+        .to_string(),
+    )
+    .await
+    .unwrap();
+    tokio::fs::write(
+        package_root.join("SKILL.md"),
+        format!(
+            "---\nname: {instruction_name}\ndescription: Editable instructions.\n---\n\n# {instruction_name}\n{body}"
+        ),
+    )
+    .await
+    .unwrap();
+}
+
 fn unique_test_dir(name: &str) -> PathBuf {
     std::env::temp_dir().join(format!(
         "agentweave-dev-api-{name}-{}",
@@ -357,11 +377,14 @@ fn post_request(uri: &str) -> Request<Body> {
         .unwrap()
 }
 
-fn delete_request(uri: &str) -> Request<Body> {
+fn delete_request(uri: &str, expected_revision: &str) -> Request<Body> {
     Request::builder()
         .method("DELETE")
         .uri(uri)
-        .body(Body::empty())
+        .header("content-type", "application/json")
+        .body(Body::from(
+            json!({"expectedRevision": expected_revision}).to_string(),
+        ))
         .unwrap()
 }
 

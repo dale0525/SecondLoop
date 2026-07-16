@@ -62,11 +62,7 @@ function toolGroupTitle(items: ToolActivityItem[]): string {
 
 function toolGroupStatus(items: ToolActivityItem[]): string {
   if (
-    items.some(
-      (item) =>
-        (isToolCall(item) && item.status === "running") ||
-        (isToolResult(item) && item.ok === undefined)
-    )
+    items.some((item) => isToolCall(item) && item.status === "running")
   ) {
     return "Running";
   }

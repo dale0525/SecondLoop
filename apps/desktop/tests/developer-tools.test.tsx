@@ -78,13 +78,8 @@ describe("developer skill prompts", () => {
 describe("DeveloperTools", () => {
   it("routes #developer to the developer tools screen", async () => {
     installHostBootstrap();
+    installDevApiBridge({ root: "/repo/skills", packages: [] });
     window.history.replaceState(null, "", "/#developer");
-    mockFetch([
-      jsonResponse({
-        root: "/repo/skills",
-        packages: []
-      })
-    ]);
 
     render(<App />);
 
@@ -95,11 +90,8 @@ describe("DeveloperTools", () => {
 
   it("shows settings developer entry only when the dev API is available", async () => {
     installHostBootstrap();
+    installDevApiBridge({ root: "/repo/skills", packages: [] });
     const user = userEvent.setup();
-    mockFetch([
-      jsonResponse({ root: "/repo/skills", packages: [] }),
-      jsonResponse({ root: "/repo/skills", packages: [] })
-    ]);
 
     render(<App />);
 
@@ -108,6 +100,32 @@ describe("DeveloperTools", () => {
     expect(
       await screen.findByRole("button", { name: "Open developer tools" })
     ).toBeInTheDocument();
+  });
+
+  it("keeps a reloaded inventory when leaving and reopening developer tools", async () => {
+    installHostBootstrap();
+    const initialInventory = inventoryWith("echo");
+    const reloadedInventory = inventoryWith("planning");
+    if (!window.agentWeave) throw new Error("Host bootstrap must be installed first");
+    window.agentWeave.server = {
+      request: async (operation) => {
+        if (operation === "devSkills.list") return initialInventory;
+        if (operation === "devSkills.reload") return reloadResponse(2, reloadedInventory);
+        throw new Error(`Unexpected operation: ${operation}`);
+      },
+    };
+    window.history.replaceState(null, "", "/#developer");
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Reload diagnostics" }));
+    expect(await screen.findByText("skills/planning")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Back to settings" }));
+    await user.click(await screen.findByRole("button", { name: "Open developer tools" }));
+
+    expect(await screen.findByText("skills/planning")).toBeInTheDocument();
+    expect(screen.queryByText("skills/echo")).not.toBeInTheDocument();
   });
 
   it("hides settings developer entry when the dev API is unavailable", async () => {
@@ -123,6 +141,18 @@ describe("DeveloperTools", () => {
         screen.queryByRole("button", { name: "Open developer tools" })
       ).not.toBeInTheDocument();
     });
+  });
+
+  it("rejects direct developer navigation outside the trusted Electron bridge", async () => {
+    installHostBootstrap();
+    window.history.replaceState(null, "", "/#developer");
+    const fetchMock = mockFetch([jsonResponse({ root: "/repo/skills", packages: [] })]);
+
+    render(<App />);
+
+    expect(await screen.findByRole("main", { name: "Settings" })).toBeInTheDocument();
+    expect(screen.queryByRole("main", { name: "Developer Tools" })).not.toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("treats runtime-only missing SKILL.md diagnostics as informational", async () => {
@@ -200,61 +230,59 @@ describe("DeveloperTools", () => {
     ).toBeInTheDocument();
   });
 
-  it("opens a skill-creator prompt dialog for a selected package", async () => {
+  it("opens, saves, and reloads an instruction Skill in the simple editor", async () => {
     const user = userEvent.setup();
-    mockFetch([
-      jsonResponse({
-        root: "/repo/skills",
-        packages: [
-          {
-            id: "echo",
-            path: "echo",
-            name: "echo",
-            description: "Echo a text payload.",
-            hasSkillMd: false,
-            hasRuntimeManifest: true,
-            runtimeTools: ["echo"],
-            packageKind: "runtime",
-            bundleReady: true,
-            validation: { ok: true, errors: [], warnings: [] }
-          }
-        ]
-      })
+    const inventory = inventoryWithInstruction("briefing");
+    const source = {
+      directory: "briefing",
+      sourceRevision: "a".repeat(64),
+      manifest: {
+        schemaVersion: 1,
+        id: "com.example.secretary.briefing",
+        version: "0.1.0",
+        displayName: "Briefing",
+        kind: "instruction_only",
+        package: { includeInstructions: true, includeRuntime: false },
+        compatibility: { platforms: ["desktop"] },
+        requires: { packages: [], capabilities: [], runtimeTools: [], connectors: [] }
+      },
+      skillMd: "---\nname: briefing\ndescription: Prepare a briefing.\n---\n\n# Briefing\n"
+    };
+    const fetchMock = mockFetch([
+      jsonResponse(inventory),
+      jsonResponse(source),
+      jsonResponse({ inventory, source: { ...source, sourceRevision: "b".repeat(64) } }),
+      jsonResponse(reloadResponse(3, inventory))
     ]);
 
     render(<DeveloperTools onBack={() => undefined} />);
 
-    await user.click(
-      await screen.findByRole("button", { name: "Modify with skill-creator" })
-    );
+    await user.click(await screen.findByRole("button", { name: "Edit skill" }));
 
-    const dialog = screen.getByRole("dialog", { name: "skill-creator prompt" });
-    expect(dialog).toBeInTheDocument();
-    expect(
-      within(dialog).getByText(/Use the existing skill-creator skill/)
-    ).toBeInTheDocument();
+    const dialog = screen.getByRole("dialog", { name: "Edit skill" });
+    const displayName = await within(dialog).findByDisplayValue("Briefing");
+    await user.clear(displayName);
+    await user.type(displayName, "Daily Briefing");
+    await user.click(within(dialog).getByRole("button", { name: "Save and reload" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Edit skill" })).not.toBeInTheDocument());
+    const snapshot = screen.getByText("Active snapshot 3");
+    expect(snapshot).toBeInTheDocument();
+    expect(snapshot.closest(".developer-status-banner")).not.toHaveClass(
+      "developer-status-banner-error",
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "/__agentweave/dev/skills/briefing", expect.objectContaining({ method: "GET" }));
+    expect(fetchMock).toHaveBeenNthCalledWith(3, "/__agentweave/dev/skills/briefing", expect.objectContaining({ method: "PUT" }));
+    expect(fetchMock).toHaveBeenNthCalledWith(4, "/__agentweave/dev/skills/reload", expect.objectContaining({ method: "POST" }));
   });
 
   it("deletes a package after confirmation and refreshes inventory", async () => {
     const user = userEvent.setup();
+    const inventory = inventoryWithInstruction("echo");
+    const source = instructionSource("echo");
     const fetchMock = mockFetch([
-      jsonResponse({
-        root: "/repo/skills",
-        packages: [
-          {
-            id: "echo",
-            path: "echo",
-            name: "echo",
-            description: "Echo a text payload.",
-            hasSkillMd: false,
-            hasRuntimeManifest: true,
-            runtimeTools: ["echo"],
-            packageKind: "runtime",
-            bundleReady: true,
-            validation: { ok: true, errors: [], warnings: [] }
-          }
-        ]
-      }),
+      jsonResponse(inventory),
+      jsonResponse(source),
       jsonResponse({ root: "/repo/skills", packages: [] })
     ]);
 
@@ -268,30 +296,18 @@ describe("DeveloperTools", () => {
     });
     expect(fetchMock).toHaveBeenLastCalledWith(
       "/__agentweave/dev/skills/echo",
-      expect.objectContaining({ method: "DELETE" })
+      expect.objectContaining({
+        body: JSON.stringify({ expectedRevision: source.sourceRevision }),
+        method: "DELETE"
+      })
     );
   });
 
   it("closes the delete dialog and shows an error when deletion fails", async () => {
     const user = userEvent.setup();
     mockFetch([
-      jsonResponse({
-        root: "/repo/skills",
-        packages: [
-          {
-            id: "echo",
-            path: "echo",
-            name: "echo",
-            description: "Echo a text payload.",
-            hasSkillMd: false,
-            hasRuntimeManifest: true,
-            runtimeTools: ["echo"],
-            packageKind: "runtime",
-            bundleReady: true,
-            validation: { ok: true, errors: [], warnings: [] }
-          }
-        ]
-      }),
+      jsonResponse(inventoryWithInstruction("echo")),
+      jsonResponse(instructionSource("echo")),
       new Response(JSON.stringify({ error: "delete failed" }), { status: 500 })
     ]);
 
@@ -327,7 +343,7 @@ describe("DeveloperTools", () => {
 
     render(<DeveloperTools onBack={() => undefined} />);
 
-    await screen.findByRole("button", { name: "Modify with skill-creator" });
+    await screen.findByRole("button", { name: "Runtime source is read-only" });
     await user.click(screen.getByRole("button", { name: "Reload diagnostics" }));
     expect(await screen.findByText("Active snapshot 2")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Refresh skill packages" }));
@@ -447,6 +463,34 @@ function inventoryWith(...ids: string[]): DevSkillInventory {
   };
 }
 
+function inventoryWithInstruction(id: string): DevSkillInventory {
+  return {
+    root: "/repo/skills",
+    packages: [{
+      ...skillPackage(id),
+      hasRuntimeManifest: false,
+      runtimeTools: [],
+      packageKind: "instruction",
+    }]
+  };
+}
+
+function instructionSource(id: string) {
+  return {
+    directory: id,
+    sourceRevision: "a".repeat(64),
+    manifest: {
+      schemaVersion: 1,
+      id: `com.example.${id}`,
+      version: "0.1.0",
+      displayName: id,
+      kind: "instruction_only",
+      package: { includeInstructions: true, includeRuntime: false }
+    },
+    skillMd: `---\nname: ${id}\ndescription: ${id} instructions.\n---\n\n# ${id}\n`
+  };
+}
+
 function reloadResponse(
   activeGeneration: number,
   inventory: DevSkillInventory
@@ -500,4 +544,14 @@ function mockFetch(responses: Array<Response | Promise<Response>>) {
   }
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
+}
+
+function installDevApiBridge(inventory: DevSkillInventory): void {
+  if (!window.agentWeave) throw new Error("Host bootstrap must be installed first");
+  window.agentWeave.server = {
+    request: async (operation) => {
+      if (operation !== "devSkills.list") throw new Error(`Unexpected operation: ${operation}`);
+      return inventory;
+    },
+  };
 }

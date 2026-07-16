@@ -1,8 +1,8 @@
 use crate::event_persistence::project_runtime_event_for_persistence;
 use crate::events::RuntimeEvent;
 use crate::session::{
-    ConversationEventRecord, ConversationScope, ConversationTurn, ConversationTurnEventPage,
-    ConversationTurnStatus, Message,
+    ConversationEventRecord, ConversationScope, ConversationSessionEventPage, ConversationTurn,
+    ConversationTurnEventPage, ConversationTurnStatus, Message,
 };
 use crate::storage::Storage;
 use chrono::{DateTime, Duration, Utc};
@@ -280,6 +280,41 @@ impl Storage {
         let next_cursor = events.last().map_or(after, |event| event.event_index);
         Ok(Some(ConversationTurnEventPage {
             turn,
+            events,
+            next_cursor,
+            has_more,
+        }))
+    }
+
+    pub async fn list_scoped_session_events_page(
+        &self,
+        scope: &ConversationScope,
+        session_id: &str,
+        after: i64,
+        limit: usize,
+    ) -> anyhow::Result<Option<ConversationSessionEventPage>> {
+        scope.validate()?;
+        anyhow::ensure!(after >= -1, "session event cursor is invalid");
+        anyhow::ensure!((1..=100).contains(&limit), "session event limit is invalid");
+        if self.get_scoped_session(scope, session_id).await?.is_none() {
+            return Ok(None);
+        }
+        let rows = sqlx::query(
+            "SELECT e.id, e.session_id, e.turn_id, e.event_index, e.kind, e.payload_json, e.created_at FROM conversation_events e WHERE e.session_id = ? AND e.event_index > ? ORDER BY e.event_index LIMIT ?",
+        )
+        .bind(session_id)
+        .bind(after)
+        .bind(i64::try_from(limit + 1)?)
+        .fetch_all(self.pool())
+        .await?;
+        let mut events = rows
+            .into_iter()
+            .map(event_from_row)
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        let has_more = events.len() > limit;
+        events.truncate(limit);
+        let next_cursor = events.last().map_or(after, |event| event.event_index);
+        Ok(Some(ConversationSessionEventPage {
             events,
             next_cursor,
             has_more,
