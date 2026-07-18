@@ -30,6 +30,7 @@ describe("desktop sidecar controller", () => {
     const supervisor = {
       ensureRunning: vi.fn(async () => readyStatus),
       request: vi.fn(async () => new Response("ok")),
+      shutdown: vi.fn(async () => readyStatus),
       start: vi.fn(async () => readyStatus),
       status: vi.fn(() => readyStatus),
       stop: vi.fn(async () => readyStatus),
@@ -67,7 +68,62 @@ describe("desktop sidecar controller", () => {
       state: "external",
     });
     await expect(controller.stop()).resolves.toMatchObject({ state: "external" });
+    const key = Buffer.alloc(32, 7);
+    await expect(controller.provisionLaunchKeys({ backupKey: key })).rejects.toThrow(/managed/i);
+    expect(key).toEqual(Buffer.alloc(32, 7));
     expect(supervisorFactory).not.toHaveBeenCalled();
+  });
+
+  it("serializes purpose-key provisioning and rebuilds with retained keys", async () => {
+    const supervisors = [supervisorFixture(), supervisorFixture(), supervisorFixture()];
+    const supervisorFactory = vi.fn(() => supervisors.shift()!);
+    const controller = createDesktopSidecarController(managedResolution(), {
+      prepareDirectory: vi.fn(),
+      supervisorFactory,
+    });
+
+    await controller.start();
+    const backupKey = Buffer.alloc(32, 3);
+    await controller.provisionLaunchKeys({ backupKey });
+    expect(supervisorFactory).toHaveBeenNthCalledWith(2, expect.objectContaining({ backupKey }));
+
+    const credentialVaultKey = Buffer.alloc(32, 4);
+    await controller.provisionLaunchKeys({ credentialVaultKey });
+    expect(supervisorFactory).toHaveBeenNthCalledWith(3, expect.objectContaining({
+      backupKey,
+      credentialVaultKey,
+    }));
+    await expect(controller.provisionLaunchKeys({ backupKey: Buffer.alloc(32, 9) }))
+      .rejects.toThrow(/cannot change/);
+  });
+
+  it("waits for active requests before replacing the managed sidecar", async () => {
+    let finishRequest: (() => void) | undefined;
+    const first = supervisorFixture();
+    first.request.mockImplementation(() => new Promise<Response>((resolve) => {
+      finishRequest = () => resolve(new Response("ok"));
+    }));
+    const second = supervisorFixture();
+    const supervisorFactory = vi.fn()
+      .mockReturnValueOnce(first)
+      .mockReturnValueOnce(second);
+    const controller = createDesktopSidecarController(managedResolution(), {
+      prepareDirectory: vi.fn(),
+      supervisorFactory,
+    });
+    await controller.start();
+
+    const request = controller.request("/foundation/memory");
+    await flushMicrotasks();
+    const provision = controller.provisionLaunchKeys({ backupKey: Buffer.alloc(32, 6) });
+    await flushMicrotasks();
+    expect(first.stop).not.toHaveBeenCalled();
+
+    finishRequest?.();
+    await request;
+    await provision;
+    expect(first.stop).toHaveBeenCalledOnce();
+    expect(second.start).toHaveBeenCalledOnce();
   });
 
   it("requires Main-owned transport authentication for a trusted external server", async () => {
@@ -123,7 +179,7 @@ describe("desktop sidecar controller", () => {
       beforeQuit?: (event: { preventDefault(): void }) => void;
       finishStop?: () => void;
     } = {};
-    const stop = vi.fn(() => new Promise<SidecarStatus>((resolve) => {
+    const shutdown = vi.fn(() => new Promise<SidecarStatus>((resolve) => {
       harness.finishStop = () => resolve(readyStatus);
     }));
     const app = {
@@ -133,7 +189,7 @@ describe("desktop sidecar controller", () => {
       quit: vi.fn(),
       removeListener: vi.fn(),
     };
-    installSidecarShutdownGate({ app, controller: { stop } });
+    installSidecarShutdownGate({ app, controller: { shutdown } });
     const firstEvent = { preventDefault: vi.fn() };
     const secondEvent = { preventDefault: vi.fn() };
 
@@ -142,7 +198,7 @@ describe("desktop sidecar controller", () => {
     await flushMicrotasks();
     expect(firstEvent.preventDefault).toHaveBeenCalledOnce();
     expect(secondEvent.preventDefault).toHaveBeenCalledOnce();
-    expect(stop).toHaveBeenCalledOnce();
+    expect(shutdown).toHaveBeenCalledOnce();
     expect(app.quit).not.toHaveBeenCalled();
 
     harness.finishStop?.();
@@ -165,6 +221,17 @@ function managedResolution(): ManagedSidecarResolution {
     env: { PATH: "/usr/bin" },
     mode: "managed",
     workspaceRoot: "/user/sidecar/workspace",
+  };
+}
+
+function supervisorFixture() {
+  return {
+    ensureRunning: vi.fn(async () => readyStatus),
+    request: vi.fn(async () => new Response("ok")),
+    shutdown: vi.fn(async () => readyStatus),
+    start: vi.fn(async () => readyStatus),
+    status: vi.fn(() => readyStatus),
+    stop: vi.fn(async () => readyStatus),
   };
 }
 

@@ -29,11 +29,13 @@ The first descriptor is host-to-child. The host writes one bounded JSON document
   "schemaVersion": 1,
   "launchId": "7f21b128-918e-4b03-91f9-14a95c842ee4",
   "transportToken": "a-base64url-credential-with-at-least-256-bits-of-entropy",
-  "dataProtectionKeyHex": "optional-64-character-lowercase-hex-key"
+  "backupKeyHex": "optional-64-character-lowercase-hex-key",
+  "credentialVaultKeyHex": "optional-64-character-lowercase-hex-key",
+  "storageProtectionKeyHex": "optional-64-character-lowercase-hex-key"
 }
 ```
 
-The input is limited to 4096 bytes, rejects unknown fields, requires a canonical UUID, and accepts only a 43-to-128-character base64url-compatible transport credential. `dataProtectionKeyHex` is optional; when present, it must decode to exactly 32 bytes and is consumed as secret material by the sidecar.
+The input is limited to 4096 bytes, rejects unknown fields, requires a canonical UUID, and accepts only a 43-to-128-character base64url-compatible transport credential. Each purpose key is optional, must decode to exactly 32 bytes, and is consumed as secret material by the sidecar. `backupKeyHex` enables authenticated backup and restore, `credentialVaultKeyHex` unlocks the persistent Host secret store, and `storageProtectionKeyHex` is reserved for a configured at-rest storage provider. The legacy `dataProtectionKeyHex` field remains accepted as both backup and storage-protection material for compatibility, but cannot be combined with any purpose-specific field.
 
 The second descriptor is child-to-host. After binding the listener, the sidecar writes one newline-terminated JSON document and closes the pipe:
 
@@ -56,7 +58,7 @@ Session, Foundation, development, Host bootstrap, model, notification, Owner, an
 
 Every crash restart creates a new launch UUID, endpoint, and credential. The prior credential buffer is cleared when its child generation stops being authoritative. Public sidecar status never includes any of these private transport details.
 
-When local data protection is enabled, Electron Main also passes its operating-system-protected backup key through the launch pipe. The key never appears in the child environment or launch result. See [Local Data Protection and Backup](./DATA_PROTECTION.md) for its narrower purpose and recovery boundary.
+Electron Main provisions purpose keys only when the corresponding capability is needed. A clean App starts without any purpose key; an existing Credential Vault is unlocked for background Connector work, while the backup key is loaded only after an explicit export or restore action. No purpose key appears in the child environment or launch result. See [Local Data Protection and Backup](./DATA_PROTECTION.md) for the backup boundary.
 
 ## Development compatibility
 

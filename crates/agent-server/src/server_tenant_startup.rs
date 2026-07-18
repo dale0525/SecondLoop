@@ -147,7 +147,7 @@ pub(super) async fn open_storage(
     Ok((storage, database_path))
 }
 
-pub(super) fn apply_storage_protection(
+pub(super) fn apply_data_protection(
     state: api::AppState,
     database_path: &Option<PathBuf>,
     key: &Option<Arc<SecretMaterial>>,

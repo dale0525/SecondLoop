@@ -35,7 +35,7 @@ use server_skill_startup::{
 #[cfg(test)]
 use server_skill_startup::{ManagedSkillsConfig, load_skill_manager};
 use server_tenant_startup::{
-    apply_connector_foundation, apply_storage_protection, build_managed_tenant_registry,
+    apply_connector_foundation, apply_data_protection, build_managed_tenant_registry,
     build_tenant_app_state, dev_skills_root_from_env, open_storage, runtime_config_from_env,
     skills_root_from_env, sqlite_database_path,
 };
@@ -45,7 +45,8 @@ async fn main() -> anyhow::Result<()> {
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
     let mut transport = agent_server::local_transport::prepare_from_environment().await?;
-    let data_protection_key = transport.take_data_protection_key().map(Arc::new);
+    let backup_key = transport.take_backup_key().map(Arc::new);
+    let storage_protection_key = transport.take_storage_protection_key().map(Arc::new);
     let credential_vault_key = transport.take_credential_vault_key().map(Arc::new);
 
     let skills_root = skills_root_from_env();
@@ -78,7 +79,7 @@ async fn main() -> anyhow::Result<()> {
             managed_skills,
             builtin_mode,
             policy,
-            data_protection_key.clone(),
+            storage_protection_key.clone(),
             credential_vault_key.clone(),
         )
         .await?;
@@ -110,7 +111,7 @@ async fn main() -> anyhow::Result<()> {
         let database_url = std::env::var("AGENTWEAVE_DATABASE_URL")
             .unwrap_or_else(|_| DEFAULT_DATABASE_URL.into());
         let (storage, database_path) =
-            open_storage(&database_url, data_protection_key.clone()).await?;
+            open_storage(&database_url, storage_protection_key.clone()).await?;
         let loaded =
             load_skill_manager_with_mode(&skills_root, storage.clone(), None, builtin_mode).await?;
         if owner_host.is_none() {
@@ -185,7 +186,7 @@ async fn main() -> anyhow::Result<()> {
     } else {
         state
     };
-    let state = apply_storage_protection(state, &database_path, &data_protection_key)?;
+    let state = apply_data_protection(state, &database_path, &backup_key)?;
     let state = Arc::new(state.with_skills_root(dev_skills_root));
     let app = api::router_for_transport(state, dev_api_enabled, transport.auth());
     let addr = transport.address();

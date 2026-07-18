@@ -2,7 +2,7 @@
 
 [English](./DATA_PROTECTION.md)
 
-AgentWeave 提供一项可选的 Host 能力，用于加密本地备份和可安全重启的数据库恢复。App 需要在 Manifest 中声明 `data-protection` 能力，Host 还必须通过可信启动通道提供一个 32 字节的数据保护密钥。
+AgentWeave 提供一项可选的 Host 能力，用于加密本地备份和可安全重启的数据库恢复。App 需要在 Manifest 中声明 `data-protection` 能力；用户请求导出或恢复时，Host 再通过可信启动通道提供一把专用的 32 字节 Backup key。
 
 ## 保护边界
 
@@ -20,13 +20,17 @@ Provider credential 以 App、tenant、user 和 credential ID 为联合键。每
 
 删除一个 Connector 绑定不会撤销或删除仍被共享的 credential。只有最后一个绑定已移除，Host 才能撤销 credential 并清除它引用的 secret material。每次 lease 都会在读取 secret material 前检查精确的 Connector 与 account 绑定、绑定 scope 子集、provider grant、过期时间和撤销状态。
 
-## Desktop 密钥处理
+## Desktop 用途密钥
 
-Electron Main 会生成一个随机 32 字节密钥，并且只在 App 数据目录中保存经操作系统加密后的形式。原始密钥通过继承的启动管道传给受管 Rust sidecar，不会进入子进程环境变量、Renderer、Preload 返回值、日志、Prompt 或备份元数据。
+Electron Main 把 Backup key、Credential Vault key 和可选的 Storage Protection key 分成独立安全领域。新建的 Backup key 与 Vault key 分别随机生成，只在 App 数据目录保存由操作系统加密、带明确用途的包装文件。原始密钥通过继承的启动管道传给受管 Rust sidecar，不会进入子进程环境变量、Renderer、Preload 返回值、日志、Prompt 或备份元数据。
+
+没有秘密材料的 App 冷启动不会访问操作系统凭据存储。用户选择备份导出位置或恢复来源后才 provision Backup key；开始 OAuth 或修改 Mail 账号配置时才 provision Vault key。已经存在加密 Connector secret 时，Desktop 会在启动时解锁 Vault，以保证后台工作仍然可用。
+
+已有 `data-protection-key.v1.json` 的安装按用途惰性迁移。Backup provision 保留旧的原始备份密钥；Vault provision 保留原有 HKDF 派生结果。旧文件继续保留，避免两个用途尚未分别完成迁移时发生破坏性的全量切换。
 
 Desktop 导出会把经操作系统加密后的密钥包装与 Rust 加密备份信封放在一起。只要同一个操作系统用户的 Keychain 仍能解密包装密钥，即使重新安装 App，也可以恢复备份。它不是跨用户或跨设备恢复方案；如果平台 Keychain 和当前 App 数据同时丢失，这类备份将无法解密。
 
-自定义 Server Host 可以通过 `AppState::with_data_protection` 注入自己妥善保护的密钥。未由可信受管 Host 提供密钥时，默认开发 Server 不启用这项能力。
+自定义 Server Host 可以通过 `AppState::with_data_protection` 注入自己妥善保护的 Backup key。未由可信受管 Host 提供密钥时，默认开发 Server 不启用这项能力。
 
 ## 备份流程
 

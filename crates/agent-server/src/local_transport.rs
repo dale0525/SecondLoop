@@ -30,6 +30,10 @@ struct LaunchConfigWire {
     #[serde(default)]
     data_protection_key_hex: Option<String>,
     #[serde(default)]
+    backup_key_hex: Option<String>,
+    #[serde(default)]
+    storage_protection_key_hex: Option<String>,
+    #[serde(default)]
     credential_vault_key_hex: Option<String>,
 }
 
@@ -76,7 +80,8 @@ impl TransportAuth {
 struct LaunchConfig {
     launch_id: String,
     auth: TransportAuth,
-    data_protection_key: Option<agent_runtime::credential::SecretMaterial>,
+    backup_key: Option<agent_runtime::credential::SecretMaterial>,
+    storage_protection_key: Option<agent_runtime::credential::SecretMaterial>,
     credential_vault_key: Option<agent_runtime::credential::SecretMaterial>,
 }
 
@@ -84,15 +89,20 @@ pub struct PreparedLocalTransport {
     listener: TcpListener,
     auth: Option<TransportAuth>,
     address: SocketAddr,
-    data_protection_key: Option<agent_runtime::credential::SecretMaterial>,
+    backup_key: Option<agent_runtime::credential::SecretMaterial>,
+    storage_protection_key: Option<agent_runtime::credential::SecretMaterial>,
     credential_vault_key: Option<agent_runtime::credential::SecretMaterial>,
 }
 
 impl PreparedLocalTransport {
-    pub fn take_data_protection_key(
+    pub fn take_backup_key(&mut self) -> Option<agent_runtime::credential::SecretMaterial> {
+        self.backup_key.take()
+    }
+
+    pub fn take_storage_protection_key(
         &mut self,
     ) -> Option<agent_runtime::credential::SecretMaterial> {
-        self.data_protection_key.take()
+        self.storage_protection_key.take()
     }
 
     pub fn take_credential_vault_key(
@@ -123,7 +133,8 @@ pub async fn prepare_from_environment() -> anyhow::Result<PreparedLocalTransport
             listener,
             auth: None,
             address,
-            data_protection_key: None,
+            backup_key: None,
+            storage_protection_key: None,
             credential_vault_key: None,
         });
     };
@@ -150,7 +161,8 @@ pub async fn prepare_from_environment() -> anyhow::Result<PreparedLocalTransport
             listener,
             auth: Some(config.auth),
             address,
-            data_protection_key: config.data_protection_key,
+            backup_key: config.backup_key,
+            storage_protection_key: config.storage_protection_key,
             credential_vault_key: config.credential_vault_key,
         })
     }
@@ -222,7 +234,12 @@ fn read_launch_config(mut reader: impl Read) -> anyhow::Result<LaunchConfig> {
 
 fn validate_launch_config(wire: LaunchConfigWire) -> anyhow::Result<LaunchConfig> {
     let mut token = wire.transport_token.into_bytes();
-    let mut data_protection_key = wire.data_protection_key_hex.map(|value| value.into_bytes());
+    let mut legacy_data_protection_key =
+        wire.data_protection_key_hex.map(|value| value.into_bytes());
+    let mut backup_key = wire.backup_key_hex.map(|value| value.into_bytes());
+    let mut storage_protection_key = wire
+        .storage_protection_key_hex
+        .map(|value| value.into_bytes());
     let mut credential_vault_key = wire
         .credential_vault_key_hex
         .map(|value| value.into_bytes());
@@ -238,9 +255,24 @@ fn validate_launch_config(wire: LaunchConfigWire) -> anyhow::Result<LaunchConfig
             "local transport launch identifier is invalid"
         );
         let auth = TransportAuth::new(&token)?;
-        let data_protection_key = decode_launch_key(
-            data_protection_key.as_deref(),
-            "data protection key is invalid",
+        anyhow::ensure!(
+            legacy_data_protection_key.is_none()
+                || (backup_key.is_none()
+                    && storage_protection_key.is_none()
+                    && credential_vault_key.is_none()),
+            "legacy data protection key cannot be combined with purpose keys"
+        );
+        let backup_key = decode_launch_key(
+            backup_key
+                .as_deref()
+                .or(legacy_data_protection_key.as_deref()),
+            "backup key is invalid",
+        )?;
+        let storage_protection_key = decode_launch_key(
+            storage_protection_key
+                .as_deref()
+                .or(legacy_data_protection_key.as_deref()),
+            "storage protection key is invalid",
         )?;
         let credential_vault_key = decode_launch_key(
             credential_vault_key.as_deref(),
@@ -249,12 +281,19 @@ fn validate_launch_config(wire: LaunchConfigWire) -> anyhow::Result<LaunchConfig
         Ok(LaunchConfig {
             launch_id: launch_id.to_string(),
             auth,
-            data_protection_key,
+            backup_key,
+            storage_protection_key,
             credential_vault_key,
         })
     })();
     token.zeroize();
-    if let Some(key) = &mut data_protection_key {
+    if let Some(key) = &mut legacy_data_protection_key {
+        key.zeroize();
+    }
+    if let Some(key) = &mut backup_key {
+        key.zeroize();
+    }
+    if let Some(key) = &mut storage_protection_key {
         key.zeroize();
     }
     if let Some(key) = &mut credential_vault_key {
@@ -341,20 +380,34 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert(&TRANSPORT_HEADER, HeaderValue::from_static(TOKEN));
         assert!(config.auth.authenticate(&headers));
-        assert!(config.data_protection_key.is_none());
+        assert!(config.backup_key.is_none());
+        assert!(config.storage_protection_key.is_none());
         assert!(config.credential_vault_key.is_none());
 
         let protected = read_launch_config(
             format!(
-                r#"{{"schemaVersion":1,"launchId":"{LAUNCH_ID}","transportToken":"{TOKEN}","dataProtectionKeyHex":"{}","credentialVaultKeyHex":"{}"}}"#,
+                r#"{{"schemaVersion":1,"launchId":"{LAUNCH_ID}","transportToken":"{TOKEN}","backupKeyHex":"{}","storageProtectionKeyHex":"{}","credentialVaultKeyHex":"{}"}}"#,
                 "ab".repeat(32),
+                "bc".repeat(32),
                 "cd".repeat(32),
             )
             .as_bytes(),
         )
         .unwrap();
-        assert!(protected.data_protection_key.is_some());
+        assert!(protected.backup_key.is_some());
+        assert!(protected.storage_protection_key.is_some());
         assert!(protected.credential_vault_key.is_some());
+
+        let legacy = read_launch_config(
+            format!(
+                r#"{{"schemaVersion":1,"launchId":"{LAUNCH_ID}","transportToken":"{TOKEN}","dataProtectionKeyHex":"{}"}}"#,
+                "ef".repeat(32),
+            )
+            .as_bytes(),
+        )
+        .unwrap();
+        assert!(legacy.backup_key.is_some());
+        assert!(legacy.storage_protection_key.is_some());
 
         for invalid in [
             format!(r#"{{"schemaVersion":2,"launchId":"{LAUNCH_ID}","transportToken":"{TOKEN}"}}"#),
@@ -364,7 +417,23 @@ mod tests {
                 r#"{{"schemaVersion":1,"launchId":"{LAUNCH_ID}","transportToken":"{TOKEN}","dataProtectionKeyHex":"short"}}"#
             ),
             format!(
+                r#"{{"schemaVersion":1,"launchId":"{LAUNCH_ID}","transportToken":"{TOKEN}","backupKeyHex":"short"}}"#
+            ),
+            format!(
+                r#"{{"schemaVersion":1,"launchId":"{LAUNCH_ID}","transportToken":"{TOKEN}","storageProtectionKeyHex":"short"}}"#
+            ),
+            format!(
                 r#"{{"schemaVersion":1,"launchId":"{LAUNCH_ID}","transportToken":"{TOKEN}","credentialVaultKeyHex":"short"}}"#
+            ),
+            format!(
+                r#"{{"schemaVersion":1,"launchId":"{LAUNCH_ID}","transportToken":"{TOKEN}","dataProtectionKeyHex":"{}","backupKeyHex":"{}"}}"#,
+                "ab".repeat(32),
+                "cd".repeat(32),
+            ),
+            format!(
+                r#"{{"schemaVersion":1,"launchId":"{LAUNCH_ID}","transportToken":"{TOKEN}","dataProtectionKeyHex":"{}","credentialVaultKeyHex":"{}"}}"#,
+                "ab".repeat(32),
+                "cd".repeat(32),
             ),
             format!(
                 r#"{{"schemaVersion":1,"launchId":"{LAUNCH_ID}","transportToken":"{TOKEN}","extra":true}}"#

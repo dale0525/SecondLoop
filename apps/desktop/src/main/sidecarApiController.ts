@@ -49,6 +49,7 @@ type IpcMainLike = {
 
 type RequestDescription = {
   body?: unknown;
+  credentialVault?: true;
   method: "DELETE" | "GET" | "PATCH" | "POST" | "PUT";
   oauthAuthorization?: string;
   oauthStartInput?: {
@@ -61,6 +62,7 @@ type RequestDescription = {
 };
 
 export function registerSidecarApiController(options: {
+  ensureCredentialVault?: () => Promise<void>;
   ipcMain: IpcMainLike;
   openExternal: (url: string) => Promise<unknown> | unknown;
   requesterWebContents: { id: number };
@@ -71,6 +73,7 @@ export function registerSidecarApiController(options: {
       throw new Error("Sidecar API is restricted to the requester window");
     }
     const request = describeRequest(parseRequest(value));
+    if (request.credentialVault) await options.ensureCredentialVault?.();
     const payload = await requestSidecarJson(options.sidecarRequest, request);
     if (request.structuredAction) {
       return handleStructuredActionResponse({
@@ -287,6 +290,7 @@ function describeRequest(request: SidecarApiRequest): RequestDescription {
           connectorIds,
           requestedCapabilities,
         }),
+        credentialVault: true,
         oauthStartInput: { connectorIds, providerId, requestedCapabilities },
       };
     }
@@ -297,6 +301,7 @@ function describeRequest(request: SidecarApiRequest): RequestDescription {
       );
       return {
         ...get(`/host/oauth/authorizations/${encodeURIComponent(authorizationId)}`),
+        credentialVault: true,
         oauthAuthorization: authorizationId,
       };
     }
@@ -306,6 +311,7 @@ function describeRequest(request: SidecarApiRequest): RequestDescription {
         "authorizationId",
       );
       return {
+        credentialVault: true,
         method: "DELETE",
         oauthAuthorization: authorizationId,
         pathname: `/host/oauth/authorizations/${encodeURIComponent(authorizationId)}`,
@@ -337,31 +343,35 @@ function describeRequest(request: SidecarApiRequest): RequestDescription {
         "trashMailbox",
         "username",
       ]);
-      return json(
-        "PUT",
-        `/foundation/mail/account-configurations/${identifier(input, "id")}`,
-        {
-          displayName: nonBlankString(input, "displayName", 512),
-          primaryName: optionalString(input, "primaryName", 512),
-          primaryAddress: nonBlankString(input, "primaryAddress", 512),
-          username: nonBlankString(input, "username", 512),
-          password: nonBlankString(input, "password", 64 * 1_024),
-          imapHost: nonBlankString(input, "imapHost", 512),
-          imapPort: fieldInteger(input, "imapPort", 1, 65_535),
-          imapTls: fieldEnum(input, "imapTls", MAIL_TLS_MODES),
-          smtpHost: nonBlankString(input, "smtpHost", 512),
-          smtpPort: fieldInteger(input, "smtpPort", 1, 65_535),
-          smtpTls: fieldEnum(input, "smtpTls", MAIL_TLS_MODES),
-          archiveMailbox: optionalString(input, "archiveMailbox", 512),
-          sentMailbox: optionalString(input, "sentMailbox", 512),
-          draftsMailbox: optionalString(input, "draftsMailbox", 512),
-          trashMailbox: optionalString(input, "trashMailbox", 512),
-          allowInsecureLocalhost: optionalBoolean(input, "allowInsecureLocalhost") ?? false,
-        },
-      );
+      return {
+        ...json(
+          "PUT",
+          `/foundation/mail/account-configurations/${identifier(input, "id")}`,
+          {
+            displayName: nonBlankString(input, "displayName", 512),
+            primaryName: optionalString(input, "primaryName", 512),
+            primaryAddress: nonBlankString(input, "primaryAddress", 512),
+            username: nonBlankString(input, "username", 512),
+            password: nonBlankString(input, "password", 64 * 1_024),
+            imapHost: nonBlankString(input, "imapHost", 512),
+            imapPort: fieldInteger(input, "imapPort", 1, 65_535),
+            imapTls: fieldEnum(input, "imapTls", MAIL_TLS_MODES),
+            smtpHost: nonBlankString(input, "smtpHost", 512),
+            smtpPort: fieldInteger(input, "smtpPort", 1, 65_535),
+            smtpTls: fieldEnum(input, "smtpTls", MAIL_TLS_MODES),
+            archiveMailbox: optionalString(input, "archiveMailbox", 512),
+            sentMailbox: optionalString(input, "sentMailbox", 512),
+            draftsMailbox: optionalString(input, "draftsMailbox", 512),
+            trashMailbox: optionalString(input, "trashMailbox", 512),
+            allowInsecureLocalhost: optionalBoolean(input, "allowInsecureLocalhost") ?? false,
+          },
+        ),
+        credentialVault: true,
+      };
     }
     case "mail.configuration.delete":
       return {
+        credentialVault: true,
         method: "DELETE",
         pathname: `/foundation/mail/account-configurations/${identifier(request.input, "id")}`,
       };

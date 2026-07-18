@@ -31,10 +31,10 @@ export type SidecarSpawn = (
 
 export type SidecarSupervisorOptions = {
   args?: string[];
+  backupKey?: Buffer;
   command: string;
   credentialVaultKey?: Buffer;
   cwd: string;
-  dataProtectionKey?: Buffer;
   env: NodeJS.ProcessEnv;
   fetchImpl?: typeof fetch;
   healthPollMs?: number;
@@ -47,6 +47,7 @@ export type SidecarSupervisorOptions = {
   shutdownTimeoutMs?: number;
   spawnImpl?: SidecarSpawn;
   startupTimeoutMs?: number;
+  storageProtectionKey?: Buffer;
   wait?: (milliseconds: number) => Promise<void>;
 };
 
@@ -74,13 +75,14 @@ type ActiveTransport = {
 };
 
 export class DesktopSidecarSupervisor {
-  private readonly options: Required<Omit<SidecarSupervisorOptions, "args" | "credentialVaultKey" | "dataProtectionKey" | "fetchImpl" | "log" | "now" | "spawnImpl" | "wait">> & Pick<SidecarSupervisorOptions, "log"> & {
+  private readonly options: Required<Omit<SidecarSupervisorOptions, "args" | "backupKey" | "credentialVaultKey" | "fetchImpl" | "log" | "now" | "spawnImpl" | "storageProtectionKey" | "wait">> & Pick<SidecarSupervisorOptions, "log"> & {
     args: string[];
+    backupKey: Buffer | null;
     credentialVaultKey: Buffer | null;
-    dataProtectionKey: Buffer | null;
     fetchImpl: typeof fetch;
     now: () => number;
     spawnImpl: SidecarSpawn;
+    storageProtectionKey: Buffer | null;
     wait: (milliseconds: number) => Promise<void>;
   };
   private state: SidecarState = "idle";
@@ -95,6 +97,7 @@ export class DesktopSidecarSupervisor {
   private readonly intentionalChildren = new WeakSet<SidecarChild>();
   private readonly handledChildren = new WeakSet<SidecarChild>();
   private readonly readyChildren = new WeakSet<SidecarChild>();
+  private shutdownRequested = false;
   private unexpectedExitTimes: number[] = [];
   private transport: ActiveTransport | null = null;
 
@@ -102,11 +105,14 @@ export class DesktopSidecarSupervisor {
     this.options = {
       command: options.command,
       args: [...(options.args ?? [])],
+      backupKey: options.backupKey
+        ? Buffer.from(options.backupKey)
+        : null,
       credentialVaultKey: options.credentialVaultKey
         ? Buffer.from(options.credentialVaultKey)
         : null,
-      dataProtectionKey: options.dataProtectionKey
-        ? Buffer.from(options.dataProtectionKey)
+      storageProtectionKey: options.storageProtectionKey
+        ? Buffer.from(options.storageProtectionKey)
         : null,
       cwd: options.cwd,
       env: { ...options.env },
@@ -146,6 +152,7 @@ export class DesktopSidecarSupervisor {
   }
 
   start(): Promise<SidecarStatus> {
+    if (this.shutdownRequested) return Promise.resolve(this.status());
     if (this.state === "ready") return Promise.resolve(this.status());
     if (this.state === "circuit_open") return Promise.resolve(this.status());
     if (this.state === "stopping") {
@@ -180,6 +187,15 @@ export class DesktopSidecarSupervisor {
       this.state = "idle";
     }
     return this.start();
+  }
+
+  shutdown(): Promise<SidecarStatus> {
+    this.shutdownRequested = true;
+    return this.stop().finally(() => {
+      this.options.backupKey?.fill(0);
+      this.options.credentialVaultKey?.fill(0);
+      this.options.storageProtectionKey?.fill(0);
+    });
   }
 
   stop(): Promise<SidecarStatus> {
@@ -240,8 +256,9 @@ export class DesktopSidecarSupervisor {
         child.stdio[LAUNCH_CONFIG_FD],
         launchId,
         token,
-        this.options.dataProtectionKey,
+        this.options.backupKey,
         this.options.credentialVaultKey,
+        this.options.storageProtectionKey,
       );
       const origin = await readLaunchResult(
         child,
@@ -454,19 +471,23 @@ function writeLaunchConfig(
   stream: Writable,
   launchId: string,
   token: Buffer,
-  dataProtectionKey: Buffer | null,
+  backupKey: Buffer | null,
   credentialVaultKey: Buffer | null,
+  storageProtectionKey: Buffer | null,
 ): Promise<void> {
   if (!stream || stream.destroyed) throw new Error("Sidecar launch pipe is unavailable");
   const document = JSON.stringify({
     schemaVersion: 1,
     launchId,
     transportToken: token.toString("base64url"),
-    ...(dataProtectionKey
-      ? { dataProtectionKeyHex: dataProtectionKey.toString("hex") }
+    ...(backupKey
+      ? { backupKeyHex: backupKey.toString("hex") }
       : {}),
     ...(credentialVaultKey
       ? { credentialVaultKeyHex: credentialVaultKey.toString("hex") }
+      : {}),
+    ...(storageProtectionKey
+      ? { storageProtectionKeyHex: storageProtectionKey.toString("hex") }
       : {}),
   });
   return new Promise((resolve, reject) => {
@@ -608,11 +629,14 @@ function wait(milliseconds: number): Promise<void> {
 
 function validateOptions(options: DesktopSidecarSupervisor["options"]): void {
   if (!options.command || !options.cwd) throw new Error("Sidecar launch paths are required");
-  if (options.dataProtectionKey && options.dataProtectionKey.byteLength !== 32) {
-    throw new Error("Sidecar data protection key must be 32 bytes");
+  if (options.backupKey && options.backupKey.byteLength !== 32) {
+    throw new Error("Sidecar backup key must be 32 bytes");
   }
   if (options.credentialVaultKey && options.credentialVaultKey.byteLength !== 32) {
     throw new Error("Sidecar credential Vault key must be 32 bytes");
+  }
+  if (options.storageProtectionKey && options.storageProtectionKey.byteLength !== 32) {
+    throw new Error("Sidecar storage protection key must be 32 bytes");
   }
   for (const [label, value] of [
     ["startup timeout", options.startupTimeoutMs],

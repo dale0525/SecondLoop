@@ -5,13 +5,10 @@ import { pathToFileURL } from "node:url";
 
 import { registerApprovalWindowController } from "./approvalWindow";
 import { registerAttachmentController } from "./attachmentController";
-import {
-  deriveCredentialVaultKey,
-  loadOrCreateDataProtectionKey,
-  unwrapDataProtectionKey,
-  type DesktopDataProtectionKey,
-} from "./dataProtectionKey";
 import { registerDataProtectionController } from "./dataProtectionController";
+import { createDesktopSecurityProvisioner } from "./desktopSecurityProvisioner";
+import { createDesktopSecurityKeyStore } from "./desktopSecurityKeys";
+import { startDesktopSidecarWithSecurity } from "./desktopStartupSecurity";
 import {
   installDesktopLifecycle,
   type DesktopLifecycleEvent,
@@ -35,39 +32,43 @@ configureDevelopmentUserDataRoot();
 
 app.whenReady().then(async () => {
   const rendererBase = process.env.AGENTWEAVE_DESKTOP_URL;
-  let dataProtection: DesktopDataProtectionKey | null = null;
-  try {
-    dataProtection = loadOrCreateDataProtectionKey({
-      safeStorage,
-      storagePath: path.join(app.getPath("userData"), "data-protection-key.v1.json"),
-    });
-  } catch {
-    console.error("Data protection key is unavailable");
-  }
-  const wrappedDataProtectionKey = dataProtection?.wrappedKey;
-  const credentialVaultKey = dataProtection
-    ? deriveCredentialVaultKey(dataProtection.key)
-    : null;
-  const sidecar = createDesktopSidecarController(resolveDesktopSidecar({
+  const userDataPath = app.getPath("userData");
+  const sidecarResolution = resolveDesktopSidecar({
     appPath: app.getAppPath(),
     env: process.env,
     isPackaged: app.isPackaged,
     resourcesPath: process.resourcesPath,
-    userDataPath: app.getPath("userData"),
-  }), {
-    ...(dataProtection ? { dataProtectionKey: dataProtection.key } : {}),
-    ...(credentialVaultKey ? { credentialVaultKey } : {}),
+    userDataPath,
+  });
+  const sidecar = createDesktopSidecarController(sidecarResolution, {
     log: (stream, message) => console.log(`[sidecar:${stream}] ${message}`),
+  });
+  const security = createDesktopSecurityProvisioner({
+    keyStore: createDesktopSecurityKeyStore({
+      backupKeyPath: path.join(userDataPath, "backup-key.v1.json"),
+      credentialVaultKeyPath: path.join(userDataPath, "credential-vault-key.v1.json"),
+      legacyKeyPath: path.join(userDataPath, "data-protection-key.v1.json"),
+      safeStorage,
+    }),
+    sidecar,
   });
   installSidecarShutdownGate({
     app,
     controller: sidecar,
     onError: () => console.error("Failed to stop the managed sidecar"),
   });
-  await sidecar.start();
-  dataProtection?.key.fill(0);
-  credentialVaultKey?.fill(0);
-  dataProtection = null;
+  await startDesktopSidecarWithSecurity({
+    onCredentialVaultStartupFailure: (failure) => {
+      console.error(failure === "credential-key-unavailable"
+        ? "Credential Vault key is unavailable"
+        : failure === "sidecar-startup-failed"
+          ? "Sidecar could not start with Credential Vault"
+          : "Credential Vault startup failed");
+    },
+    resolution: sidecarResolution,
+    security,
+    sidecar,
+  });
   const mainUrl = rendererBase
     ? new URL("/", rendererBase).href
     : pathToFileURL(path.join(__dirname, "../dist/index.html")).href;
@@ -133,6 +134,9 @@ app.whenReady().then(async () => {
           sidecarRequest: sidecar.request,
         }));
         disposers.push(registerSidecarApiController({
+          ...(sidecarResolution.mode === "managed"
+            ? { ensureCredentialVault: () => security.ensureCredentialVault() }
+            : {}),
           ipcMain,
           openExternal: (url) => shell.openExternal(url),
           requesterWebContents: mainWindow.webContents,
@@ -199,10 +203,10 @@ app.whenReady().then(async () => {
           },
           requesterWebContents: mainWindow.webContents,
           sidecar,
-          ...(wrappedDataProtectionKey
+          ...(sidecarResolution.mode === "managed"
             ? {
-                unwrapKey: (wrappedKey: string) => unwrapDataProtectionKey(wrappedKey, safeStorage),
-                wrappedKey: wrappedDataProtectionKey,
+                prepareBackup: () => security.ensureBackup(),
+                unwrapKey: (wrappedKey: string) => security.unwrapBackupKey(wrappedKey),
               }
             : {}),
           writeFile: async (filePath, bytes) => {

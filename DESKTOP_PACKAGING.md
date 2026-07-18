@@ -48,7 +48,7 @@ App-local packages stay inside the locked App tree. The top-level `skills/` dire
 
 ## Signing and release handoff
 
-Development packages receive an ad-hoc signature for local verification. Pass `--sign-identity "Developer ID Application: ..."` to use a distribution identity during packaging. Notarization credentials, DMG creation, update metadata, and release publication remain explicit release-pipeline steps; credentials must come from the CI secret store and must never be copied into the App, lock, logs, or fixtures.
+Development packages receive an ad-hoc signature for local verification. An ad-hoc designated requirement is tied to the current build hash, so macOS Keychain can treat a rebuilt App as a different accessor. Such packages are for local development, not a stable credential-bearing update channel. Desktop does not access Keychain during a clean startup without Connector secrets or an explicit backup action. Pass `--sign-identity "Developer ID Application: ..."` to use a stable distribution identity during packaging. Notarization credentials, DMG creation, update metadata, and release publication remain explicit release-pipeline steps; credentials must come from the CI secret store and must never be copied into the App, lock, logs, or fixtures.
 
 Archive `.app` bundles with `ditto` or another macOS-aware tool so executable permissions, resource forks, and signatures are preserved.
 

@@ -46,10 +46,10 @@ describe("trusted data protection controller", () => {
       chooseBackupDestination: async () => "/Users/local/backup.agentweave-backup",
       chooseBackupSource: async () => null,
       ipcMain: harness.ipcMain,
+      prepareBackup: async () => ({ wrappedKey: "wrapped-key" }),
       readFile: vi.fn(),
       requesterWebContents: { id: 42 },
       sidecar,
-      wrappedKey: "wrapped-key",
       writeFile,
     });
 
@@ -81,6 +81,7 @@ describe("trusted data protection controller", () => {
       chooseBackupDestination: async () => null,
       chooseBackupSource: async () => "/private/backup.agentweave-backup",
       ipcMain: harness.ipcMain,
+      prepareBackup: async () => ({ wrappedKey: "local-wrapped-key" }),
       readFile: async () => desktopBundle("wrapped-key", new Uint8Array([1, 2, 3, 4])),
       requesterWebContents: { id: 42 },
       sidecar,
@@ -101,10 +102,12 @@ describe("trusted data protection controller", () => {
   it("rejects other windows and treats picker cancellation as no mutation", async () => {
     const harness = ipcHarness();
     const sidecar = sidecarFixture(vi.fn());
+    const prepareBackup = vi.fn(async () => ({ wrappedKey: "unused" }));
     registerDataProtectionController({
       chooseBackupDestination: async () => null,
       chooseBackupSource: async () => null,
       ipcMain: harness.ipcMain,
+      prepareBackup,
       readFile: vi.fn(),
       requesterWebContents: { id: 42 },
       sidecar,
@@ -114,6 +117,7 @@ describe("trusted data protection controller", () => {
     await expect(harness.invoke(DATA_PROTECTION_EXPORT_CHANNEL, 7)).rejects.toThrow(/requester/);
     await expect(harness.invoke(DATA_PROTECTION_EXPORT_CHANNEL, 42)).resolves.toBeNull();
     await expect(harness.invoke(DATA_PROTECTION_RESTORE_CHANNEL, 42)).resolves.toBeNull();
+    expect(prepareBackup).not.toHaveBeenCalled();
     expect(sidecar.request).not.toHaveBeenCalled();
   });
 });
