@@ -24,11 +24,11 @@ export function registerDataProtectionController(options: {
   chooseBackupDestination: () => Promise<string | null>;
   chooseBackupSource: () => Promise<string | null>;
   ipcMain: IpcMainLike;
+  prepareBackup?: () => Promise<{ wrappedKey: string }>;
   readFile: (filePath: string) => Promise<Uint8Array>;
   requesterWebContents: { id: number };
   sidecar: Pick<DesktopSidecarController, "request" | "start" | "stop">;
   unwrapKey?: (wrappedKey: string) => Buffer;
-  wrappedKey?: string;
   writeFile: (filePath: string, bytes: Uint8Array) => Promise<void>;
 }): () => void {
   const assertRequester = (event: IpcEvent) => {
@@ -46,7 +46,8 @@ export function registerDataProtectionController(options: {
     assertRequester(event);
     const destination = await safeChoose(options.chooseBackupDestination, "Backup destination selection failed");
     if (!destination) return null;
-    if (!options.wrappedKey) throw new Error("Portable backup key wrapping is unavailable");
+    if (!options.prepareBackup) throw new Error("Portable backup key wrapping is unavailable");
+    const protection = await options.prepareBackup();
     const response = await options.sidecar.request("/foundation/data-protection/backup");
     await ensureOk(response);
     const declaredBytes = boundedLength(response.headers.get("content-length"));
@@ -65,7 +66,7 @@ export function registerDataProtectionController(options: {
     if (createHash("sha256").update(envelopeBytes).digest("hex") !== envelopeSha256) {
       throw new Error("Backup response hash is inconsistent");
     }
-    const backupBytes = encodeDesktopBundle(options.wrappedKey, envelopeBytes);
+    const backupBytes = encodeDesktopBundle(protection.wrappedKey, envelopeBytes);
     const sha256 = createHash("sha256").update(backupBytes).digest("hex");
     try {
       await options.writeFile(destination, backupBytes);
@@ -92,6 +93,8 @@ export function registerDataProtectionController(options: {
     if (bytes.byteLength === 0 || bytes.byteLength > MAX_BUNDLE_BYTES) {
       throw new Error("Encrypted backup exceeds the size limit");
     }
+    if (!options.prepareBackup) throw new Error("Portable backup key wrapping is unavailable");
+    await options.prepareBackup();
     if (!options.unwrapKey) throw new Error("Portable backup key unwrapping is unavailable");
     const bundle = decodeDesktopBundle(bytes);
     const key = options.unwrapKey(bundle.wrappedKey);

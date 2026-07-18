@@ -48,7 +48,7 @@ App 私有 package 保留在带锁的 App 树中。顶层 `skills/` 只包含被
 
 ## 签名与发布
 
-开发产物会使用 ad-hoc 签名，便于本地验证。通过 `--sign-identity "Developer ID Application: ..."` 可以在打包时使用分发身份。
+开发产物会使用 ad-hoc 签名，便于本地验证。ad-hoc 身份的 designated requirement 绑定当前构建哈希；重打包后，macOS Keychain 可能把它视为新的访问者。此类产物只用于本地开发，不应被当作具有稳定凭据身份的更新渠道。没有 Connector secret 且没有主动操作备份时，Desktop 不会在冷启动访问 Keychain。通过 `--sign-identity "Developer ID Application: ..."` 可以在打包时使用稳定的分发身份。
 
 正式分发由 `.github/workflows/macos-desktop-release.yml` 的手工工作流负责。该工作流只能在受保护的 `macos-release` environment 中运行，并要求以下 GitHub Actions secrets：
 

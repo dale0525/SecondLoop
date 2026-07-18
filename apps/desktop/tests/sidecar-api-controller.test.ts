@@ -317,7 +317,9 @@ describe("trusted sidecar API controller", () => {
   it("maps bounded Mail configuration only to the trusted Host API", async () => {
     const harness = ipcHarness();
     const sidecarRequest = vi.fn(async () => new Response(JSON.stringify({ configured: true })));
+    const ensureCredentialVault = vi.fn(async () => undefined);
     registerSidecarApiController({
+      ensureCredentialVault,
       ipcMain: harness.ipcMain,
       openExternal: vi.fn(),
       requesterWebContents: { id: 42 },
@@ -358,6 +360,32 @@ describe("trusted sidecar API controller", () => {
       "/foundation/mail/account-configurations/primary",
       expect.objectContaining({ method: "DELETE" }),
     );
+    expect(ensureCredentialVault).toHaveBeenCalledTimes(2);
+  });
+
+  it("provisions the Credential Vault before OAuth sidecar access", async () => {
+    const harness = ipcHarness();
+    const order: string[] = [];
+    const ensureCredentialVault = vi.fn(async () => {
+      order.push("vault");
+    });
+    const sidecarRequest = vi.fn(async () => {
+      order.push("request");
+      return new Response(JSON.stringify(oauthStartResponse()));
+    });
+    registerSidecarApiController({
+      ensureCredentialVault,
+      ipcMain: harness.ipcMain,
+      openExternal: vi.fn(),
+      requesterWebContents: { id: 42 },
+      sidecarRequest,
+    });
+
+    await harness.invoke(
+      { sender: { id: 42 } },
+      { input: oauthStartInput(), operation: "oauth.start" },
+    );
+    expect(order).toEqual(["vault", "request"]);
   });
 
   it.each([

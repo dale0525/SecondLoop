@@ -2,7 +2,7 @@
 
 [简体中文](./DATA_PROTECTION.zh-CN.md)
 
-AgentWeave provides an optional Host capability for encrypted local backups and restart-safe database restore. An App enables it by declaring the `data-protection` capability. A Host must also supply a 32-byte data-protection key through a trusted launch channel.
+AgentWeave provides an optional Host capability for encrypted local backups and restart-safe database restore. An App enables it by declaring the `data-protection` capability. A Host supplies a dedicated 32-byte backup key through a trusted launch channel when the user requests an export or restore.
 
 ## Protection boundary
 
@@ -20,13 +20,17 @@ A provider credential is keyed by App, tenant, user, and credential ID. Each Con
 
 Removing one Connector binding does not revoke or delete a shared credential. The Host can revoke the credential and scrub its referenced secret material only after the final binding has been removed. Every lease checks the exact Connector and account binding, the binding scope subset, the provider grant, expiry, and revocation state before reading secret material.
 
-## Desktop key handling
+## Purpose-separated Desktop keys
 
-Electron Main creates a random 32-byte key and stores only its operating-system-encrypted form in the App data directory. The raw key is passed to the managed Rust sidecar through the inherited launch pipe. It is not placed in the child environment, Renderer, Preload result, logs, prompts, or backup metadata.
+Electron Main keeps the backup key, Credential Vault key, and optional storage-protection key in separate domains. New backup and Vault keys are independently random and stored only in operating-system-encrypted purpose files in the App data directory. The raw keys are passed to the managed Rust sidecar through the inherited launch pipe. They are not placed in the child environment, Renderer, Preload result, logs, prompts, or backup metadata.
+
+A clean App does not access operating-system credential storage during startup. The backup key is provisioned only after the user selects an export destination or restore source. A Vault key is provisioned when the user starts OAuth or changes a Mail account configuration. If encrypted Connector secrets already exist, Desktop unlocks the Vault at startup so background work remains available.
+
+Existing `data-protection-key.v1.json` installations migrate lazily. Backup provisioning preserves the old raw backup key; Vault provisioning preserves the existing HKDF-derived Vault key. The legacy file is retained until both independent uses can migrate without a destructive all-or-nothing step.
 
 A Desktop export wraps the operating-system-encrypted key next to the encrypted Rust backup envelope. This permits recovery after reinstall for the same operating-system user when the platform keychain can still decrypt the wrapped key. It is not a cross-user or cross-machine recovery mechanism. Losing both the platform keychain and the active App data makes these backups unrecoverable.
 
-Custom Server Hosts can inject their own protected key through `AppState::with_data_protection`. The stock unauthenticated development server leaves the capability disabled unless a trusted managed Host supplies a key.
+Custom Server Hosts can inject their own protected backup key through `AppState::with_data_protection`. The stock unauthenticated development server leaves the capability disabled unless a trusted managed Host supplies a key.
 
 ## Backup workflow
 

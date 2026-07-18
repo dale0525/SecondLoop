@@ -23,22 +23,31 @@ type IpcMainLike = {
 
 type SupervisorLike = Pick<
   DesktopSidecarSupervisor,
-  "ensureRunning" | "request" | "start" | "status" | "stop"
+  "ensureRunning" | "request" | "shutdown" | "start" | "status" | "stop"
 >;
 
 export type DesktopSidecarController = Readonly<{
   ensureRunning(): Promise<SidecarStatus>;
+  provisionLaunchKeys(keys: DesktopSidecarLaunchKeys): Promise<SidecarStatus>;
   request: SidecarRequest;
+  shutdown(): Promise<SidecarStatus>;
   start(): Promise<SidecarStatus>;
   status(): SidecarStatus;
   stop(): Promise<SidecarStatus>;
 }>;
 
-export type DesktopSidecarControllerDependencies = Readonly<{
+export type DesktopSidecarLaunchKeys = Readonly<{
+  backupKey?: Buffer;
   credentialVaultKey?: Buffer;
-  dataProtectionKey?: Buffer;
+  storageProtectionKey?: Buffer;
+}>;
+
+export type DesktopSidecarControllerDependencies = Readonly<{
+  backupKey?: Buffer;
+  credentialVaultKey?: Buffer;
   log?: SidecarSupervisorOptions["log"];
   prepareDirectory?: (directory: string) => void;
+  storageProtectionKey?: Buffer;
   supervisorFactory?: (options: SidecarSupervisorOptions) => SupervisorLike;
 }>;
 
@@ -61,25 +70,103 @@ export function createDesktopSidecarController(
     }
     const createSupervisor = dependencies.supervisorFactory
       ?? ((options: SidecarSupervisorOptions) => new DesktopSidecarSupervisor(options));
-    const supervisor = createSupervisor({
+    const launchKeys: {
+      backupKey: Buffer | null;
+      credentialVaultKey: Buffer | null;
+      storageProtectionKey: Buffer | null;
+    } = {
+      backupKey: copyLaunchKey(dependencies.backupKey, "backup"),
+      credentialVaultKey: copyLaunchKey(dependencies.credentialVaultKey, "credential Vault"),
+      storageProtectionKey: copyLaunchKey(dependencies.storageProtectionKey, "storage protection"),
+    };
+    const create = () => createSupervisor({
       args: [...resolution.args],
       command: resolution.command,
       cwd: resolution.cwd,
       env: resolution.env,
       log: dependencies.log,
-      ...(dependencies.dataProtectionKey
-        ? { dataProtectionKey: dependencies.dataProtectionKey }
+      ...(launchKeys.backupKey ? { backupKey: launchKeys.backupKey } : {}),
+      ...(launchKeys.credentialVaultKey
+        ? { credentialVaultKey: launchKeys.credentialVaultKey }
         : {}),
-      ...(dependencies.credentialVaultKey
-        ? { credentialVaultKey: dependencies.credentialVaultKey }
+      ...(launchKeys.storageProtectionKey
+        ? { storageProtectionKey: launchKeys.storageProtectionKey }
         : {}),
     });
+    let supervisor = create();
+    let transition = Promise.resolve();
+    let activeRequests = 0;
+    const idleWaiters = new Set<() => void>();
+    const waitForRequests = () => activeRequests === 0
+      ? Promise.resolve()
+      : new Promise<void>((resolve) => idleWaiters.add(resolve));
+    const exclusive = <T>(operation: () => Promise<T>): Promise<T> => {
+      const result = transition.then(operation);
+      transition = result.then(() => undefined, () => undefined);
+      return result;
+    };
+    const request: SidecarRequest = (pathname, init) => {
+      const gate = transition;
+      return gate.then(async () => {
+        activeRequests += 1;
+        const active = supervisor;
+        try {
+          return await active.request(pathname, init);
+        } finally {
+          activeRequests -= 1;
+          if (activeRequests === 0) {
+            for (const resolve of idleWaiters) resolve();
+            idleWaiters.clear();
+          }
+        }
+      });
+    };
     return Object.freeze({
-      ensureRunning: () => supervisor.ensureRunning(),
-      request: (pathname, init) => supervisor.request(pathname, init),
-      start: () => supervisor.start(),
+      ensureRunning: () => exclusive(() => supervisor.ensureRunning()),
+      provisionLaunchKeys: (keys) => exclusive(async () => {
+        const updates = validatedLaunchKeyUpdates(keys, launchKeys);
+        if (Object.keys(updates).length === 0) {
+          const status = await supervisor.ensureRunning();
+          if (status.state !== "ready") throw new Error("Sidecar security provisioning failed");
+          return status;
+        }
+        let retained = false;
+        try {
+          await waitForRequests();
+          await supervisor.stop();
+          for (const [name, key] of Object.entries(updates) as Array<
+            [keyof typeof launchKeys, Buffer]
+          >) {
+            launchKeys[name] = key;
+          }
+          retained = true;
+          supervisor = create();
+          const status = await supervisor.start();
+          if (status.state !== "ready") throw new Error("Sidecar security provisioning failed");
+          return status;
+        } finally {
+          if (!retained) {
+            for (const key of Object.values(updates)) key?.fill(0);
+          }
+        }
+      }),
+      request,
+      shutdown: () => exclusive(async () => {
+        await waitForRequests();
+        try {
+          return await supervisor.shutdown();
+        } finally {
+          launchKeys.backupKey?.fill(0);
+          launchKeys.credentialVaultKey?.fill(0);
+          launchKeys.storageProtectionKey?.fill(0);
+        }
+      }),
+      start: () => exclusive(() => supervisor.start()),
       status: () => supervisor.status(),
-      stop: () => supervisor.stop(),
+      stop: () => exclusive(async () => {
+        await waitForRequests();
+        return supervisor.stop();
+      }),
     });
   } catch {
     return staticController({ mode: "unavailable", reason: "missing-executable" });
@@ -87,7 +174,7 @@ export function createDesktopSidecarController(
 }
 
 export function registerSidecarController(options: {
-  controller: DesktopSidecarController;
+  controller: Pick<DesktopSidecarController, "ensureRunning" | "status">;
   ipcMain: IpcMainLike;
   requesterWebContents: { id: number };
 }): () => void {
@@ -116,7 +203,7 @@ export function installSidecarShutdownGate(options: {
     quit(): void;
     removeListener(event: "before-quit", listener: (event: { preventDefault(): void }) => void): void;
   };
-  controller: Pick<DesktopSidecarController, "stop">;
+  controller: Pick<DesktopSidecarController, "shutdown">;
   onError?: (error: unknown) => void;
 }): () => void {
   let stopped = false;
@@ -126,7 +213,7 @@ export function installSidecarShutdownGate(options: {
     event.preventDefault();
     if (stopping) return;
     stopping = Promise.resolve()
-      .then(() => options.controller.stop())
+      .then(() => options.controller.shutdown())
       .catch((error) => options.onError?.(error))
       .then(() => {
         stopped = true;
@@ -151,13 +238,54 @@ function staticController(
   });
   return Object.freeze({
     ensureRunning: async () => status,
+    provisionLaunchKeys: async () => {
+      throw new Error("Managed sidecar is required for local security provisioning");
+    },
     request: mode === "external"
       ? externalRequest(resolution.baseUrl, resolution.transportToken)
       : async () => Promise.reject(new Error("Desktop sidecar is unavailable")),
+    shutdown: async () => status,
     start: async () => status,
     status: () => status,
     stop: async () => status,
   });
+}
+
+function copyLaunchKey(value: Buffer | undefined, label: string): Buffer | null {
+  if (!value) return null;
+  if (value.byteLength !== 32) throw new Error(`Sidecar ${label} key must be 32 bytes`);
+  return Buffer.from(value);
+}
+
+function validatedLaunchKeyUpdates(
+  input: DesktopSidecarLaunchKeys,
+  current: {
+    backupKey: Buffer | null;
+    credentialVaultKey: Buffer | null;
+    storageProtectionKey: Buffer | null;
+  },
+): Partial<Record<keyof typeof current, Buffer>> {
+  for (const [name, label] of [
+    ["backupKey", "backup"],
+    ["credentialVaultKey", "credential Vault"],
+    ["storageProtectionKey", "storage protection"],
+  ] as const) {
+    const supplied = input[name];
+    if (!supplied) continue;
+    if (supplied.byteLength !== 32) throw new Error(`Sidecar ${label} key must be 32 bytes`);
+    if (current[name]) {
+      if (!current[name].equals(supplied)) {
+        throw new Error(`Sidecar ${label} key cannot change during the host lifetime`);
+      }
+      continue;
+    }
+  }
+  const updates: Partial<Record<keyof typeof current, Buffer>> = {};
+  for (const name of ["backupKey", "credentialVaultKey", "storageProtectionKey"] as const) {
+    const supplied = input[name];
+    if (supplied && !current[name]) updates[name] = Buffer.from(supplied);
+  }
+  return updates;
 }
 
 function externalRequest(baseUrl: string, transportToken: string | null): SidecarRequest {

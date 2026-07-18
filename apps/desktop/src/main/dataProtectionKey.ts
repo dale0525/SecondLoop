@@ -3,6 +3,7 @@ import {
   closeSync,
   existsSync,
   fsyncSync,
+  lstatSync,
   mkdirSync,
   openSync,
   readFileSync,
@@ -12,7 +13,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 
-type SafeStorageLike = {
+export type SafeStorageLike = {
   decryptString(value: Buffer): string;
   encryptString(value: string): Buffer;
   isEncryptionAvailable(): boolean;
@@ -86,6 +87,10 @@ function decryptStoredKey(
 }
 
 function readStoredKey(storagePath: string): StoredDataProtectionKey {
+  const metadata = lstatSync(storagePath);
+  if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.size > 16 * 1_024) {
+    throw new Error("Stored data protection settings are not a private file");
+  }
   let value: unknown;
   try {
     value = JSON.parse(readFileSync(storagePath, "utf8"));

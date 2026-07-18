@@ -36,17 +36,37 @@ describe("Desktop sidecar supervisor", () => {
     const child = new MockChild();
     const key = Buffer.alloc(32, 7);
     const credentialVaultKey = Buffer.alloc(32, 9);
+    const storageProtectionKey = Buffer.alloc(32, 5);
     const spawnImpl = spawnSequence(child);
-    const supervisor = createSupervisor({ credentialVaultKey, dataProtectionKey: key, spawnImpl });
+    const supervisor = createSupervisor({
+      backupKey: key,
+      credentialVaultKey,
+      spawnImpl,
+      storageProtectionKey,
+    });
 
     await supervisor.start();
 
-    expect(child.launch?.dataProtectionKeyHex).toBe(key.toString("hex"));
+    expect(child.launch?.backupKeyHex).toBe(key.toString("hex"));
     expect(child.launch?.credentialVaultKeyHex).toBe(credentialVaultKey.toString("hex"));
+    expect(child.launch?.storageProtectionKeyHex).toBe(storageProtectionKey.toString("hex"));
     expect(JSON.stringify(spawnImpl.mock.calls[0]?.[2]?.env)).not.toContain(key.toString("hex"));
     expect(JSON.stringify(spawnImpl.mock.calls[0]?.[2]?.env)).not.toContain(
       credentialVaultKey.toString("hex"),
     );
+  });
+
+  it("cannot restart after final shutdown clears launch-key ownership", async () => {
+    const child = new MockChild({ exitOnSignal: true });
+    const spawnImpl = spawnSequence(child);
+    const supervisor = createSupervisor({ backupKey: Buffer.alloc(32, 7), spawnImpl });
+    await supervisor.start();
+
+    await supervisor.shutdown();
+    const status = await supervisor.start();
+
+    expect(status.state).toBe("stopped");
+    expect(spawnImpl).toHaveBeenCalledOnce();
   });
 
   it("fails a timed-out startup and terminates that child", async () => {
@@ -287,9 +307,10 @@ class MockChild extends EventEmitter {
   readonly signals: string[] = [];
   readonly pid = 20_000 + MockChild.nextPid++;
   launch: {
+    backupKeyHex?: string;
     credentialVaultKeyHex?: string;
-    dataProtectionKeyHex?: string;
     launchId: string;
+    storageProtectionKeyHex?: string;
     transportToken: string;
   } | null = null;
   exitCode: number | null = null;
