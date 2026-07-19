@@ -127,6 +127,6 @@ object AgentAppLocalizationLoader {
   }
 }
 
-private val PLACEHOLDER = Regex("\\{([A-Za-z][A-Za-z0-9_]*)}")
+private val PLACEHOLDER = Regex("\\{([A-Za-z][A-Za-z0-9_]*)\\}")
 private const val LOCALIZATION_PREFERENCES = "agentweave.localization.v1"
 private const val LOCALE_PREFERENCE = "locale"

@@ -123,4 +123,35 @@ describe("desktop sidecar runtime resolution", () => {
       isPackaged: true,
     })).toMatchObject({ mode: "unavailable", reason: "missing-executable" });
   });
+
+  it("injects only the fixed development gateway artifact and strips developer APIs when packaged", () => {
+    const developmentExecutable = "/repo/target/debug/agent-server";
+    const gatewayArtifact = "/repo/.tool/cloudflare-gateway/gateway.mjs";
+    const development = resolveDesktopSidecar({
+      ...baseOptions,
+      env: { AGENTWEAVE_DEV_API: "1" },
+      isExecutable: (candidate) => candidate === developmentExecutable,
+      isRegularFile: (candidate) => candidate === gatewayArtifact,
+    });
+    if (development.mode !== "managed") throw new Error("Expected managed resolution");
+    expect(development.env).toMatchObject({
+      AGENTWEAVE_CLOUDFLARE_GATEWAY_ARTIFACT: gatewayArtifact,
+      AGENTWEAVE_CLOUDFLARE_GATEWAY_TEMPLATE_VERSION: "0.3.0",
+      AGENTWEAVE_DEV_API: "1",
+    });
+
+    const packaged = resolveDesktopSidecar({
+      ...baseOptions,
+      env: {
+        AGENTWEAVE_CLOUDFLARE_GATEWAY_ARTIFACT: "/untrusted/gateway.mjs",
+        AGENTWEAVE_DEV_API: "1",
+      },
+      isExecutable: (candidate) => candidate === "/app/resources/sidecar/agent-server",
+      isPackaged: true,
+      isRegularFile: () => true,
+    });
+    if (packaged.mode !== "managed") throw new Error("Expected managed resolution");
+    expect(packaged.env).not.toHaveProperty("AGENTWEAVE_DEV_API");
+    expect(packaged.env).not.toHaveProperty("AGENTWEAVE_CLOUDFLARE_GATEWAY_ARTIFACT");
+  });
 });

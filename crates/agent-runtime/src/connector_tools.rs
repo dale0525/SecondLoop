@@ -189,6 +189,17 @@ impl ConnectorToolRuntime {
         })
     }
 
+    pub fn with_context_provider(
+        &self,
+        context_provider: Arc<dyn ConnectorCallContextProvider>,
+    ) -> Self {
+        Self {
+            runtime: self.runtime.clone(),
+            context_provider,
+            bindings: self.bindings.clone(),
+        }
+    }
+
     pub fn definitions(&self) -> Vec<ToolDefinition> {
         let mut definitions = Vec::new();
         for binding in self.bindings.iter() {

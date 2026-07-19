@@ -6,6 +6,7 @@ export type SidecarApiOperation =
   | "attachments.delete"
   | "attachments.get"
   | "attachments.list"
+  | "devProviders.list"
   | "devSkills.delete"
   | "devSkills.create"
   | "devSkills.list"

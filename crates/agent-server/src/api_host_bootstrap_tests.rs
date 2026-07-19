@@ -57,7 +57,7 @@ async fn host_bootstrap_fails_closed_without_a_resolved_agent_app() {
 
 fn discovery_fixture(app_id: &str, display_name: &str) -> AgentAppHostDiscovery {
     serde_json::from_value(json!({
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "manifestSha256": "a".repeat(64),
         "runtimeVersion": "0.1.0",
         "platform": "desktop",
@@ -86,6 +86,20 @@ fn discovery_fixture(app_id: &str, display_name: &str) -> AgentAppHostDiscovery 
             "backgroundExecution": "disabled",
             "memoryPersistence": "local_only",
             "skillManagement": "disabled"
+        },
+        "access": {
+            "modelAccess": {
+                "configurationPolicy": "user_configurable",
+                "profile": null
+            },
+            "identity": {
+                "mode": "local_single_user",
+                "provider": null
+            },
+            "entitlements": {
+                "mode": "disabled",
+                "provider": null
+            }
         }
     }))
     .unwrap()

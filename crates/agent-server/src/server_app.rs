@@ -24,7 +24,7 @@ use agent_runtime::contacts_connector_transport::{
 };
 use agent_runtime::credential::{
     ConnectorAccount, CredentialScope, CredentialVault, ProviderCredential, SecretId,
-    SecretMaterial,
+    SecretMaterial, SecretStore,
 };
 use agent_runtime::mail::{MailAccount, MailAddress, MailConnector};
 use agent_runtime::mail_attachments::{MailAttachmentSource, StoredMailAttachmentSource};
@@ -38,6 +38,7 @@ use agent_runtime::mail_imap_smtp_accounts::{
 };
 use agent_runtime::memory::{MemoryProvider, MemoryScope};
 use agent_runtime::memory_tools::MemoryToolRuntime;
+use agent_runtime::model_access::{ModelAuthentication, ModelConfigurationPolicy};
 use agent_runtime::platform::PlatformId;
 use agent_runtime::prompt_composer::AppPromptConfig;
 use agent_runtime::skill_manager::SkillManager;
@@ -45,6 +46,8 @@ use agent_runtime::storage::Storage;
 use agent_runtime::task_tools::TaskToolRuntime;
 use agent_runtime::tasks::{TaskProvider, TaskScope};
 use agent_runtime::tools::RuntimeConfig;
+use model_gateway::provider::ProviderProfile;
+use model_gateway::responses::GatewayHttpClient;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -66,18 +69,71 @@ pub(super) struct ResolvedServerApp {
 }
 
 impl ResolvedServerApp {
+    pub(super) fn app_id(&self) -> &str {
+        &self.prompt.identity.app_id
+    }
+
+    pub(super) fn runtime_policy(&self) -> Option<&AgentAppRuntimePolicy> {
+        self.runtime_policy.as_ref()
+    }
+
     pub(super) fn enforce_runtime_policy(&self, runtime_config: RuntimeConfig) -> RuntimeConfig {
         match &self.runtime_policy {
             Some(policy) => runtime_config.with_agent_app_policy(policy.clone()),
             None => runtime_config,
         }
     }
-}
 
-pub(super) fn credential_root_for_database(database_path: Option<&Path>) -> Option<PathBuf> {
-    database_path
-        .and_then(Path::parent)
-        .map(|parent| parent.join("credentials"))
+    pub(super) fn effective_model_profile(
+        &self,
+        fallback: ProviderProfile,
+    ) -> anyhow::Result<ProviderProfile> {
+        let Some(policy) = &self.runtime_policy else {
+            return Ok(fallback);
+        };
+        let access = policy.model_access();
+        if access.configuration_policy == ModelConfigurationPolicy::UserConfigurable {
+            return Ok(fallback);
+        }
+        let profile = access.profile.as_ref().ok_or_else(|| {
+            anyhow::anyhow!("app-managed model access requires a validated model profile")
+        })?;
+        Ok(ProviderProfile {
+            id: profile.provider_id.clone(),
+            name: profile.provider_id.clone(),
+            endpoint_type: profile.endpoint_type,
+            base_url: profile.base_url.clone(),
+            model: profile.model_name.clone(),
+            api_key: None,
+            headers: profile.headers.clone(),
+        })
+    }
+
+    pub(super) fn effective_model_client(
+        &self,
+        fallback: ProviderProfile,
+        identity: Option<&agent_server::identity_api::IdentityRuntime>,
+    ) -> anyhow::Result<GatewayHttpClient> {
+        let profile = self.effective_model_profile(fallback)?;
+        let uses_identity = self.runtime_policy.as_ref().is_some_and(|policy| {
+            policy
+                .model_access()
+                .profile
+                .as_ref()
+                .is_some_and(|profile| profile.authentication == ModelAuthentication::UserIdentity)
+        });
+        if uses_identity {
+            let identity = identity.ok_or_else(|| {
+                anyhow::anyhow!("app-managed model access requires an available identity runtime")
+            })?;
+            Ok(GatewayHttpClient::with_credential_provider(
+                profile,
+                Arc::new(identity.clone()),
+            ))
+        } else {
+            Ok(GatewayHttpClient::new(profile))
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -135,6 +191,7 @@ pub(super) async fn resolve_app(
                 )
             })
             .collect(),
+        providers: agent_server::provider_catalog::runtime_provider_versions()?,
         capabilities,
         runtime_tools: snapshot
             .registry()
@@ -887,18 +944,27 @@ async fn resolve_credential_vault(
     trusted_key: Option<&SecretMaterial>,
     trusted_root: Option<&Path>,
 ) -> anyhow::Result<Option<Arc<CredentialVault>>> {
+    let Some(store) = resolve_secret_store(trusted_key, trusted_root)? else {
+        return Ok(None);
+    };
+    let metadata =
+        agent_runtime::credential_sqlite::SqliteCredentialMetadataStore::from_storage(storage)
+            .await?;
+    Ok(Some(Arc::new(CredentialVault::new_persistent(
+        store, metadata,
+    ))))
+}
+
+pub(super) fn resolve_secret_store(
+    trusted_key: Option<&SecretMaterial>,
+    trusted_root: Option<&Path>,
+) -> anyhow::Result<Option<Arc<dyn SecretStore>>> {
     if let Some(key) = trusted_key {
         let root = trusted_root
             .ok_or_else(|| anyhow::anyhow!("trusted Credential Vault root is unavailable"))?;
-        let store = Arc::new(
-            agent_runtime::credential_file::EncryptedFileSecretStore::new_borrowed(root, key)?,
-        );
-        let metadata =
-            agent_runtime::credential_sqlite::SqliteCredentialMetadataStore::from_storage(storage)
-                .await?;
-        return Ok(Some(Arc::new(CredentialVault::new_persistent(
-            store, metadata,
-        ))));
+        let store =
+            agent_runtime::credential_file::EncryptedFileSecretStore::new_borrowed(root, key)?;
+        return Ok(Some(Arc::new(store)));
     }
     let configured = match (
         std::env::var("AGENTWEAVE_SECRET_ROOT").ok(),
@@ -912,18 +978,11 @@ async fn resolve_credential_vault(
     };
     let key = hex::decode(configured.1)?;
     anyhow::ensure!(key.len() == 32, "secret master key must decode to 32 bytes");
-    let store = Arc::new(
-        agent_runtime::credential_file::EncryptedFileSecretStore::new(
-            configured.0,
-            agent_runtime::credential::SecretMaterial::new(key)?,
-        )?,
-    );
-    let metadata =
-        agent_runtime::credential_sqlite::SqliteCredentialMetadataStore::from_storage(storage)
-            .await?;
-    Ok(Some(Arc::new(CredentialVault::new_persistent(
-        store, metadata,
-    ))))
+    let store = agent_runtime::credential_file::EncryptedFileSecretStore::new(
+        configured.0,
+        SecretMaterial::new(key)?,
+    )?;
+    Ok(Some(Arc::new(store)))
 }
 
 #[cfg(test)]

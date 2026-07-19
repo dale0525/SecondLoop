@@ -26,6 +26,10 @@ impl TaskToolRuntime {
         Ok(Self { provider, scope })
     }
 
+    pub fn for_scope(&self, scope: TaskScope) -> anyhow::Result<Self> {
+        Self::new(self.provider.clone(), scope)
+    }
+
     pub fn definitions(&self) -> Vec<ToolDefinition> {
         definitions()
     }

@@ -22,6 +22,7 @@ use crate::dev_skill_authoring::{
 };
 use crate::dev_skill_authoring_error::{DevSkillAuthoringError, DevSkillAuthoringErrorKind};
 use crate::dev_skills::DevSkillInventory;
+use agent_devkit::ProviderDescriptor;
 
 #[derive(Debug, Serialize)]
 struct DevToolsResponse {
@@ -63,6 +64,7 @@ struct DevSkillReloadResponse {
 pub(crate) fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/dev/tools", get(list_tools))
+        .route("/dev/providers", get(list_providers))
         .route("/dev/tool-discovery", get(discover_tools))
         .route("/dev/instructions/preview", post(preview_instructions))
         .route("/dev/skills", get(list_skills).post(create_skill))
@@ -72,6 +74,12 @@ pub(crate) fn routes() -> Router<Arc<AppState>> {
             "/dev/skills/{skill_id}",
             get(read_skill).put(update_skill).delete(delete_skill),
         )
+}
+
+async fn list_providers() -> Result<Json<Vec<ProviderDescriptor>>, StatusCode> {
+    crate::provider_catalog::builtin_provider_catalog()
+        .map(Json)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
 
 async fn list_tools(

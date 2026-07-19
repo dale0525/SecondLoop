@@ -2,7 +2,7 @@ use crate::api::{ApiError, AppState};
 use agent_runtime::tasks::{TaskContent, TaskError, TaskStatus};
 use axum::{
     Json, Router,
-    extract::{Path, Query, State},
+    extract::{Extension, Path, Query, State},
     routing::{get, post},
 };
 use chrono::{DateTime, Utc};
@@ -61,9 +61,10 @@ struct DeleteTaskRequest {
 
 async fn list_tasks(
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
     Query(query): Query<TaskListQuery>,
 ) -> Result<Json<agent_runtime::tasks::TaskPage>, ApiError> {
-    let runtime = task_runtime(&state)?;
+    let runtime = task_runtime(&state, &security)?;
     runtime
         .execute(
             "task_list",
@@ -85,9 +86,10 @@ async fn list_tasks(
 
 async fn get_task(
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
     Path(task_id): Path<String>,
 ) -> Result<Json<agent_runtime::tasks::TaskRecord>, ApiError> {
-    let value = task_runtime(&state)?
+    let value = task_runtime(&state, &security)?
         .execute("task_get", serde_json::json!({"id": task_id}))
         .await
         .map_err(map_runtime_error)?;
@@ -97,10 +99,12 @@ async fn get_task(
 
 async fn create_task(
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
     Json(request): Json<CreateTaskRequest>,
 ) -> Result<Json<agent_runtime::tasks::TaskRecord>, ApiError> {
     execute_record(
         &state,
+        &security,
         "task_create",
         serde_json::json!({
             "content": request.content,
@@ -113,11 +117,13 @@ async fn create_task(
 
 async fn update_task(
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
     Path(task_id): Path<String>,
     Json(request): Json<UpdateTaskRequest>,
 ) -> Result<Json<agent_runtime::tasks::TaskRecord>, ApiError> {
     execute_record(
         &state,
+        &security,
         "task_update",
         serde_json::json!({
             "id": task_id,
@@ -131,11 +137,13 @@ async fn update_task(
 
 async fn set_task_status(
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
     Path(task_id): Path<String>,
     Json(request): Json<SetTaskStatusRequest>,
 ) -> Result<Json<agent_runtime::tasks::TaskRecord>, ApiError> {
     execute_record(
         &state,
+        &security,
         "task_set_status",
         serde_json::json!({
             "id": task_id,
@@ -149,10 +157,11 @@ async fn set_task_status(
 
 async fn delete_task(
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
     Path(task_id): Path<String>,
     Json(request): Json<DeleteTaskRequest>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    task_runtime(&state)?
+    task_runtime(&state, &security)?
         .execute(
             "task_delete",
             serde_json::json!({
@@ -167,19 +176,24 @@ async fn delete_task(
 
 async fn execute_record(
     state: &AppState,
+    security: &crate::identity_api::RequestSecurityContext,
     name: &str,
     arguments: serde_json::Value,
 ) -> Result<agent_runtime::tasks::TaskRecord, ApiError> {
-    let value = task_runtime(state)?
+    let value = task_runtime(state, security)?
         .execute(name, arguments)
         .await
         .map_err(map_runtime_error)?;
     decode(value)
 }
 
-fn task_runtime(state: &AppState) -> Result<agent_runtime::task_tools::TaskToolRuntime, ApiError> {
+fn task_runtime(
+    state: &AppState,
+    security: &crate::identity_api::RequestSecurityContext,
+) -> Result<agent_runtime::task_tools::TaskToolRuntime, ApiError> {
     state
-        .task_tools()
+        .task_tools_for(security)
+        .map_err(ApiError::Internal)?
         .ok_or(ApiError::NotFound("Tasks Foundation is disabled"))
 }
 

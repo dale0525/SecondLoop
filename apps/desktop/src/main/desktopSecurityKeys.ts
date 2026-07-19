@@ -103,8 +103,32 @@ export function credentialVaultStartupPolicy(options: {
   }
   const workspace = options.env.AGENTWEAVE_WORKSPACE_PROVIDER;
   const mail = options.env.AGENTWEAVE_MAIL_CONNECTOR;
-  const configured = workspace === "google" || workspace === "microsoft" || mail === "imap-smtp";
+  const configured = workspace === "google"
+    || workspace === "microsoft"
+    || mail === "imap-smtp"
+    || options.env.AGENTWEAVE_DEV_API === "1"
+    || appManifestRequiresIdentity(options.env.AGENTWEAVE_APP_ROOT);
   return Object.freeze({ allowCreate: configured, required: configured });
+}
+
+function appManifestRequiresIdentity(appRoot: string | undefined): boolean {
+  if (!appRoot || !path.isAbsolute(appRoot)) return false;
+  const manifestPath = path.join(appRoot, "agent-app.json");
+  try {
+    const metadata = lstatSync(manifestPath);
+    if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.size > 256 * 1024) return false;
+    const value = JSON.parse(readFileSync(manifestPath, "utf8")) as unknown;
+    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+    const identity = (value as Record<string, unknown>).identity;
+    return Boolean(
+      identity
+      && typeof identity === "object"
+      && !Array.isArray(identity)
+      && (identity as Record<string, unknown>).mode === "required",
+    );
+  } catch {
+    return false;
+  }
 }
 
 function loadPurposeKey(options: {

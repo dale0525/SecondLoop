@@ -1,4 +1,4 @@
-import { accessSync, constants, statSync } from "node:fs";
+import { accessSync, constants, lstatSync, statSync } from "node:fs";
 import path from "node:path";
 
 export type ManagedSidecarResolution = Readonly<{
@@ -37,6 +37,7 @@ export type DesktopSidecarResolutionOptions = Readonly<{
   appPath: string;
   env: NodeJS.ProcessEnv;
   isExecutable?: (candidate: string) => boolean;
+  isRegularFile?: (candidate: string) => boolean;
   isPackaged: boolean;
   platform?: NodeJS.Platform;
   resourcesPath: string;
@@ -61,6 +62,7 @@ export function resolveDesktopSidecar(
   const executableName = platform === "win32" ? "agent-server.exe" : "agent-server";
   const explicitExecutable = options.env.AGENTWEAVE_SIDECAR_EXECUTABLE;
   const isExecutable = options.isExecutable ?? ((candidate) => executableExists(candidate, platform));
+  const isRegularFile = options.isRegularFile ?? regularFileExists;
   const developmentRoot = path.resolve(options.appPath, "../..");
   let command: string | null = null;
   let cwd = options.isPackaged ? options.resourcesPath : developmentRoot;
@@ -93,6 +95,10 @@ export function resolveDesktopSidecar(
     dataRoot,
     env: options.env,
     isPackaged: options.isPackaged,
+    gatewayArtifact: !options.isPackaged
+      ? path.join(developmentRoot, ".tool", "cloudflare-gateway", "gateway.mjs")
+      : null,
+    isRegularFile,
     resourcesPath: options.resourcesPath,
     workspaceRoot,
   });
@@ -114,7 +120,9 @@ function managedEnvironment(options: {
   cwd: string;
   dataRoot: string;
   env: NodeJS.ProcessEnv;
+  gatewayArtifact: string | null;
   isPackaged: boolean;
+  isRegularFile: (candidate: string) => boolean;
   resourcesPath: string;
   workspaceRoot: string;
 }): NodeJS.ProcessEnv {
@@ -126,18 +134,30 @@ function managedEnvironment(options: {
   delete env.AGENTWEAVE_APP_PACKAGES_ROOT;
   delete env.AGENTWEAVE_LAUNCH_CONFIG_FD;
   delete env.AGENTWEAVE_LAUNCH_RESULT_FD;
+  delete env.AGENTWEAVE_CLOUDFLARE_GATEWAY_ARTIFACT;
+  delete env.AGENTWEAVE_CLOUDFLARE_GATEWAY_TEMPLATE_VERSION;
   env.AGENTWEAVE_APP_DATA_ROOT = options.dataRoot;
   env.AGENTWEAVE_CACHE_ROOT = options.cacheRoot;
   env.AGENTWEAVE_DATABASE_URL = `sqlite://${path.join(options.dataRoot, "agentweave.db")}?mode=rwc`;
   env.AGENTWEAVE_MANAGED_SKILLS ??= "1";
   env.AGENTWEAVE_SCHEDULER_WORKER = "1";
   if (options.isPackaged) {
+    delete env.AGENTWEAVE_DEV_API;
+    delete env.AGENTWEAVE_DEV_SKILLS_ROOT;
     env.AGENTWEAVE_APP_ROOT = path.join(options.resourcesPath, "agent-app", "app");
     env.AGENTWEAVE_APP_PACKAGES_ROOT = path.join(options.resourcesPath, "agent-app", "packages");
     env.AGENTWEAVE_BUILTIN_SKILLS_MODE = "directory";
     env.AGENTWEAVE_SKILLS_ROOT = path.join(options.resourcesPath, "skills");
   } else {
     env.AGENTWEAVE_SKILLS_ROOT ??= path.join(options.cwd, "skills");
+    if (
+      env.AGENTWEAVE_DEV_API === "1"
+      && options.gatewayArtifact
+      && options.isRegularFile(options.gatewayArtifact)
+    ) {
+      env.AGENTWEAVE_CLOUDFLARE_GATEWAY_ARTIFACT = options.gatewayArtifact;
+      env.AGENTWEAVE_CLOUDFLARE_GATEWAY_TEMPLATE_VERSION = "0.3.0";
+    }
   }
   env.AGENTWEAVE_WORKSPACE_ROOT = options.workspaceRoot;
   return env;
@@ -213,6 +233,15 @@ function executableExists(candidate: string, platform: NodeJS.Platform): boolean
     if (!statSync(candidate).isFile()) return false;
     accessSync(candidate, platform === "win32" ? constants.F_OK : constants.X_OK);
     return true;
+  } catch {
+    return false;
+  }
+}
+
+function regularFileExists(candidate: string): boolean {
+  try {
+    const metadata = lstatSync(candidate);
+    return metadata.isFile() && !metadata.isSymbolicLink();
   } catch {
     return false;
   }

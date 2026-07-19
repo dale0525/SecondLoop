@@ -52,7 +52,7 @@ describe("Host bootstrap controller", () => {
     registerHostBootstrapController({
       ipcMain: harness.ipcMain,
       requesterWebContents: { id: 41 },
-      sidecarRequest: async () => jsonResponse({ ...hostDiscoveryFixture(), schemaVersion: 2 }),
+      sidecarRequest: async () => jsonResponse({ ...hostDiscoveryFixture(), schemaVersion: 3 }),
     });
 
     await expect(harness.invoke({ sender: { id: 41 } })).rejects.toThrow(

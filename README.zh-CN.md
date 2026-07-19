@@ -181,6 +181,7 @@ Preview package 已实现并通过本地 package 校验，但 API、Provider/Con
 - [开发 Agent App](./DEVELOPING_AGENT_APPS.zh-CN.md)：Manifest、Prompt、Skill、主题、字体和发布产物。
 - [Minimal Agent](./examples/minimal-agent/README.md)：最小消费者应用。
 - [Secretary Agent](./examples/secretary-agent/README.zh-CN.md)：组合 Mail、Memory 与应用私有 Skill 的参考应用。
+- [Managed Gateway Agent](./examples/managed-gateway-agent/README.zh-CN.md)：使用可替换身份、权益与 Cloudflare 网关 Provider 的 App 托管模型参考应用。
 - [Mail Connector 配置](./MAIL_CONNECTOR_SETUP.zh-CN.md)：IMAP/SMTP 与 Credential Vault 的本地配置。
 - [本地数据保护与备份](./DATA_PROTECTION.zh-CN.md)：加密备份、可信 Desktop 密钥处理和安全重启恢复。
 - [项目协作约定](./AGENTS.md)：架构边界、工具、编码与仓库级约束。

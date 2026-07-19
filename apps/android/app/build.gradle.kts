@@ -1,3 +1,6 @@
+import groovy.json.JsonSlurper
+import java.net.URI
+
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.kotlin.compose)
@@ -6,6 +9,29 @@ plugins {
 val generatedSkillAssets = layout.buildDirectory.dir("generated/skillAssets/main")
 val packagedAgentAppRoot = providers.environmentVariable("AGENTWEAVE_APP_ROOT")
   .orElse(rootProject.projectDir.resolve("../../examples/secretary-agent").absolutePath)
+val oidcRedirectScheme = providers.provider {
+  val manifest = file(packagedAgentAppRoot.get()).resolve("agent-app.json")
+  if (!manifest.isFile) return@provider "agentweave.mobile"
+  @Suppress("UNCHECKED_CAST")
+  val document = JsonSlurper().parse(manifest) as Map<String, Any?>
+  val identity = document["identity"] as? Map<*, *>
+  if (identity?.get("mode") != "required") return@provider "agentweave.mobile"
+  val provider = identity["provider"] as? Map<*, *>
+  val publicConfig = provider?.get("publicConfig") as? Map<*, *>
+  val redirect = publicConfig?.get("redirectUri") as? String
+    ?: error("Required Android identity is missing redirectUri")
+  val uri = URI(redirect)
+  require(
+    uri.scheme?.contains('.') == true &&
+      uri.rawAuthority == null &&
+      !uri.path.isNullOrBlank() &&
+      uri.rawQuery == null &&
+      uri.rawFragment == null
+  ) {
+    "Android OIDC redirectUri must use a private reverse-domain scheme and callback path"
+  }
+  uri.scheme
+}
 
 android {
   namespace = "com.agentweave.mobile"
@@ -18,6 +44,7 @@ android {
     versionCode = 1
     versionName = "0.1.0"
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    manifestPlaceholders["oidcRedirectScheme"] = oidcRedirectScheme.get()
   }
 
   buildFeatures {

@@ -5,11 +5,15 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+agent-devkit = { path = "../agent-devkit" }
 agent-runtime = { path = "../agent-runtime" }
 agent-provider-adapters = { path = "../provider-adapters" }
+entitlement-providers = { path = "../entitlement-providers" }
+identity-oidc = { path = "../identity-oidc" }
 anyhow.workspace = true
 async-trait.workspace = true
 axum.workspace = true
+base64.workspace = true
 chrono.workspace = true
 fs2.workspace = true
 futures.workspace = true

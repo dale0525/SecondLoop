@@ -1,6 +1,13 @@
 use crate::app_manifest::{
-    AgentAppManifest, AgentAppPolicy, AppNetworkPolicy, BackgroundExecutionPolicy,
-    ExternalSideEffectPolicy, LoadedAgentAppManifest,
+    AgentAppEntitlementConfiguration, AgentAppIdentityConfiguration, AgentAppManifest,
+    AgentAppModelAccess, AgentAppModelAuthentication, AgentAppModelConfigurationPolicy,
+    AgentAppPolicy, AppNetworkPolicy, AppSkillManagementPolicy, BackgroundExecutionPolicy,
+    ExternalSideEffectPolicy, LoadedAgentAppManifest, MemoryPersistencePolicy,
+};
+use crate::entitlement::EntitlementMode;
+use crate::identity::IdentityMode;
+use crate::model_access::{
+    ModelAccessPolicy, ModelAccessProfile, ModelAuthentication, ModelConfigurationPolicy,
 };
 use crate::platform::PlatformId;
 use crate::prompt_composer::AppPromptConfig;
@@ -9,13 +16,14 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-pub const AGENT_APP_HOST_DISCOVERY_SCHEMA_VERSION: u32 = 1;
+pub const AGENT_APP_HOST_DISCOVERY_SCHEMA_VERSION: u32 = 2;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AgentAppRuntimeInventory {
     pub runtime_version: Version,
     pub platform: PlatformId,
     pub packages: BTreeMap<String, Version>,
+    pub providers: BTreeMap<String, Version>,
     pub capabilities: BTreeSet<String>,
     pub runtime_tools: BTreeSet<String>,
     pub connectors: BTreeSet<String>,
@@ -37,6 +45,11 @@ pub struct AgentAppRuntimePolicy {
     external_side_effects: ExternalSideEffectPolicy,
     network: AppNetworkPolicy,
     background_execution: BackgroundExecutionPolicy,
+    memory_persistence: MemoryPersistencePolicy,
+    skill_management: AppSkillManagementPolicy,
+    model_access: ModelAccessPolicy,
+    identity: AgentAppIdentityConfiguration,
+    entitlements: AgentAppEntitlementConfiguration,
     declared_runtime_tools: BTreeSet<String>,
     declared_connectors: BTreeSet<String>,
 }
@@ -47,6 +60,11 @@ impl AgentAppRuntimePolicy {
             external_side_effects: manifest.policy.external_side_effects,
             network: manifest.policy.network,
             background_execution: manifest.policy.background_execution,
+            memory_persistence: manifest.policy.memory_persistence,
+            skill_management: manifest.policy.skill_management,
+            model_access: compile_model_access(manifest),
+            identity: manifest.effective_identity(),
+            entitlements: manifest.effective_entitlements(),
             declared_runtime_tools: manifest
                 .requires
                 .runtime_tools
@@ -74,6 +92,30 @@ impl AgentAppRuntimePolicy {
         self.background_execution
     }
 
+    pub fn memory_persistence(&self) -> MemoryPersistencePolicy {
+        self.memory_persistence
+    }
+
+    pub fn skill_management(&self) -> AppSkillManagementPolicy {
+        self.skill_management
+    }
+
+    pub fn model_access(&self) -> &ModelAccessPolicy {
+        &self.model_access
+    }
+
+    pub fn identity(&self) -> &AgentAppIdentityConfiguration {
+        &self.identity
+    }
+
+    pub fn entitlements(&self) -> &AgentAppEntitlementConfiguration {
+        &self.entitlements
+    }
+
+    pub fn allows_user_model_configuration(&self) -> bool {
+        self.model_access.configuration_policy == ModelConfigurationPolicy::UserConfigurable
+    }
+
     pub fn declares_runtime_tool(&self, tool: &str) -> bool {
         self.declared_runtime_tools.contains(tool)
     }
@@ -93,6 +135,43 @@ impl AgentAppRuntimePolicy {
             BackgroundExecutionPolicy::Enabled => declared_by_app || enabled_by_host,
         }
     }
+}
+
+fn compile_model_access(manifest: &AgentAppManifest) -> ModelAccessPolicy {
+    let access = manifest.effective_model_access();
+    let identity = manifest.effective_identity();
+    let entitlements = manifest.effective_entitlements();
+    let policy = ModelAccessPolicy {
+        configuration_policy: match access.configuration_policy {
+            AgentAppModelConfigurationPolicy::UserConfigurable => {
+                ModelConfigurationPolicy::UserConfigurable
+            }
+            AgentAppModelConfigurationPolicy::AppManaged => ModelConfigurationPolicy::AppManaged,
+        },
+        profile: access.profile.map(|profile| ModelAccessProfile {
+            provider_id: profile.provider_id.as_str().to_string(),
+            endpoint_type: profile.endpoint_type,
+            base_url: profile.base_url,
+            model_name: profile.model_name,
+            authentication: match profile.authentication {
+                AgentAppModelAuthentication::None => ModelAuthentication::None,
+                AgentAppModelAuthentication::UserIdentity => ModelAuthentication::UserIdentity,
+            },
+            headers: profile.headers,
+        }),
+        identity_mode: match identity.mode {
+            crate::app_manifest::AgentAppIdentityMode::LocalSingleUser => {
+                IdentityMode::LocalSingleUser
+            }
+            crate::app_manifest::AgentAppIdentityMode::Required => IdentityMode::Required,
+        },
+        entitlement_mode: match entitlements.mode {
+            crate::app_manifest::AgentAppEntitlementMode::Disabled => EntitlementMode::Disabled,
+            crate::app_manifest::AgentAppEntitlementMode::Required => EntitlementMode::Required,
+        },
+    };
+    debug_assert!(policy.validate().is_ok());
+    policy
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -133,6 +212,14 @@ pub struct AgentAppHostRequirements {
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AgentAppHostAccessConfiguration {
+    pub model_access: AgentAppModelAccess,
+    pub identity: AgentAppIdentityConfiguration,
+    pub entitlements: AgentAppEntitlementConfiguration,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AgentAppHostDiscovery {
     pub schema_version: u32,
     pub manifest_sha256: String,
@@ -142,6 +229,7 @@ pub struct AgentAppHostDiscovery {
     pub features: BTreeSet<String>,
     pub requirements: AgentAppHostRequirements,
     pub policy: AgentAppPolicy,
+    pub access: AgentAppHostAccessConfiguration,
 }
 
 impl AgentAppHostDiscovery {
@@ -222,6 +310,11 @@ impl AgentAppHostDiscovery {
                     .collect(),
             },
             policy: manifest.policy.clone(),
+            access: AgentAppHostAccessConfiguration {
+                model_access: manifest.effective_model_access(),
+                identity: manifest.effective_identity(),
+                entitlements: manifest.effective_entitlements(),
+            },
         }
     }
 }
@@ -300,6 +393,29 @@ pub fn validate_app_compatibility(
             "required App package {} expects {}, found {version}",
             requirement.id.as_str(),
             requirement.version
+        );
+    }
+    for binding in [
+        manifest.effective_identity().provider,
+        manifest.effective_entitlements().provider,
+    ]
+    .into_iter()
+    .flatten()
+    {
+        let version = inventory
+            .providers
+            .get(binding.id.as_str())
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "required App provider is unavailable: {}",
+                    binding.id.as_str()
+                )
+            })?;
+        anyhow::ensure!(
+            binding.version.matches(version),
+            "required App provider {} expects {}, found {version}",
+            binding.id.as_str(),
+            binding.version
         );
     }
     validate_required_set(
@@ -402,10 +518,44 @@ mod tests {
                 "agentweave.foundation.memory".into(),
                 "0.1.2".parse().unwrap(),
             )]),
+            providers: BTreeMap::new(),
             capabilities: BTreeSet::from(["memory.read".into()]),
             runtime_tools: BTreeSet::from(["memory.search".into()]),
             connectors: BTreeSet::from(["mail.fake".into()]),
         }
+    }
+
+    fn managed_manifest() -> AgentAppManifest {
+        let mut value = serde_json::to_value(manifest()).unwrap();
+        value["schemaVersion"] = serde_json::json!(2);
+        value["modelAccess"] = serde_json::json!({
+            "configurationPolicy": "app_managed",
+            "profile": {
+                "providerId": "example.gateway",
+                "endpointType": "responses",
+                "baseUrl": "https://gateway.example.test/v1",
+                "modelName": "managed-model",
+                "authentication": "user_identity",
+                "headers": {}
+            }
+        });
+        value["identity"] = serde_json::json!({
+            "mode": "required",
+            "provider": {
+                "id": "agentweave.identity.oidc",
+                "version": "^1.0.0",
+                "publicConfig": {"issuer": "https://identity.example.test"}
+            }
+        });
+        value["entitlements"] = serde_json::json!({
+            "mode": "required",
+            "provider": {
+                "id": "agentweave.entitlements.http",
+                "version": "^1.0.0",
+                "publicConfig": {"endpoint": "https://access.example.test"}
+            }
+        });
+        AgentAppManifest::parse_json(&serde_json::to_vec(&value).unwrap()).unwrap()
     }
 
     #[test]
@@ -431,6 +581,31 @@ mod tests {
                 .to_string()
                 .contains("capability")
         );
+    }
+
+    #[test]
+    fn required_access_providers_are_version_checked() {
+        let manifest = managed_manifest();
+        let mut inventory = inventory_fixture();
+
+        let missing = validate_app_compatibility(&manifest, &inventory).unwrap_err();
+        assert!(missing.to_string().contains("provider is unavailable"));
+
+        inventory
+            .providers
+            .insert("agentweave.identity.oidc".into(), "1.2.0".parse().unwrap());
+        inventory.providers.insert(
+            "agentweave.entitlements.http".into(),
+            "2.0.0".parse().unwrap(),
+        );
+        let incompatible = validate_app_compatibility(&manifest, &inventory).unwrap_err();
+        assert!(incompatible.to_string().contains("expects ^1.0.0"));
+
+        inventory.providers.insert(
+            "agentweave.entitlements.http".into(),
+            "1.1.0".parse().unwrap(),
+        );
+        validate_app_compatibility(&manifest, &inventory).unwrap();
     }
 
     #[test]
@@ -476,6 +651,18 @@ mod tests {
         assert!(!discovery.requires_capability("host.unrelated"));
         assert!(!discovery.requires_runtime_tool("host.unrelated"));
         assert!(!discovery.requires_connector("host.unrelated"));
+        assert_eq!(
+            discovery.access.model_access.configuration_policy,
+            AgentAppModelConfigurationPolicy::UserConfigurable
+        );
+        assert_eq!(
+            discovery.access.identity.mode,
+            crate::app_manifest::AgentAppIdentityMode::LocalSingleUser
+        );
+        assert_eq!(
+            discovery.access.entitlements.mode,
+            crate::app_manifest::AgentAppEntitlementMode::Disabled
+        );
     }
 
     #[test]
@@ -491,6 +678,15 @@ mod tests {
             policy.background_execution(),
             BackgroundExecutionPolicy::Disabled
         );
+        assert_eq!(
+            policy.memory_persistence(),
+            MemoryPersistencePolicy::LocalOnly
+        );
+        assert_eq!(
+            policy.skill_management(),
+            AppSkillManagementPolicy::Disabled
+        );
+        assert!(policy.allows_user_model_configuration());
         assert!(policy.declares_runtime_tool("memory.search"));
         assert!(!policy.declares_runtime_tool("host.unrelated"));
         assert!(policy.declares_connector("mail.fake"));
@@ -507,13 +703,17 @@ mod tests {
         );
         let value = serde_json::to_value(&discovery).unwrap();
 
-        assert_eq!(value["schemaVersion"], 1);
+        assert_eq!(value["schemaVersion"], 2);
         assert_eq!(value["manifestSha256"], "manifest-hash");
         assert_eq!(value["runtimeVersion"], "0.1.0");
         assert_eq!(value["platform"], "server");
         assert_eq!(
             value["requirements"]["runtimeTools"],
             serde_json::json!(["memory.search"])
+        );
+        assert_eq!(
+            value["access"]["modelAccess"]["configurationPolicy"],
+            "user_configurable"
         );
 
         let round_trip: AgentAppHostDiscovery = serde_json::from_value(value.clone()).unwrap();

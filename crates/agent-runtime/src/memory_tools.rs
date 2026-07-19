@@ -32,6 +32,10 @@ impl MemoryToolRuntime {
         Ok(Self { provider, scope })
     }
 
+    pub fn for_scope(&self, scope: MemoryScope) -> anyhow::Result<Self> {
+        Self::new(self.provider.clone(), scope)
+    }
+
     pub fn definitions(&self) -> Vec<ToolDefinition> {
         definitions()
     }

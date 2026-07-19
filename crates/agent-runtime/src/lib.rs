@@ -1,5 +1,6 @@
 #![cfg_attr(test, allow(deprecated))]
 
+pub mod app_access_manifest;
 pub mod app_definition;
 pub mod app_manifest;
 pub mod approval;
@@ -26,10 +27,12 @@ pub mod credential_sqlite;
 pub mod data_protection;
 pub mod documents;
 pub mod durable_run;
+pub mod entitlement;
 pub mod event_persistence;
 pub mod events;
 pub mod foundation_action_envelope;
 pub mod foundation_actions;
+pub mod identity;
 pub mod instructions;
 pub mod mail;
 pub mod mail_action_envelope;
@@ -46,6 +49,7 @@ pub mod memory_sqlite;
 pub mod memory_tools;
 pub mod messaging;
 pub mod mobile_host;
+pub mod model_access;
 pub mod model_config;
 pub mod notes;
 pub mod oauth;

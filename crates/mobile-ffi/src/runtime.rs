@@ -7,22 +7,16 @@ use crate::types::{
     MobileSkillDto, MobileTurnDto,
 };
 use agent_runtime::app_definition::ResolvedAgentApp;
-use agent_runtime::app_manifest::{AppNetworkPolicy, ExternalSideEffectPolicy};
+use agent_runtime::app_manifest::ExternalSideEffectPolicy;
 use agent_runtime::automation::{
     DeclarativeScheduledRunExecutor, NotificationDeliveryOutcome, NotificationRecord,
     NotificationStore, SchedulerRunner,
 };
-use agent_runtime::connector::ConnectorRuntime;
-use agent_runtime::connector_ledger::SqliteConnectorActionLedger;
-use agent_runtime::connector_tools::{ConnectorToolRuntime, EphemeralConnectorContextProvider};
-use agent_runtime::credential::{CredentialScope, CredentialVault, InMemorySecretStore};
+use agent_runtime::connector_tools::ConnectorToolRuntime;
 use agent_runtime::foundation_actions::MailActionService;
-use agent_runtime::mail::{MailAccount, MailAddress};
-use agent_runtime::mail_connector_transport::MailConnectorTransport;
-use agent_runtime::mail_fake::FakeMailConnector;
-use agent_runtime::memory::{MemoryProvider, MemoryScope};
 use agent_runtime::memory_tools::MemoryToolRuntime;
 use agent_runtime::mobile_host::{HttpMobileRuntimeHost, MobileRuntimeInit, SecretResolver};
+use agent_runtime::model_access::ModelConfigurationPolicy;
 use agent_runtime::model_config::StoredModelConfig;
 use agent_runtime::platform::{CapabilitySet, PlatformId};
 use agent_runtime::prompt_composer::AppPromptConfig;
@@ -66,6 +60,17 @@ use support::*;
 #[path = "runtime_policy.rs"]
 mod runtime_policy;
 
+#[path = "runtime_identity.rs"]
+mod runtime_identity;
+use runtime_identity::{app_managed_model_config, identity_database_path, model_policy_name};
+
+#[path = "runtime_identity_session.rs"]
+mod runtime_identity_session;
+
+#[path = "runtime_foundations.rs"]
+mod runtime_foundations;
+use runtime_foundations::{resolve_mobile_mail, resolve_mobile_memory};
+
 pub struct MobileRuntime {
     tokio: Runtime,
     storage: Storage,
@@ -80,6 +85,12 @@ pub struct MobileRuntime {
     skills_ready: bool,
     reload_status: MonotonicReloadStatus,
     model_configured: AtomicBool,
+    model_configuration_policy: ModelConfigurationPolicy,
+    app_model_config: Option<StoredModelConfig>,
+    gateway_identity_required: bool,
+    security_context: Mutex<Option<agent_runtime::identity::SecurityContext>>,
+    account_id: Option<String>,
+    identity_mode: String,
     cancellation: CancellationToken,
     app_prompt: AppPromptConfig,
     conversation_scope: ConversationScope,
@@ -107,6 +118,11 @@ impl MobileRuntime {
                 resolve_private_path(path, &app_data_dir, &allowed_roots, "App package directory")
             })
             .transpose()?;
+        let identity_scope = tokio.block_on(runtime_identity::resolve_mobile_identity_scope(
+            app_package_path.as_deref(),
+            config.security_context.take(),
+            config.actor_context.device_id.as_deref(),
+        ))?;
         let builtin_skills_path = resolve_private_path(
             &config.builtin_skills_dir,
             &app_data_dir,
@@ -137,11 +153,21 @@ impl MobileRuntime {
             &staging_skills_path,
             &quarantine_skills_path,
         ])?;
-        let database_path = resolve_private_path(
+        let configured_database_path = resolve_private_path(
             &config.database_path,
             &app_data_dir,
             &allowed_roots,
             "database path",
+        )?;
+        let selected_database_path =
+            identity_database_path(&configured_database_path, &app_data_dir, &identity_scope);
+        let database_path = resolve_private_path(
+            selected_database_path
+                .to_str()
+                .ok_or_else(|| anyhow::anyhow!("database path is not valid UTF-8"))?,
+            &app_data_dir,
+            &allowed_roots,
+            "identity database path",
         )?;
         ensure_database_outside_skill_roots(
             &database_path,
@@ -223,7 +249,6 @@ impl MobileRuntime {
         let recovery = tokio
             .block_on(skill_manager.startup_reconcile())
             .context("managed skill startup reconciliation failed")?;
-        let model_configured = tokio.block_on(storage.load_model_config())?.is_some();
         let mut excluded_roots = vec![
             prepared_builtin,
             managed_skills_path,
@@ -246,10 +271,26 @@ impl MobileRuntime {
         } else {
             (AppPromptConfig::default(), runtime_config)
         };
-        let conversation_scope = ConversationScope::local(&app_prompt.identity.app_id);
-        let memory_tools = tokio.block_on(resolve_mobile_memory(&storage, &app_prompt))?;
-        let connector_foundation =
-            tokio.block_on(resolve_mobile_mail(&storage, &app_prompt, &runtime_config))?;
+        anyhow::ensure!(
+            identity_scope.conversation.app_id == app_prompt.identity.app_id,
+            "mobile identity scope does not match the active Agent App"
+        );
+        let (model_configuration_policy, app_model_config, gateway_identity_required) =
+            app_managed_model_config(runtime_config.agent_app_policy.as_ref())?;
+        let model_configured =
+            app_model_config.is_some() || tokio.block_on(storage.load_model_config())?.is_some();
+        let conversation_scope = identity_scope.conversation.clone();
+        let memory_tools = tokio.block_on(resolve_mobile_memory(
+            &storage,
+            &app_prompt,
+            &conversation_scope,
+        ))?;
+        let connector_foundation = tokio.block_on(resolve_mobile_mail(
+            &storage,
+            &app_prompt,
+            &runtime_config,
+            &conversation_scope,
+        ))?;
         let connector_tools = connector_foundation
             .as_ref()
             .map(|foundation| foundation.0.clone());
@@ -281,6 +322,12 @@ impl MobileRuntime {
                 recovery_status_name(recovery.status),
             ),
             model_configured: AtomicBool::new(model_configured),
+            model_configuration_policy,
+            app_model_config,
+            gateway_identity_required,
+            security_context: Mutex::new(identity_scope.context),
+            account_id: identity_scope.account_id,
+            identity_mode: identity_scope.mode.into(),
             cancellation: CancellationToken::new(),
             app_prompt,
             conversation_scope,
@@ -352,6 +399,9 @@ impl MobileRuntime {
             storage_protection_state: self.storage.protection_status().state().as_str().into(),
             skills_ready: self.skills_ready,
             model_configured: self.model_configured.load(Ordering::Acquire),
+            model_configuration_policy: model_policy_name(self.model_configuration_policy).into(),
+            identity_mode: self.identity_mode.clone(),
+            account_id: self.account_id.clone(),
             skill_management_mode: management_mode_name(self.skill_policy.mode).into(),
             active_snapshot_generation: snapshot.generation(),
             quarantined_count,
@@ -700,6 +750,10 @@ impl MobileRuntime {
     }
 
     pub fn save_model_config(&self, config: MobileModelConfigDto) -> Result<()> {
+        anyhow::ensure!(
+            self.model_configuration_policy == ModelConfigurationPolicy::UserConfigurable,
+            "the packaged App does not allow user model configuration"
+        );
         let stored = StoredModelConfig::try_from(config)?;
         self.tokio
             .block_on(self.storage.save_model_config(&stored))?;
@@ -708,6 +762,9 @@ impl MobileRuntime {
     }
 
     pub fn load_model_config(&self) -> Result<Option<MobileModelConfigDto>> {
+        if let Some(config) = &self.app_model_config {
+            return Ok(Some(config.clone().into()));
+        }
         self.tokio
             .block_on(self.storage.load_model_config())
             .map(|config| config.map(Into::into))
@@ -803,7 +860,12 @@ impl MobileRuntime {
             self.mail_actions
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("Foundation action service is disabled"))?
-                .resolve(approval_id, decision, "local-user", chrono::Utc::now()),
+                .resolve(
+                    approval_id,
+                    decision,
+                    &self.conversation_scope.user_id,
+                    chrono::Utc::now(),
+                ),
         )
     }
 
@@ -835,7 +897,7 @@ impl MobileRuntime {
         &self,
         session_id: &str,
         content: &str,
-        api_key: Option<String>,
+        host_credential: Option<String>,
     ) -> Result<MobileTurnDto> {
         if self.cancellation.is_cancelled() {
             anyhow::bail!("runtime closed");
@@ -856,19 +918,37 @@ impl MobileRuntime {
         let cancellation = self.cancellation.clone();
         let result = self.tokio.block_on(async {
             let turn = async {
-                let config = self
-                    .storage
-                    .load_model_config()
-                    .await?
-                    .ok_or_else(|| anyhow::anyhow!("model configuration is required"))?;
-                if config.secret_id.is_some()
-                    && api_key
-                        .as_deref()
-                        .map(str::trim)
-                        .filter(|value| !value.is_empty())
-                        .is_none()
-                {
-                    anyhow::bail!("model API key is unavailable");
+                let config = match &self.app_model_config {
+                    Some(config) => config.clone(),
+                    None => self
+                        .storage
+                        .load_model_config()
+                        .await?
+                        .ok_or_else(|| anyhow::anyhow!("model configuration is required"))?,
+                };
+                let credential = host_credential
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty());
+                match self.model_configuration_policy {
+                    ModelConfigurationPolicy::UserConfigurable if config.secret_id.is_some() => {
+                        anyhow::ensure!(credential.is_some(), "model API key is unavailable");
+                    }
+                    ModelConfigurationPolicy::AppManaged if self.gateway_identity_required => {
+                        let context = self.current_security_context()?;
+                        context
+                            .validate()
+                            .map_err(|_| anyhow::anyhow!("mobile security context is invalid"))?;
+                        anyhow::ensure!(
+                            !context.is_expired_at(Utc::now()),
+                            "mobile identity session has expired"
+                        );
+                        anyhow::ensure!(
+                            credential.is_some(),
+                            "gateway identity assertion is unavailable"
+                        );
+                    }
+                    _ => {}
                 }
                 let host = HttpMobileRuntimeHost::new_with_manager(
                     self.storage.clone(),
@@ -876,9 +956,20 @@ impl MobileRuntime {
                     self.runtime_config.clone(),
                     self.init.clone(),
                     config,
-                    TransientSecretResolver::new(api_key),
+                    TransientSecretResolver::new(
+                        (self.model_configuration_policy
+                            == ModelConfigurationPolicy::UserConfigurable)
+                            .then(|| host_credential.clone())
+                            .flatten(),
+                    ),
                 )?
                 .with_app_prompt(self.app_prompt.clone())
+                .with_conversation_scope(self.conversation_scope.clone())?
+                .with_gateway_credential_provider(transient_gateway_credential(
+                    self.gateway_identity_required
+                        .then(|| host_credential.clone())
+                        .flatten(),
+                )?)
                 .with_foundations(self.memory_tools.clone(), self.connector_tools.clone())
                 .with_mail_actions(self.mail_actions.clone())
                 .with_owner_turn_context(self.skill_management.clone(), self.actor_context.clone());
@@ -902,93 +993,4 @@ impl MobileRuntime {
     pub fn close(&self) {
         self.cancellation.cancel();
     }
-}
-
-async fn resolve_mobile_memory(
-    storage: &Storage,
-    app_prompt: &AppPromptConfig,
-) -> Result<Option<MemoryToolRuntime>> {
-    if !app_prompt
-        .identity
-        .enabled_capabilities
-        .iter()
-        .any(|capability| capability == "memory-provider")
-    {
-        return Ok(None);
-    }
-    let provider = Arc::new(storage.local_memory_provider());
-    provider.initialize().await?;
-    Ok(Some(MemoryToolRuntime::new(
-        provider,
-        MemoryScope::new(&app_prompt.identity.app_id, "local", "local-user")?,
-    )?))
-}
-
-async fn resolve_mobile_mail(
-    storage: &Storage,
-    app_prompt: &AppPromptConfig,
-    runtime_config: &RuntimeConfig,
-) -> Result<Option<(ConnectorToolRuntime, MailActionService)>> {
-    if !app_prompt
-        .identity
-        .enabled_capabilities
-        .iter()
-        .any(|capability| capability == "mail-connector")
-    {
-        return Ok(None);
-    }
-    if runtime_config
-        .agent_app_policy
-        .as_ref()
-        .is_some_and(|policy| {
-            policy.network() == AppNetworkPolicy::Deny
-                || !policy
-                    .declares_connector(agent_runtime::mail_connector_transport::MAIL_CONNECTOR_ID)
-        })
-    {
-        return Ok(None);
-    }
-    let mail = Arc::new(FakeMailConnector::new());
-    mail.add_account(MailAccount {
-        id: "primary".into(),
-        display_name: "Example Mail".into(),
-        primary_address: MailAddress {
-            name: Some("Local User".into()),
-            address: "local@example.test".into(),
-        },
-        addresses: Vec::new(),
-        provider_reference: None,
-    })?;
-    let ledger = Arc::new(SqliteConnectorActionLedger::from_storage(storage).await?);
-    let vault = CredentialVault::new(Arc::new(InMemorySecretStore::default()));
-    let runtime = Arc::new(ConnectorRuntime::new_with_ledger(
-        Some(vault),
-        ledger,
-        256 * 1024,
-    )?);
-    runtime
-        .register(
-            MailConnectorTransport::descriptor("Fake Mail", true),
-            Arc::new(MailConnectorTransport::new(mail)),
-        )
-        .await?;
-    let scope = CredentialScope {
-        app_id: app_prompt.identity.app_id.clone(),
-        tenant_id: "local".into(),
-        user_id: "local-user".into(),
-    };
-    let context = Arc::new(EphemeralConnectorContextProvider::fail_closed(
-        scope.clone(),
-        Duration::from_secs(30),
-    )?);
-    let tools = ConnectorToolRuntime::load(runtime, context.clone())?;
-    let actions = MailActionService::new(
-        storage,
-        tools.clone(),
-        context,
-        scope,
-        "agentweave.mobile.foundation-actions.v1",
-    )
-    .await?;
-    Ok(Some((tools, actions)))
 }

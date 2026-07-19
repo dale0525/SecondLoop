@@ -851,6 +851,14 @@ export {
   validateDevSkills,
 } from "./devSkillsApi";
 
+export { listDeveloperProviders } from "./devProvidersApi";
+export type {
+  DeveloperConfigField,
+  DeveloperProviderDescriptor,
+  DeveloperProviderKind,
+  DeveloperSensitiveField,
+} from "./devProvidersApi";
+
 export async function acceptStructuredAction(
   sessionId: string,
   bindingId: string,

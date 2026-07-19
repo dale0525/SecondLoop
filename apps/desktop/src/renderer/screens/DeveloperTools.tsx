@@ -1,6 +1,14 @@
 import * as Tabs from "@radix-ui/react-tabs";
-import { ArrowLeft, Bot, Boxes, PackageCheck, RefreshCw, ShieldCheck } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ArrowLeft,
+  Bot,
+  Boxes,
+  PackageCheck,
+  RefreshCw,
+  ShieldCheck,
+  UsersRound,
+} from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import {
   deleteDevSkill,
@@ -12,14 +20,25 @@ import {
 } from "../api";
 import { AppIconButton } from "../components/AppIconButton";
 import { DeleteSkillDialog } from "../components/developer/DeleteSkillDialog";
+import { DeveloperAccessOverview } from "../components/developer/DeveloperAccessOverview";
+import { DeveloperAccessSetup } from "../components/developer/DeveloperAccessSetup";
 import { DeveloperBuildPanel } from "../components/developer/DeveloperBuildPanel";
+import { DeveloperModelPanel } from "../components/developer/DeveloperModelPanel";
 import {
   SkillAuthoringDialog,
   type SkillAuthoringSaveResult,
 } from "../components/developer/SkillAuthoringDialog";
 import { SkillPackageDetail } from "../components/developer/SkillPackageDetail";
 import { SkillPackageList } from "../components/developer/SkillPackageList";
-import { SettingsModel } from "../components/SettingsModel";
+import {
+  loadDeveloperControlStatus,
+  loadDeveloperProject,
+  type DeveloperControlStatus,
+} from "../developerAccessApi";
+import { listDeveloperProviders, type DeveloperProviderDescriptor } from "../devProvidersApi";
+import { parseDeveloperProject, type DeveloperProjectDocument } from "../developerProjectModel";
+import type { DeveloperProjectSnapshot } from "../../shared/developerProject";
+import { useHostBootstrap } from "../hostBootstrap";
 import { useI18n } from "../i18n/I18nProvider";
 
 export type DevApiProbeStatus = "available" | "loading" | "unavailable";
@@ -29,19 +48,27 @@ type DeveloperToolsProps = {
   initialStatus?: DevApiProbeStatus;
   onBack: () => void;
   onInventoryChange?: (inventory: DevSkillInventory) => void;
+  onNavigate?: (route: DeveloperRoute) => void;
+  route?: DeveloperRoute;
 };
 
-type DeveloperTab = "model" | "skills" | "build";
+export type DeveloperRoute = "model" | "access" | "access/setup" | "skills" | "build";
+type DeveloperTab = Exclude<DeveloperRoute, "access/setup">;
 
 export function DeveloperTools({
   initialInventory = null,
   initialStatus,
   onBack,
   onInventoryChange,
+  onNavigate,
+  route,
 }: DeveloperToolsProps): JSX.Element {
   const { t } = useI18n();
+  const bootstrap = useHostBootstrap();
   const actionFailureMessage = t("developer.actionFailed");
-  const [activeTab, setActiveTab] = useState<DeveloperTab>("skills");
+  const [internalRoute, setInternalRoute] = useState<DeveloperRoute>(route ?? "skills");
+  const activeRoute = route ?? internalRoute;
+  const activeTab: DeveloperTab = activeRoute === "access/setup" ? "access" : activeRoute;
   const [inventory, setInventory] = useState<DevSkillInventory | null>(initialInventory);
   const [selectedId, setSelectedId] = useState<string | null>(initialInventory?.packages?.[0]?.id ?? null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -53,6 +80,22 @@ export function DeveloperTools({
   const inventoryRef = useRef<DevSkillInventory | null>(initialInventory);
   const operationSequenceRef = useRef(0);
   const operationInFlightRef = useRef(false);
+  const releaseLoadStartedRef = useRef(false);
+  const [projectSnapshot, setProjectSnapshot] = useState<DeveloperProjectSnapshot | null>(null);
+  const [project, setProject] = useState<DeveloperProjectDocument | null>(null);
+  const [providers, setProviders] = useState<DeveloperProviderDescriptor[]>([]);
+  const [controlStatus, setControlStatus] = useState<DeveloperControlStatus | null>(null);
+  const [releaseLoading, setReleaseLoading] = useState(false);
+  const [releaseError, setReleaseError] = useState<string | null>(null);
+
+  const navigate = useCallback((nextRoute: DeveloperRoute) => {
+    setInternalRoute(nextRoute);
+    onNavigate?.(nextRoute);
+  }, [onNavigate]);
+
+  useEffect(() => {
+    if (route) setInternalRoute(route);
+  }, [route]);
 
   useEffect(() => {
     inventoryRef.current = inventory;
@@ -132,6 +175,45 @@ export function DeveloperTools({
     if (initialInventory && !inventoryRef.current) adoptInventory(initialInventory);
   }, [adoptInventory, initialInventory, initialStatus, loadInventory, t]);
 
+  const loadReleaseState = useCallback(async () => {
+    setReleaseLoading(true);
+    setReleaseError(null);
+    try {
+      const [snapshot, installedProviders] = await Promise.all([
+        loadDeveloperProject(),
+        listDeveloperProviders(),
+      ]);
+      setProjectSnapshot(snapshot);
+      setProject(parseDeveloperProject(snapshot.project));
+      setProviders(installedProviders);
+      try {
+        setControlStatus(await loadDeveloperControlStatus());
+      } catch {
+        setControlStatus(null);
+      }
+    } catch {
+      setProjectSnapshot(null);
+      setProject(null);
+      setProviders([]);
+      setReleaseError(t("developer.release.unavailable"));
+    } finally {
+      setReleaseLoading(false);
+    }
+  }, [t]);
+
+  useEffect(() => {
+    if (activeRoute === "skills") return;
+    if (releaseLoadStartedRef.current) return;
+    releaseLoadStartedRef.current = true;
+    void loadReleaseState();
+  }, [activeRoute, loadReleaseState]);
+
+  const adoptProjectSnapshot = useCallback((snapshot: DeveloperProjectSnapshot) => {
+    setProjectSnapshot(snapshot);
+    setProject(parseDeveloperProject(snapshot.project));
+    bootstrap.reload();
+  }, [bootstrap]);
+
   const handleDelete = useCallback(async (skillPackage: DevSkillPackage) => {
     const operationId = beginOperation();
     if (operationId === null) return;
@@ -180,7 +262,11 @@ export function DeveloperTools({
         </AppIconButton>
         <div className="top-bar-title">
           <h1>{t("developer.title")}</h1>
-          <p>{loadError ? t("developer.apiDisconnected") : t("developer.apiConnected")}</p>
+          <p>{activeTab === "skills"
+            ? loadError ? t("developer.apiDisconnected") : t("developer.apiConnected")
+            : releaseError ? t("developer.release.apiDisconnected")
+              : releaseLoading ? t("developer.release.apiLoading")
+                : t("developer.release.apiConnected")}</p>
         </div>
         {activeTab === "skills" ? (
           <div className="developer-top-bar-actions">
@@ -210,12 +296,15 @@ export function DeveloperTools({
 
       <Tabs.Root
         className="developer-tabs"
-        onValueChange={(value) => setActiveTab(value as DeveloperTab)}
+        onValueChange={(value) => navigate(value as DeveloperTab)}
         value={activeTab}
       >
         <Tabs.List aria-label={t("developer.tabsLabel")} className="developer-tab-list">
           <Tabs.Trigger className="developer-tab" value="model">
             <Bot aria-hidden="true" size={17} /> {t("developer.tabModel")}
+          </Tabs.Trigger>
+          <Tabs.Trigger className="developer-tab" value="access">
+            <UsersRound aria-hidden="true" size={17} /> {t("developer.tabAccess")}
           </Tabs.Trigger>
           <Tabs.Trigger className="developer-tab" value="skills">
             <Boxes aria-hidden="true" size={17} /> {t("developer.tabSkills")}
@@ -226,7 +315,41 @@ export function DeveloperTools({
         </Tabs.List>
 
         <Tabs.Content className="developer-tab-content developer-model-content" value="model">
-          <SettingsModel />
+          <ReleaseBoundary error={releaseError} loading={releaseLoading} onRetry={loadReleaseState}>
+            {projectSnapshot && project ? (
+              <DeveloperModelPanel
+                onConfigureManaged={() => navigate("access/setup")}
+                onSaved={adoptProjectSnapshot}
+                project={project}
+                snapshot={projectSnapshot}
+              />
+            ) : null}
+          </ReleaseBoundary>
+        </Tabs.Content>
+
+        <Tabs.Content className="developer-tab-content developer-access-content" value="access">
+          <ReleaseBoundary error={releaseError} loading={releaseLoading} onRetry={loadReleaseState}>
+            {projectSnapshot && project ? activeRoute === "access/setup" ? (
+              <DeveloperAccessSetup
+                initialControlStatus={controlStatus}
+                onCancel={() => navigate("access")}
+                onControlStatus={setControlStatus}
+                onProjectSaved={adoptProjectSnapshot}
+                project={project}
+                providers={providers}
+                snapshot={projectSnapshot}
+              />
+            ) : (
+              <DeveloperAccessOverview
+                controlStatus={controlStatus}
+                onOpenModel={() => navigate("model")}
+                onSetup={() => navigate("access/setup")}
+                project={project}
+                providers={providers}
+                snapshot={projectSnapshot}
+              />
+            ) : null}
+          </ReleaseBoundary>
         </Tabs.Content>
 
         <Tabs.Content className="developer-tab-content developer-skills-content" value="skills">
@@ -271,7 +394,14 @@ export function DeveloperTools({
         </Tabs.Content>
 
         <Tabs.Content className="developer-tab-content developer-build-content" value="build">
-          <DeveloperBuildPanel inventory={inventory} />
+          <ReleaseBoundary error={releaseError} loading={releaseLoading} onRetry={loadReleaseState}>
+            <DeveloperBuildPanel
+              inventory={inventory}
+              onOpenAccess={() => navigate("access")}
+              project={project}
+              snapshot={projectSnapshot}
+            />
+          </ReleaseBoundary>
         </Tabs.Content>
       </Tabs.Root>
 
@@ -282,7 +412,7 @@ export function DeveloperTools({
         }}
         onRequestModelSettings={() => {
           setEditorTarget(null);
-          setActiveTab("model");
+          navigate("model");
         }}
         onSaved={handleEditorSaved}
         target={editorTarget}
@@ -297,4 +427,33 @@ export function DeveloperTools({
       />
     </main>
   );
+}
+
+function ReleaseBoundary({
+  children,
+  error,
+  loading,
+  onRetry,
+}: {
+  children: ReactNode;
+  error: string | null;
+  loading: boolean;
+  onRetry: () => Promise<void>;
+}): JSX.Element {
+  const { t } = useI18n();
+  if (loading) {
+    return <div className="release-loading" role="status">{t("developer.release.loading")}</div>;
+  }
+  if (error) {
+    return (
+      <div className="developer-empty-state">
+        <h2>{error}</h2>
+        <p>{t("developer.release.unavailableHint")}</p>
+        <button className="settings-primary-action" onClick={() => void onRetry()} type="button">
+          {t("conversation.retry")}
+        </button>
+      </div>
+    );
+  }
+  return <>{children}</>;
 }

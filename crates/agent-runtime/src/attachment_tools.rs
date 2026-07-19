@@ -21,6 +21,10 @@ impl AttachmentToolRuntime {
         Self { store, scope }
     }
 
+    pub fn for_scope(&self, scope: AttachmentScope) -> Self {
+        Self::new(self.store.clone(), scope)
+    }
+
     pub fn definitions(&self) -> Vec<ToolDefinition> {
         definitions()
     }

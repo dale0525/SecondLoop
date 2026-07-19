@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { listDevSkills, type DevSkillInventory } from "./api";
 import { AppearanceProvider } from "./appearance/AppearanceProvider";
 import { HostBootstrapProvider, useHostBootstrap } from "./hostBootstrap";
+import { IdentitySessionProvider } from "./identitySession";
 import type { DesktopHostFeatures } from "./hostFeatures";
 import { I18nProvider, useI18n } from "./i18n/I18nProvider";
 import {
@@ -11,12 +12,17 @@ import {
   getOwnerPolicy
 } from "./ownerBridge";
 import { Chat } from "./screens/Chat";
-import { DeveloperTools, type DevApiProbeStatus } from "./screens/DeveloperTools";
+import {
+  DeveloperTools,
+  type DevApiProbeStatus,
+  type DeveloperRoute,
+} from "./screens/DeveloperTools";
 import { OwnerSkills } from "./screens/OwnerSkills";
 import { Settings } from "./screens/Settings";
 import { Accounts } from "./screens/Accounts";
 import { Memory } from "./screens/Memory";
 import { FoundationActions } from "./screens/FoundationActions";
+import { IdentityRequiredScreen } from "./components/IdentityRequiredScreen";
 
 type AppView = "chat" | "settings" | "developer" | "owner-skills" | "accounts" | "memory" | "actions";
 type DevApiProbe = {
@@ -26,7 +32,7 @@ type DevApiProbe = {
 
 function getViewFromHash(): AppView {
   if (typeof window !== "undefined") {
-    if (window.location.hash === "#developer") {
+    if (window.location.hash === "#developer" || window.location.hash.startsWith("#developer/")) {
       return "developer";
     }
 
@@ -46,12 +52,22 @@ function getViewFromHash(): AppView {
   return "chat";
 }
 
+function getDeveloperRouteFromHash(): DeveloperRoute {
+  if (typeof window === "undefined") return "model";
+  const route = window.location.hash.replace(/^#developer\/?/, "");
+  if (route === "model" || route === "access" || route === "access/setup"
+    || route === "skills" || route === "build") return route;
+  return window.location.hash === "#developer" ? "skills" : "model";
+}
+
 export default function App(): JSX.Element {
   return (
     <I18nProvider>
       <AppearanceProvider>
         <HostBootstrapProvider>
-          <AppContent />
+          <IdentitySessionProvider>
+            <AppContent />
+          </IdentitySessionProvider>
         </HostBootstrapProvider>
       </AppearanceProvider>
     </I18nProvider>
@@ -60,6 +76,7 @@ export default function App(): JSX.Element {
 
 function AppContent(): JSX.Element {
   const [view, setView] = useState<AppView>(getViewFromHash);
+  const [developerRoute, setDeveloperRoute] = useState<DeveloperRoute>(getDeveloperRouteFromHash);
   const [ownerPolicy, setOwnerPolicy] = useState<OwnerPolicy | null>(null);
   const [devApiProbe, setDevApiProbe] = useState<DevApiProbe>({
     inventory: null,
@@ -118,7 +135,10 @@ function AppContent(): JSX.Element {
   }, [bootstrap.discovery, t]);
 
   useEffect(() => {
-    const syncViewFromHash = () => setView(getViewFromHash());
+    const syncViewFromHash = () => {
+      setView(getViewFromHash());
+      if (getViewFromHash() === "developer") setDeveloperRoute(getDeveloperRouteFromHash());
+    };
 
     window.addEventListener("hashchange", syncViewFromHash);
 
@@ -128,6 +148,15 @@ function AppContent(): JSX.Element {
   const navigate = (nextView: AppView) => {
     setView(nextView);
     const nextHash = nextView === "chat" ? "" : `#${nextView}`;
+    if (typeof window !== "undefined" && window.location.hash !== nextHash) {
+      window.location.hash = nextHash;
+    }
+  };
+
+  const navigateDeveloper = (nextRoute: DeveloperRoute = developerRoute) => {
+    setDeveloperRoute(nextRoute);
+    setView("developer");
+    const nextHash = `#developer/${nextRoute}`;
     if (typeof window !== "undefined" && window.location.hash !== nextHash) {
       window.location.hash = nextHash;
     }
@@ -163,7 +192,7 @@ function AppContent(): JSX.Element {
           <Settings
             developerToolsAvailable={devApiProbe.status === "available"}
             onBack={() => navigate("chat")}
-            onOpenDeveloperTools={() => navigate("developer")}
+            onOpenDeveloperTools={() => navigateDeveloper()}
             onOpenOwnerSkills={() => navigate("owner-skills")}
             onOpenAccounts={() => navigate("accounts")}
             onOpenMemory={() => navigate("memory")}
@@ -177,18 +206,26 @@ function AppContent(): JSX.Element {
           initialStatus={devApiProbe.status === "idle" ? "loading" : devApiProbe.status}
           onBack={() => navigate("settings")}
           onInventoryChange={handleDevInventoryChange}
+          onNavigate={navigateDeveloper}
+          route={developerRoute}
         />
       ) : activeView === "accounts" ? (
-        <Accounts onBack={() => navigate("settings")} />
+        <IdentityRequiredScreen onOpenSettings={() => navigate("settings")}>
+          <Accounts onBack={() => navigate("settings")} />
+        </IdentityRequiredScreen>
       ) : activeView === "memory" ? (
-        <Memory onBack={() => navigate("settings")} />
+        <IdentityRequiredScreen onOpenSettings={() => navigate("settings")}>
+          <Memory onBack={() => navigate("settings")} />
+        </IdentityRequiredScreen>
       ) : activeView === "actions" ? (
-        <FoundationActions onBack={() => navigate("settings")} />
+        <IdentityRequiredScreen onOpenSettings={() => navigate("settings")}>
+          <FoundationActions onBack={() => navigate("settings")} />
+        </IdentityRequiredScreen>
       ) : activeView === "settings" ? (
         <Settings
           developerToolsAvailable={devApiProbe.status === "available"}
           onBack={() => navigate("chat")}
-          onOpenDeveloperTools={() => navigate("developer")}
+          onOpenDeveloperTools={() => navigateDeveloper()}
           onOpenOwnerSkills={() => navigate("owner-skills")}
           onOpenAccounts={() => navigate("accounts")}
           onOpenMemory={() => navigate("memory")}
@@ -196,7 +233,9 @@ function AppContent(): JSX.Element {
           ownerPolicy={ownerPolicy}
         />
       ) : (
-        <Chat onOpenSettings={() => navigate("settings")} />
+        <IdentityRequiredScreen onOpenSettings={() => navigate("settings")}>
+          <Chat onOpenSettings={() => navigate("settings")} />
+        </IdentityRequiredScreen>
       )}
     </div>
   );

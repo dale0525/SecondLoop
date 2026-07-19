@@ -12,6 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isDeepStrictEqual } from "node:util";
 
 const HANDSHAKE_LIMIT = 4_096;
 const LOG_LIMIT = 32_768;
@@ -59,6 +60,27 @@ function requireStringArray(value, label) {
   return value;
 }
 
+function requireObject(value, label) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) fail(`${label} is invalid`);
+  return value;
+}
+
+function manifestAccess(manifest) {
+  if (manifest.schemaVersion === 1) {
+    return {
+      modelAccess: { configurationPolicy: "user_configurable", profile: null },
+      identity: { mode: "local_single_user", provider: null },
+      entitlements: { mode: "disabled", provider: null },
+    };
+  }
+  if (manifest.schemaVersion !== 2) fail("packaged Agent App schema version is unsupported");
+  return {
+    modelAccess: requireObject(manifest.modelAccess, "packaged model access"),
+    identity: requireObject(manifest.identity, "packaged identity configuration"),
+    entitlements: requireObject(manifest.entitlements, "packaged entitlement configuration"),
+  };
+}
+
 export function foundationScenarioSupported(expected) {
   const capabilities = new Set(expected.capabilities);
   const tools = new Set(expected.runtimeTools);
@@ -94,6 +116,7 @@ export function packagedSidecarPlan(appPath) {
       capabilities: Object.freeze([...requireStringArray(requirements.capabilities, "packaged capabilities")]),
       connectors: Object.freeze([...requireStringArray(requirements.connectors, "packaged connectors")]),
       displayName: requireString(manifest.branding?.displayName, "packaged display name"),
+      access: Object.freeze(manifestAccess(manifest)),
       packageId: requireString(manifest.package?.id, "packaged package identifier"),
       runtimeTools: Object.freeze([...requireStringArray(requirements.runtimeTools, "packaged runtime tools")]),
       version: requireString(manifest.package?.version, "packaged App version"),
@@ -106,7 +129,7 @@ export function packagedSidecarPlan(appPath) {
 
 export function assertPackagedDiscovery(discovery, expected) {
   if (!discovery || typeof discovery !== "object") fail("host bootstrap response is invalid");
-  if (discovery.schemaVersion !== 1 || discovery.platform !== "desktop") {
+  if (discovery.schemaVersion !== 2 || discovery.platform !== "desktop") {
     fail("host bootstrap platform contract is invalid");
   }
   const identity = discovery.identity;
@@ -126,7 +149,29 @@ export function assertPackagedDiscovery(discovery, expected) {
   assertStringSet(requirements.capabilities, expected.capabilities, "capabilities");
   assertStringSet(requirements.runtimeTools, expected.runtimeTools, "runtime tools");
   assertStringSet(requirements.connectors, expected.connectors, "connectors");
+  if (!isDeepStrictEqual(normalizeAccess(discovery.access), normalizeAccess(expected.access))) {
+    fail("host bootstrap access does not match the packaged manifest");
+  }
   return true;
+}
+
+function normalizeAccess(value) {
+  const access = requireObject(value, "host bootstrap access");
+  const normalized = JSON.parse(JSON.stringify(access));
+  for (const field of ["identity", "entitlements"]) {
+    const version = normalized[field]?.provider?.version;
+    if (typeof version === "string") {
+      normalized[field].provider.version = normalizeVersionRequirement(version);
+    }
+  }
+  return normalized;
+}
+
+function normalizeVersionRequirement(value) {
+  const normalized = value.trim().replace(/\s*,\s*/g, ", ");
+  return /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(normalized)
+    ? `^${normalized}`
+    : normalized;
 }
 
 function assertStringSet(actual, expected, label) {

@@ -1,6 +1,9 @@
 use super::*;
 use agent_runtime::credential::SecretMaterial;
 use agent_runtime::storage_protection::StorageOpenOptions;
+use model_gateway::credentials::{
+    GatewayBearerToken, GatewayCredentialError, GatewayCredentialProvider,
+};
 use zeroize::{Zeroize, Zeroizing};
 
 pub(super) fn decode_storage_protection_key(
@@ -84,6 +87,39 @@ impl MonotonicReloadStatus {
 
 pub(super) struct TransientSecretResolver {
     secret: Mutex<Option<String>>,
+}
+
+struct TransientGatewayCredential {
+    value: Zeroizing<String>,
+}
+
+impl std::fmt::Debug for TransientGatewayCredential {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("TransientGatewayCredential([REDACTED])")
+    }
+}
+
+#[async_trait::async_trait]
+impl GatewayCredentialProvider for TransientGatewayCredential {
+    async fn bearer_token(
+        &self,
+    ) -> std::result::Result<GatewayBearerToken, GatewayCredentialError> {
+        GatewayBearerToken::new(self.value.as_str().to_owned())
+    }
+}
+
+pub(super) fn transient_gateway_credential(
+    value: Option<String>,
+) -> Result<Option<Arc<dyn GatewayCredentialProvider>>> {
+    value
+        .map(|value| -> std::result::Result<Arc<dyn GatewayCredentialProvider>, GatewayCredentialError> {
+            GatewayBearerToken::new(value.clone())?;
+            Ok(Arc::new(TransientGatewayCredential {
+                value: Zeroizing::new(value),
+            }) as Arc<dyn GatewayCredentialProvider>)
+        })
+        .transpose()
+        .map_err(anyhow::Error::new)
 }
 
 impl TransientSecretResolver {

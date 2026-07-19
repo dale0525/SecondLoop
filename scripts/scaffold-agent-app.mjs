@@ -12,6 +12,7 @@ import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node
 import { fileURLToPath } from "node:url";
 
 import { validateSkillPackageContract } from "./validate-skill-package.mjs";
+import { validateAgentWeaveProjectWorkspace, validateRuntimeProviderProjection } from "./agentweave-project.mjs";
 
 import {
   VSCODE_BUILTIN_THEME_IDS,
@@ -23,7 +24,7 @@ export const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..
 export const FOUNDATION_CATALOG_PATH = join(PROJECT_ROOT, "catalog", "foundation-skills.json");
 export const AGENT_APP_TEMPLATE_PATH = join(PROJECT_ROOT, "templates", "agent-app");
 export const SUPPORTED_CATALOG_SCHEMA_VERSION = 1;
-export const SUPPORTED_APP_SCHEMA_VERSION = 1;
+export const SUPPORTED_APP_SCHEMA_VERSION = 2;
 export const SUPPORTED_PACKAGE_SCHEMA_VERSION = 1;
 
 const ALLOWED_AUDIENCES = new Set(["consumer", "developer"]);
@@ -47,6 +48,7 @@ const SECRET_KEYS = new Set([
 const REQUIRED_TEMPLATE_FILES = [
   "README.md",
   "agent-app.json",
+  "agentweave-project.json",
   "fonts/README.md",
   "locales/README.md",
   "locales/en.json",
@@ -599,7 +601,10 @@ function validateFontDirectory(appRoot) {
   if (totalBytes > MAX_TOTAL_FONT_BYTES) fail("Agent App fonts exceed the 32 MiB total limit");
 }
 
-export function validateAgentApp(appPath, { catalogPath = FOUNDATION_CATALOG_PATH } = {}) {
+export function validateAgentApp(
+  appPath,
+  { catalogPath = FOUNDATION_CATALOG_PATH, validateProject = true } = {},
+) {
   const appRoot = resolveConfinedPath(PROJECT_ROOT, appPath, "agent app path");
   if (!existsSync(appRoot) || !statSync(appRoot).isDirectory()) {
     fail(`agent app path '${appRoot}' does not identify a directory`);
@@ -611,6 +616,7 @@ export function validateAgentApp(appPath, { catalogPath = FOUNDATION_CATALOG_PAT
   }
   const app = readJson(manifestPath, "agent app manifest");
   rejectEmbeddedSecrets(app);
+  validateRuntimeProviderProjection(app);
   requireOnlyKeys(
     app,
     [
@@ -625,10 +631,12 @@ export function validateAgentApp(appPath, { catalogPath = FOUNDATION_CATALOG_PAT
       "appearance",
       "localization",
       "instructions",
+      "modelAccess",
+      "identity",
+      "entitlements",
     ],
     "agent app manifest",
   );
-  requireSchemaVersion(app.schemaVersion, SUPPORTED_APP_SCHEMA_VERSION, "agent app schemaVersion");
   validateAppId(app.appId);
 
   const appPackage = requireObject(app.package, "agent app package");
@@ -755,6 +763,7 @@ export function validateAgentApp(appPath, { catalogPath = FOUNDATION_CATALOG_PAT
   for (const [index, additional] of instructions.additional.entries()) {
     validatePromptFile(appRoot, additional, `agent app instructions.additional[${index}]`);
   }
+  if (validateProject) validateAgentWeaveProjectWorkspace(appRoot, { app });
   return { app, catalog };
 }
 

@@ -148,6 +148,40 @@ async fn dev_tools_route_returns_tool_diagnostics_when_enabled() {
 }
 
 #[tokio::test]
+async fn dev_provider_catalog_is_machine_readable_and_separates_plugin_kinds() {
+    let storage = Storage::connect("sqlite::memory:").await.unwrap();
+    let app = crate::api::router_with_dev_routes(Arc::new(crate::api::AppState::new(storage)));
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/dev/providers")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let providers = read_json(response).await;
+    let providers = providers.as_array().unwrap();
+    assert!(providers.iter().any(|provider| {
+        provider["provider_id"] == "agentweave.identity.oidc" && provider["kind"] == "identity"
+    }));
+    assert!(providers.iter().any(|provider| {
+        provider["provider_id"] == "cloudflare-workers" && provider["kind"] == "gateway_deployment"
+    }));
+    let http = providers
+        .iter()
+        .find(|provider| provider["provider_id"] == "agentweave.entitlements.http")
+        .unwrap();
+    assert_eq!(
+        http["configuration_schema"]["sensitive_fields"][0]["id"],
+        "serviceCredential"
+    );
+}
+
+#[tokio::test]
 async fn dev_skills_route_returns_inventory_when_enabled() {
     let storage = Storage::connect("sqlite::memory:").await.unwrap();
     let skills_root = development_skills().await;

@@ -52,18 +52,27 @@ impl AppState {
     pub(crate) fn mail_actions(
         &self,
     ) -> Option<agent_runtime::foundation_actions::MailActionService> {
+        if self.identity_runtime().is_some() {
+            return None;
+        }
         self.mail_actions.clone()
     }
 
     pub(crate) fn calendar_actions(
         &self,
     ) -> Option<agent_runtime::calendar_actions::CalendarActionService> {
+        if self.identity_runtime().is_some() {
+            return None;
+        }
         self.calendar_actions.clone()
     }
 
     pub(crate) fn contacts_actions(
         &self,
     ) -> Option<agent_runtime::contacts_actions::ContactsActionService> {
+        if self.identity_runtime().is_some() {
+            return None;
+        }
         self.contacts_actions.clone()
     }
 
@@ -79,6 +88,9 @@ impl AppState {
         &self,
     ) -> Option<std::sync::Arc<agent_runtime::mail_imap_smtp_accounts::ImapSmtpMailAccountManager>>
     {
+        if self.identity_runtime().is_some() {
+            return None;
+        }
         self.mail_account_manager.clone()
     }
 

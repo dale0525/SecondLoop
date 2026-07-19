@@ -49,6 +49,33 @@ class RuntimeBridgeTest {
   }
 
   @Test
+  fun loadSerializesOnlyNonSecretVerifiedIdentityFacts() {
+    val context = RuntimeEnvironment.getApplication() as Context
+    val native = RecordingNativeRuntime()
+    val securityContext = testSecurityContext("account-a")
+
+    val client = RuntimeBridge(
+      context = context,
+      native = native,
+      skillAssets = BridgeSkillAssets(),
+      publicationFileSystem = JvmSkillPublicationFileSystem(),
+      configuredSecurityContext = securityContext,
+    ).load()
+    val identity = JSONObject(native.initializeRequest).getJSONObject("security_context")
+
+    assertEquals(securityContext, client.securityContext)
+    assertEquals(1, identity.getInt("schemaVersion"))
+    assertEquals("agentweave.identity.oidc", identity.getString("providerId"))
+    assertEquals("account-a", identity.getJSONObject("principal").getString("subject"))
+    assertEquals(listOf("openid", "profile"), identity.getJSONArray("grantedScopes").let { scopes ->
+      List(scopes.length()) { scopes.getString(it) }
+    })
+    assertFalse(native.initializeRequest.contains("access_token", ignoreCase = true))
+    assertFalse(native.initializeRequest.contains("refresh_token", ignoreCase = true))
+    assertFalse(native.initializeRequest.contains("bearer", ignoreCase = true))
+  }
+
+  @Test
   fun configuredPolicyAndActorAreStoredOnlyInInitialization() {
     val context = RuntimeEnvironment.getApplication() as Context
     val native = RecordingNativeRuntime()
@@ -82,6 +109,27 @@ class RuntimeBridgeTest {
     assertEquals("com.example.override", request.getJSONObject("skill_policy").getJSONArray("allowed_overrides").getString(0))
     assertEquals("android-owner", request.getJSONObject("actor_context").getString("actor_id"))
     assertFalse(native.initializeRequest.contains("actor_override"))
+  }
+
+  @Test
+  fun diagnosticsExposeIdentityAndModelConfigurationPolicy() {
+    val native = object : NativeRuntimeApi {
+      override fun initialize(requestJson: String): String = error("not used")
+
+      override fun invoke(handle: Long, requestJson: String): String =
+        """{"ok":true,"data":{"app_id":"com.example.managed","app_version":"0.1.0","app_display_name":"Managed","platform":"android","capabilities":[],"database_ready":true,"skills_ready":true,"model_configured":true,"model_configuration_policy":"app_managed","identity_mode":"required","account_id":"usr_${"a".repeat(64)}","skill_management_mode":"disabled","active_snapshot_generation":1,"quarantined_count":0,"last_reload_status":"ready"}}"""
+
+      override fun sendMessage(handle: Long, requestJson: String, apiKey: String?): String =
+        error("not used")
+
+      override fun close(handle: Long): String = """{"ok":true,"data":null}"""
+    }
+
+    val diagnostics = RuntimeClient(7L, native).diagnostics()
+
+    assertEquals("app_managed", diagnostics.modelConfigurationPolicy)
+    assertEquals("required", diagnostics.identityMode)
+    assertEquals("usr_${"a".repeat(64)}", diagnostics.accountId)
   }
 
   @Test
@@ -605,6 +653,21 @@ private fun ownerApprovalPolicy(): RuntimeSkillPolicy =
   RuntimeSkillPolicy(
     mode = "owner_only",
     allowedKinds = listOf("instruction_only", "host_tools_only"),
+  )
+
+private fun testSecurityContext(subject: String): RuntimeSecurityContext =
+  RuntimeSecurityContext(
+    providerId = "agentweave.identity.oidc",
+    appId = "com.example.managed",
+    tenantId = "tenant-main",
+    audience = "https://gateway.example.test",
+    principal = RuntimePrincipalIdentity(
+      issuer = "https://identity.example.test",
+      subject = subject,
+    ),
+    grantedScopes = listOf("openid", "profile"),
+    authenticatedAt = "2026-07-19T08:00:00Z",
+    expiresAt = "2026-07-19T09:00:00Z",
   )
 
 private fun testApprovalClient(

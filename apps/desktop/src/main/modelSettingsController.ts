@@ -10,6 +10,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
+import type { AgentAppHostDiscovery } from "../shared/hostBootstrap";
 import type { SidecarRequest } from "./sidecarSupervisor";
 
 export const MODEL_SETTINGS_LOAD_CHANNEL = "agentweave:model-settings:load";
@@ -59,6 +60,7 @@ export type PublicModelSettings = {
 
 export type ModelSettingsControllerOptions = {
   ipcMain: IpcMainLike;
+  loadHostDiscovery?: () => Promise<AgentAppHostDiscovery>;
   requesterWebContents: { id: number };
   safeStorage: SafeStorageLike;
   sidecarRequest: SidecarRequest;
@@ -74,12 +76,14 @@ export function registerModelSettingsController(
     }
   };
 
-  options.ipcMain.handle(MODEL_SETTINGS_LOAD_CHANNEL, (event) => {
+  options.ipcMain.handle(MODEL_SETTINGS_LOAD_CHANNEL, async (event) => {
     assertRequester(event);
+    await assertUserModelConfiguration(options);
     return publicSettings(readStoredSettings(options.storagePath));
   });
-  options.ipcMain.handle(MODEL_SETTINGS_SAVE_CHANNEL, (event, value) => {
+  options.ipcMain.handle(MODEL_SETTINGS_SAVE_CHANNEL, async (event, value) => {
     assertRequester(event);
+    await assertUserModelConfiguration(options);
     const input = validateSettingsInput(value);
     const existing = readStoredSettings(options.storagePath);
     const encryptedApiKey = input.apiKey
@@ -95,8 +99,9 @@ export function registerModelSettingsController(
     writeStoredSettings(options.storagePath, stored);
     return publicSettings(stored);
   });
-  options.ipcMain.handle(MODEL_SETTINGS_CLEAR_KEY_CHANNEL, (event) => {
+  options.ipcMain.handle(MODEL_SETTINGS_CLEAR_KEY_CHANNEL, async (event) => {
     assertRequester(event);
+    await assertUserModelConfiguration(options);
     const existing = readStoredSettings(options.storagePath);
     if (!existing) return publicSettings(null);
     const { encryptedApiKey: _, ...withoutKey } = existing;
@@ -105,29 +110,33 @@ export function registerModelSettingsController(
   });
   options.ipcMain.handle(MODEL_SETTINGS_TEST_CHANNEL, async (event) => {
     assertRequester(event);
+    await assertUserModelConfiguration(options);
     const settings = materializeSettings(options);
     return postJson(options.sidecarRequest, "/model/test", settings);
   });
   options.ipcMain.handle(MODEL_SETTINGS_MESSAGE_CHANNEL, async (event, value) => {
     assertRequester(event);
     const request = validateMessageRequest(value);
-    const settings = materializeSettings(options);
+    const userConfigurable = await allowsUserModelConfiguration(options);
     return postJson(
       options.sidecarRequest,
       `/sessions/${encodeURIComponent(request.sessionId)}/messages`,
-      { content: request.content, modelSettings: settings },
+      {
+        content: request.content,
+        ...(userConfigurable ? { modelSettings: materializeSettings(options) } : {}),
+      },
     );
   });
   options.ipcMain.handle(MODEL_SETTINGS_TURN_CHANNEL, async (event, value) => {
     assertRequester(event);
     const request = validateTurnRequest(value);
-    const settings = materializeSettings(options);
+    const userConfigurable = await allowsUserModelConfiguration(options);
     return postJson(
       options.sidecarRequest,
       `/sessions/${encodeURIComponent(request.sessionId)}/turns`,
       {
         content: request.content,
-        modelSettings: settings,
+        ...(userConfigurable ? { modelSettings: materializeSettings(options) } : {}),
         requestId: request.requestId,
       },
     );
@@ -141,6 +150,20 @@ export function registerModelSettingsController(
     options.ipcMain.removeHandler(MODEL_SETTINGS_MESSAGE_CHANNEL);
     options.ipcMain.removeHandler(MODEL_SETTINGS_TURN_CHANNEL);
   };
+}
+
+async function assertUserModelConfiguration(options: ModelSettingsControllerOptions): Promise<void> {
+  if (!await allowsUserModelConfiguration(options)) {
+    throw new Error("Model settings are managed by the Agent App");
+  }
+}
+
+async function allowsUserModelConfiguration(
+  options: ModelSettingsControllerOptions,
+): Promise<boolean> {
+  if (!options.loadHostDiscovery) return true;
+  const discovery = await options.loadHostDiscovery();
+  return discovery.access.modelAccess.configurationPolicy === "user_configurable";
 }
 
 function validateSettingsInput(value: unknown): ModelSettingsInput {

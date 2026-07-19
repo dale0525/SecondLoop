@@ -133,6 +133,24 @@ describe("desktop Credential Vault startup policy", () => {
     })).toEqual({ allowCreate: true, required: true });
     expect(credentialVaultStartupPolicy({ dataRoot: root, env: {} }))
       .toEqual({ allowCreate: false, required: true });
+    expect(credentialVaultStartupPolicy({
+      dataRoot: clean,
+      env: { AGENTWEAVE_DEV_API: "1" },
+    })).toEqual({ allowCreate: true, required: true });
+  });
+
+  it("provisions the Vault before starting an App with required identity", () => {
+    const dataRoot = temporaryRoot();
+    const appRoot = temporaryRoot();
+    writeFileSync(path.join(appRoot, "agent-app.json"), JSON.stringify({
+      schemaVersion: 2,
+      identity: { mode: "required", provider: { id: "agentweave.identity.oidc" } },
+    }));
+
+    expect(credentialVaultStartupPolicy({
+      dataRoot,
+      env: { AGENTWEAVE_APP_ROOT: appRoot },
+    })).toEqual({ allowCreate: true, required: true });
   });
 
   it("starts a clean App without provisioning or reading a legacy key", async () => {

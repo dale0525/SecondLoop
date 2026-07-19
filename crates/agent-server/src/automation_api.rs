@@ -7,7 +7,7 @@ use agent_runtime::scheduler::{MisfirePolicy, ScheduleSpec, ScheduledJob, Schedu
 use agent_runtime::storage::Storage;
 use axum::{
     Json, Router,
-    extract::{Path, Query, State},
+    extract::{Extension, Path, Query, State},
     routing::{get, post},
 };
 use chrono::{Duration, Utc};
@@ -117,10 +117,11 @@ struct FinishNotificationRequest {
 
 async fn list_schedules(
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
     Query(query): Query<ScheduleListQuery>,
 ) -> Result<Json<Vec<ScheduledJob>>, ApiError> {
     validate_limit(query.limit)?;
-    automation_runtime(&state)?
+    automation_runtime(&state, &security)?
         .execute("schedule_list", json!({"limit":query.limit}))
         .await
         .map_err(map_automation_error)
@@ -130,9 +131,10 @@ async fn list_schedules(
 
 async fn create_schedule(
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
     Json(request): Json<CreateScheduleRequest>,
 ) -> Result<Json<ScheduledJob>, ApiError> {
-    automation_runtime(&state)?
+    automation_runtime(&state, &security)?
         .execute(
             "schedule_create",
             json!({
@@ -151,9 +153,10 @@ async fn create_schedule(
 
 async fn get_schedule(
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
     Path(job_id): Path<String>,
 ) -> Result<Json<ScheduledJob>, ApiError> {
-    let value = automation_runtime(&state)?
+    let value = automation_runtime(&state, &security)?
         .execute("schedule_get", json!({"id":job_id}))
         .await
         .map_err(map_automation_error)?;
@@ -164,10 +167,11 @@ async fn get_schedule(
 
 async fn set_schedule_status(
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
     Path(job_id): Path<String>,
     Json(request): Json<SetScheduleStatusRequest>,
 ) -> Result<Json<ScheduledJob>, ApiError> {
-    let value = automation_runtime(&state)?
+    let value = automation_runtime(&state, &security)?
         .execute(
             "schedule_set_status",
             json!({
@@ -185,9 +189,10 @@ async fn set_schedule_status(
 
 async fn list_notifications(
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
     Query(query): Query<NotificationListQuery>,
 ) -> Result<Json<Vec<NotificationRecord>>, ApiError> {
-    let value = automation_runtime(&state)?
+    let value = automation_runtime(&state, &security)?
         .execute(
             "notification_list",
             json!({"status":query.status,"limit":query.limit}),
@@ -199,9 +204,10 @@ async fn list_notifications(
 
 async fn get_notification(
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
     Path(notification_id): Path<String>,
 ) -> Result<Json<NotificationRecord>, ApiError> {
-    let value = automation_runtime(&state)?
+    let value = automation_runtime(&state, &security)?
         .execute("notification_get", json!({"id":notification_id}))
         .await
         .map_err(map_automation_error)?;
@@ -213,9 +219,10 @@ async fn get_notification(
 
 async fn enqueue_notification(
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
     Json(request): Json<EnqueueNotificationRequest>,
 ) -> Result<Json<NotificationRecord>, ApiError> {
-    let value = automation_runtime(&state)?
+    let value = automation_runtime(&state, &security)?
         .execute(
             "notification_enqueue",
             json!({
@@ -235,9 +242,10 @@ async fn enqueue_notification(
 
 async fn cancel_notification(
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
     Path(notification_id): Path<String>,
 ) -> Result<Json<NotificationRecord>, ApiError> {
-    let value = automation_runtime(&state)?
+    let value = automation_runtime(&state, &security)?
         .execute("notification_cancel", json!({"id":notification_id}))
         .await
         .map_err(map_automation_error)?;
@@ -249,6 +257,7 @@ async fn cancel_notification(
 
 async fn claim_notifications(
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
     Query(query): Query<NotificationClaimQuery>,
 ) -> Result<Json<Vec<NotificationRecord>>, ApiError> {
     validate_limit(query.limit)?;
@@ -259,9 +268,9 @@ async fn claim_notifications(
         .claim_due_for_scope_and_channel(
             &query.worker,
             NotificationScope {
-                app_id: &state.app_prompt().identity.app_id,
-                tenant_id: "local",
-                user_id: "local-user",
+                app_id: &security.conversation_scope().app_id,
+                tenant_id: &security.conversation_scope().tenant_id,
+                user_id: &security.conversation_scope().user_id,
             },
             &query.channel,
             Utc::now(),
@@ -275,6 +284,7 @@ async fn claim_notifications(
 
 async fn finish_notification(
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
     Path(notification_id): Path<String>,
     Json(request): Json<FinishNotificationRequest>,
 ) -> Result<Json<bool>, ApiError> {
@@ -286,9 +296,9 @@ async fn finish_notification(
             &notification_id,
             &request.worker,
             NotificationScope {
-                app_id: &state.app_prompt().identity.app_id,
-                tenant_id: "local",
-                user_id: "local-user",
+                app_id: &security.conversation_scope().app_id,
+                tenant_id: &security.conversation_scope().tenant_id,
+                user_id: &security.conversation_scope().user_id,
             },
             request.outcome,
             Utc::now(),
@@ -300,9 +310,11 @@ async fn finish_notification(
 
 fn automation_runtime(
     state: &AppState,
+    security: &crate::identity_api::RequestSecurityContext,
 ) -> Result<agent_runtime::automation_tools::AutomationToolRuntime, ApiError> {
     state
-        .automation_tools()
+        .automation_tools_for(security)
+        .map_err(ApiError::Internal)?
         .ok_or(ApiError::NotFound("Automation Foundation is disabled"))
 }
 

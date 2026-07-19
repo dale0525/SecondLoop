@@ -267,6 +267,8 @@ pub struct HttpMobileRuntimeHost<R> {
     memory: Option<crate::memory_tools::MemoryToolRuntime>,
     connector_tools: Option<crate::connector_tools::ConnectorToolRuntime>,
     mail_actions: Option<crate::foundation_actions::MailActionService>,
+    gateway_credential_provider:
+        Option<Arc<dyn model_gateway::credentials::GatewayCredentialProvider>>,
 }
 
 impl<R> HttpMobileRuntimeHost<R>
@@ -325,12 +327,34 @@ where
             memory: None,
             connector_tools: None,
             mail_actions: None,
+            gateway_credential_provider: None,
         })
     }
 
     pub fn with_app_prompt(mut self, app_prompt: AppPromptConfig) -> Self {
         self.conversation_scope = ConversationScope::local(&app_prompt.identity.app_id);
         self.app_prompt = app_prompt;
+        self
+    }
+
+    pub fn with_conversation_scope(
+        mut self,
+        conversation_scope: ConversationScope,
+    ) -> anyhow::Result<Self> {
+        conversation_scope.validate()?;
+        anyhow::ensure!(
+            conversation_scope.app_id == self.app_prompt.identity.app_id,
+            "mobile conversation scope does not match the active Agent App"
+        );
+        self.conversation_scope = conversation_scope;
+        Ok(self)
+    }
+
+    pub fn with_gateway_credential_provider(
+        mut self,
+        provider: Option<Arc<dyn model_gateway::credentials::GatewayCredentialProvider>>,
+    ) -> Self {
+        self.gateway_credential_provider = provider;
         self
     }
 
@@ -441,9 +465,18 @@ where
             .map_err(|message| anyhow::anyhow!(message))?;
         let api_key = resolve_model_api_key(&self.model_config, &self.secret_resolver).await?;
         let profile = self.model_config.to_provider_profile(api_key);
+        let model = match &self.gateway_credential_provider {
+            Some(provider) => {
+                model_gateway::responses::GatewayHttpClient::with_credential_provider(
+                    profile,
+                    provider.clone(),
+                )
+            }
+            None => model_gateway::responses::GatewayHttpClient::new(profile),
+        };
         let skill_manager = mobile_safe_snapshot_manager(&self.init, &self.skill_manager);
         let mut runner = TurnRunner::new_with_manager_and_config(
-            model_gateway::responses::GatewayHttpClient::new(profile),
+            model,
             skill_manager,
             self.runtime_config.clone(),
         )

@@ -4,7 +4,7 @@ use agent_runtime::oauth::{
 };
 use axum::{
     Json, Router,
-    extract::{Path, RawQuery, State},
+    extract::{Extension, Path, RawQuery, State},
     http::{StatusCode, header},
     response::{Html, IntoResponse, Response},
     routing::{get, post},
@@ -31,9 +31,10 @@ pub(crate) fn callback_router() -> Router<Arc<AppState>> {
 
 async fn start_authorization(
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
     Json(request): Json<OAuthAuthorizationRequest>,
 ) -> Result<Response, ApiError> {
-    let broker = broker(&state)?;
+    let broker = broker(&state, &security).await?;
     broker
         .start(request, Utc::now())
         .await
@@ -44,9 +45,11 @@ async fn start_authorization(
 async fn authorization_status(
     Path(authorization_id): Path<String>,
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
 ) -> Result<Response, ApiError> {
     validate_authorization_id(&authorization_id)?;
-    broker(&state)?
+    broker(&state, &security)
+        .await?
         .status(&authorization_id)
         .await
         .map_err(ApiError::Internal)?
@@ -57,20 +60,23 @@ async fn authorization_status(
 async fn cancel_authorization(
     Path(authorization_id): Path<String>,
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
 ) -> Result<Response, ApiError> {
     validate_authorization_id(&authorization_id)?;
     let now = Utc::now();
-    let view = broker(&state)?
+    let view = broker(&state, &security)
+        .await?
         .cancel(&authorization_id, now)
         .await
         .map_err(ApiError::Internal)?
         .ok_or(ApiError::NotFound("OAuth authorization was not found"))?;
-    publish_authorization_view(&state, &view, now).await;
+    publish_authorization_view(&state, &security, &view, now).await;
     Ok(no_store_json(view))
 }
 
 async fn oauth_callback(
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
     RawQuery(raw_query): RawQuery,
 ) -> Response {
     let request = match parse_callback_query(raw_query.as_deref()) {
@@ -82,13 +88,13 @@ async fn oauth_callback(
             return callback_page(StatusCode::PAYLOAD_TOO_LARGE, false);
         }
     };
-    let Some(broker) = state.oauth_broker() else {
+    let Ok(Some(broker)) = state.oauth_broker_for(&security).await else {
         return callback_page(StatusCode::NOT_FOUND, false);
     };
     let now = Utc::now();
     match broker.callback(request, now).await {
         Ok(view) => {
-            publish_authorization_view(&state, &view, now).await;
+            publish_authorization_view(&state, &security, &view, now).await;
             callback_page(
                 StatusCode::OK,
                 view.status == OAuthAuthorizationStatus::Completed,
@@ -100,13 +106,15 @@ async fn oauth_callback(
 
 async fn publish_authorization_view(
     state: &AppState,
+    security: &crate::identity_api::RequestSecurityContext,
     view: &agent_runtime::oauth::OAuthAuthorizationView,
     now: chrono::DateTime<Utc>,
 ) {
     match serde_json::to_value(view) {
         Ok(result) => {
             if let Err(error) = state
-                .structured_content()
+                .structured_content_for(security)
+                .service()
                 .update_oauth_authorization_result(&view.authorization_id, result, now)
                 .await
             {
@@ -119,9 +127,14 @@ async fn publish_authorization_view(
     }
 }
 
-fn broker(state: &AppState) -> Result<&agent_runtime::oauth::OAuthBroker, ApiError> {
+async fn broker(
+    state: &AppState,
+    security: &crate::identity_api::RequestSecurityContext,
+) -> Result<agent_runtime::oauth::OAuthBroker, ApiError> {
     state
-        .oauth_broker()
+        .oauth_broker_for(security)
+        .await
+        .map_err(ApiError::Internal)?
         .ok_or(ApiError::NotFound("OAuth authorization is disabled"))
 }
 

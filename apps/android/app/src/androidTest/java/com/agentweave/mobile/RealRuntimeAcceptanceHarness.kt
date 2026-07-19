@@ -12,6 +12,8 @@ import com.agentweave.mobile.runtime.RuntimeActorContext
 import com.agentweave.mobile.runtime.RuntimeBridge
 import com.agentweave.mobile.runtime.RuntimeClient
 import com.agentweave.mobile.runtime.RuntimeModelConfig
+import com.agentweave.mobile.runtime.AndroidAgentAppAppearanceStore
+import com.agentweave.mobile.runtime.AndroidAgentAppLocalizationStore
 import com.agentweave.mobile.runtime.RuntimeSkillDraftFile
 import com.agentweave.mobile.runtime.RuntimeSkillDraftRequest
 import com.agentweave.mobile.runtime.RuntimeSkillPolicy
@@ -132,6 +134,8 @@ internal fun runRealRuntimeVisualHarness(arguments: Bundle) {
     val settingsGate = RuntimeSettingsGate()
     ActivityScenario.launch(MainActivity::class.java).use { scenario ->
       scenario.onActivity { activity ->
+        val appearance = AndroidAgentAppAppearanceStore(activity).appearance
+        val localization = AndroidAgentAppLocalizationStore(activity).localization
         activity.setContent {
           AgentWeaveTheme {
             AppRoot(
@@ -140,6 +144,12 @@ internal fun runRealRuntimeVisualHarness(arguments: Bundle) {
               settingsGate = settingsGate,
               initialDiagnostics = client.diagnostics(),
               secretStore = secrets,
+              appearance = appearance,
+              selectedThemeId = appearance.defaultTheme,
+              localization = localization,
+              selectedLocaleId = localization.defaultLocale,
+              onThemeSelected = {},
+              onLocaleSelected = {},
               modifier = Modifier.safeDrawingPadding(),
             )
           }

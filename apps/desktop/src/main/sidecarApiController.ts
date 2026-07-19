@@ -136,6 +136,8 @@ function describeRequest(request: SidecarApiRequest): RequestDescription {
   const sessionRequest = describeSessionRequest(request.operation, request.input);
   if (sessionRequest) return sessionRequest;
   switch (request.operation) {
+    case "devProviders.list":
+      return get("/dev/providers");
     case "memory.list": {
       const query = fieldString(request.input, "query", 4_096, true);
       const limit = fieldInteger(request.input, "limit", 1, 100);
@@ -867,6 +869,7 @@ const OPERATIONS = new Set<SidecarApiOperation>([
   "attachments.delete",
   "attachments.get",
   "attachments.list",
+  "devProviders.list",
   "devSkills.create",
   "devSkills.delete",
   "devSkills.list",

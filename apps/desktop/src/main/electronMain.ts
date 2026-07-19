@@ -6,6 +6,15 @@ import { pathToFileURL } from "node:url";
 import { registerApprovalWindowController } from "./approvalWindow";
 import { registerAttachmentController } from "./attachmentController";
 import { registerDataProtectionController } from "./dataProtectionController";
+import { registerDeveloperAccessController } from "./developerAccessController";
+import {
+  invalidateDeveloperGatewayDeployment,
+  loadDeveloperProjectSnapshot,
+  recordDeveloperGatewayDeployment,
+  registerDeveloperProjectController,
+  verifyDeveloperGatewayDeployment,
+} from "./developerProjectController";
+import { packageDeveloperApp } from "./developerPackager";
 import { createDesktopSecurityProvisioner } from "./desktopSecurityProvisioner";
 import { createDesktopSecurityKeyStore } from "./desktopSecurityKeys";
 import { startDesktopSidecarWithSecurity } from "./desktopStartupSecurity";
@@ -15,7 +24,8 @@ import {
   type DesktopWindowScope,
 } from "./desktopLifecycle";
 import { getDesktopWindowConfig } from "./index";
-import { registerHostBootstrapController } from "./hostBootstrapController";
+import { loadHostBootstrap, registerHostBootstrapController } from "./hostBootstrapController";
+import { registerIdentityController } from "./identityController";
 import { registerModelSettingsController } from "./modelSettingsController";
 import { startDesktopNotificationWorker } from "./notificationWorker";
 import { registerOwnerController } from "./ownerController";
@@ -107,6 +117,9 @@ app.whenReady().then(async () => {
         for (const dispose of disposers.reverse()) dispose();
       };
       try {
+        const developerAppRoot = process.env.AGENTWEAVE_APP_ROOT
+          ? path.resolve(process.env.AGENTWEAVE_APP_ROOT)
+          : null;
         configureRequesterWindowSecurity({
           openExternal: (url) => shell.openExternal(url),
           onExternalError: (error) => console.error("Failed to open external URL", error),
@@ -225,8 +238,67 @@ app.whenReady().then(async () => {
             }
           },
         }));
+        disposers.push(registerDeveloperProjectController({
+          appRoot: developerAppRoot,
+          ipcMain,
+          packageApp: async (appRoot) => packageDeveloperApp({
+            appRoot,
+            projectRoot: sidecarResolution.mode === "managed"
+              ? sidecarResolution.cwd
+              : process.cwd(),
+          }),
+          ...(sidecarResolution.mode === "managed"
+            ? {
+                refreshRuntime: async () => {
+                  await sidecar.stop();
+                  const status = await sidecar.start();
+                  if (status.state !== "ready") {
+                    throw new Error("The Agent runtime could not reload the developer project");
+                  }
+                },
+              }
+            : {}),
+          requesterWebContents: mainWindow.webContents,
+          showItemInFolder: (outputPath) => shell.showItemInFolder(outputPath),
+        }));
+        if (
+          sidecarResolution.mode === "managed"
+          && sidecarResolution.env.AGENTWEAVE_DEV_API === "1"
+        ) {
+          disposers.push(registerDeveloperAccessController({
+            ensureCredentialVault: () => security.ensureCredentialVault(),
+            ipcMain,
+            invalidateDeployment: () => invalidateDeveloperGatewayDeployment({
+              appRoot: developerAppRoot,
+            }),
+            loadProject: () => loadDeveloperProjectSnapshot(developerAppRoot),
+            openExternal: (url) => shell.openExternal(url),
+            recordDeployment: (expectedRevision, receipt) =>
+              recordDeveloperGatewayDeployment({
+                appRoot: developerAppRoot,
+                expectedRevision,
+                receipt,
+              }),
+            redirectUri: process.env.AGENTWEAVE_CLOUDFLARE_OAUTH_REDIRECT_URI
+              ?? "http://127.0.0.1:8977/agentweave/cloudflare/callback",
+            requesterWebContents: mainWindow.webContents,
+            sidecarRequest: sidecar.request,
+            verifyDeployment: (deployment, expectedRevision, test) =>
+              verifyDeveloperGatewayDeployment({
+                appRoot: developerAppRoot,
+                deployment,
+                expectedRevision,
+                test,
+              }),
+          }));
+        }
         disposers.push(registerModelSettingsController({
           ipcMain,
+          loadHostDiscovery: () => loadHostBootstrap({
+            ipcMain,
+            requesterWebContents: mainWindow.webContents,
+            sidecarRequest: sidecar.request,
+          }),
           requesterWebContents: mainWindow.webContents,
           safeStorage,
           sidecarRequest: sidecar.request,
@@ -234,6 +306,20 @@ app.whenReady().then(async () => {
         }));
         disposers.push(registerHostBootstrapController({
           ipcMain,
+          requesterWebContents: mainWindow.webContents,
+          sidecarRequest: sidecar.request,
+        }));
+        disposers.push(registerIdentityController({
+          ...(sidecarResolution.mode === "managed"
+            ? { ensureCredentialVault: () => security.ensureCredentialVault() }
+            : {}),
+          ipcMain,
+          loadHostDiscovery: () => loadHostBootstrap({
+            ipcMain,
+            requesterWebContents: mainWindow.webContents,
+            sidecarRequest: sidecar.request,
+          }),
+          openExternal: (url) => shell.openExternal(url),
           requesterWebContents: mainWindow.webContents,
           sidecarRequest: sidecar.request,
         }));

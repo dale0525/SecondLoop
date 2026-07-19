@@ -48,6 +48,7 @@ fn init_config(root: &std::path::Path) -> MobileInitConfig {
             "secure_storage".into(),
             "model.http_provider".into(),
         ],
+        security_context: None,
         storage_protection_key_hex: None,
     }
 }

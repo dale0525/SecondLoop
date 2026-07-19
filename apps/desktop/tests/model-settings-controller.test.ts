@@ -12,6 +12,7 @@ import {
   MODEL_SETTINGS_TURN_CHANNEL,
   registerModelSettingsController,
 } from "../src/main/modelSettingsController";
+import { hostDiscoveryFixture } from "./hostBootstrapFixture";
 
 const roots: string[] = [];
 
@@ -36,7 +37,7 @@ describe("desktop model credential storage", () => {
     const stored = readFileSync(fixture.storagePath, "utf8");
     expect(stored).not.toContain("desktop-secret");
     expect(stored).toContain(Buffer.from("enc:desktop-secret").toString("base64"));
-    expect(load(fixture.requesterEvent)).toEqual({
+    await expect(load(fixture.requesterEvent)).resolves.toEqual({
       apiKeyConfigured: true,
       baseUrl: "https://models.example.test/v1",
       endpointType: "responses",
@@ -91,25 +92,60 @@ describe("desktop model credential storage", () => {
   it("clears a credential, rejects other renderers, and fails closed without encryption", async () => {
     const fixture = createFixture();
     const save = fixture.handlers.get(MODEL_SETTINGS_SAVE_CHANNEL)!;
-    expect(() => save({ sender: { id: 99 } }, validSettings("secret"))).toThrow(/requester window/);
+    await expect(save({ sender: { id: 99 } }, validSettings("secret"))).rejects.toThrow(
+      /requester window/,
+    );
     await save(fixture.requesterEvent, validSettings("secret"));
-    expect(fixture.handlers.get(MODEL_SETTINGS_CLEAR_KEY_CHANNEL)!(fixture.requesterEvent)).toMatchObject({
-      apiKeyConfigured: false,
-    });
+    await expect(
+      fixture.handlers.get(MODEL_SETTINGS_CLEAR_KEY_CHANNEL)!(fixture.requesterEvent),
+    ).resolves.toMatchObject({ apiKeyConfigured: false });
 
     const unavailable = createFixture(false);
-    expect(() =>
+    await expect(
       unavailable.handlers.get(MODEL_SETTINGS_SAVE_CHANNEL)!(
         unavailable.requesterEvent,
         validSettings("secret"),
       ),
-    ).toThrow(/encryption is unavailable/);
+    ).rejects.toThrow(/encryption is unavailable/);
+  });
+
+  it("keeps app-managed model settings outside the renderer and omits user overrides", async () => {
+    const fixture = createFixture(true, true);
+
+    await expect(
+      fixture.handlers.get(MODEL_SETTINGS_LOAD_CHANNEL)!(fixture.requesterEvent),
+    ).rejects.toThrow("managed by the Agent App");
+    await expect(
+      fixture.handlers.get(MODEL_SETTINGS_SAVE_CHANNEL)!(
+        fixture.requesterEvent,
+        validSettings("must-not-be-used"),
+      ),
+    ).rejects.toThrow("managed by the Agent App");
+
+    const message = await fixture.handlers.get(MODEL_SETTINGS_MESSAGE_CHANNEL)!(
+      fixture.requesterEvent,
+      { sessionId: "session-1", content: "Hello" },
+    );
+    const turn = await fixture.handlers.get(MODEL_SETTINGS_TURN_CHANNEL)!(
+      fixture.requesterEvent,
+      { sessionId: "session-1", requestId: "request-1", content: "Stream" },
+    );
+
+    expect(message).toEqual({});
+    expect(turn).toEqual({});
+    expect(JSON.parse(String(fixture.sidecarRequest.mock.calls[0][1]?.body))).toEqual({
+      content: "Hello",
+    });
+    expect(JSON.parse(String(fixture.sidecarRequest.mock.calls[1][1]?.body))).toEqual({
+      content: "Stream",
+      requestId: "request-1",
+    });
   });
 });
 
 type Handler = (event: { sender: { id: number } }, value?: unknown) => Promise<unknown> | unknown;
 
-function createFixture(encryptionAvailable = true) {
+function createFixture(encryptionAvailable = true, appManaged = false) {
   mkdirSync(join(process.cwd(), ".tool"), { recursive: true });
   const root = mkdtempSync(join(process.cwd(), ".tool", "desktop-model-settings-"));
   roots.push(root);
@@ -123,6 +159,41 @@ function createFixture(encryptionAvailable = true) {
       removeHandler: (channel) => handlers.delete(channel),
     },
     requesterWebContents: requesterEvent.sender,
+    ...(appManaged
+      ? {
+          loadHostDiscovery: async () => hostDiscoveryFixture({
+            access: {
+              modelAccess: {
+                configurationPolicy: "app_managed",
+                profile: {
+                  authentication: "user_identity",
+                  baseUrl: "https://gateway.example.test/v1",
+                  endpointType: "responses",
+                  headers: {},
+                  modelName: "agent-model",
+                  providerId: "example.gateway",
+                },
+              },
+              identity: {
+                mode: "required",
+                provider: {
+                  id: "agentweave.identity.oidc",
+                  publicConfig: { issuer: "https://identity.example.test" },
+                  version: "^1.0.0",
+                },
+              },
+              entitlements: {
+                mode: "required",
+                provider: {
+                  id: "agentweave.entitlements.http",
+                  publicConfig: { endpoint: "https://access.example.test" },
+                  version: "^1.0.0",
+                },
+              },
+            },
+          }),
+        }
+      : {}),
     safeStorage: {
       isEncryptionAvailable: () => encryptionAvailable,
       encryptString: (value) => Buffer.from(`enc:${value}`),

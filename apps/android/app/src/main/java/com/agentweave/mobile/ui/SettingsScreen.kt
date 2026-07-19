@@ -58,6 +58,7 @@ import com.agentweave.mobile.runtime.AgentAppLocale
 import com.agentweave.mobile.runtime.AgentAppLocalization
 import com.agentweave.mobile.runtime.AgentAppTheme
 import com.agentweave.mobile.runtime.RuntimeClient
+import com.agentweave.mobile.runtime.MobileIdentityStatus
 import com.agentweave.mobile.runtime.RuntimeModelConfig
 import com.agentweave.mobile.secrets.ModelSecretStore
 import com.agentweave.mobile.secrets.ModelSecretStoreException
@@ -86,6 +87,9 @@ fun androidProviderIds(): List<String> = ProviderOptions.map { it.id }
 fun providerSelectionChanges(currentProviderId: String, selectedProviderId: String): Boolean =
   currentProviderId != selectedProviderId
 
+fun modelSecretReference(providerId: String, accountId: String?): String =
+  accountId?.let { "model.$it.$providerId.default" } ?: "model.$providerId.default"
+
 private val EndpointOptions = listOf(
   EndpointOption("responses", "Responses"),
   EndpointOption("chat_completions", "Chat completions"),
@@ -97,8 +101,9 @@ fun modelSecretReferenceForSave(
   currentSecretId: String?,
   hasSavedSecret: Boolean,
   hasNewSecret: Boolean,
+  accountId: String? = null,
 ): String? {
-  val providerReference = "model.$providerId.default"
+  val providerReference = modelSecretReference(providerId, accountId)
   return when {
     hasNewSecret -> providerReference
     hasSavedSecret && currentSecretId == providerReference -> currentSecretId
@@ -199,6 +204,12 @@ fun persistModelSettings(
 fun SettingsScreen(
   runtimeClient: RuntimeClient,
   secretStore: ModelSecretStore,
+  modelConfigurationPolicy: String,
+  accountId: String?,
+  identityStatus: MobileIdentityStatus? = null,
+  onSwitchAccount: () -> Unit = {},
+  onSignOut: () -> Unit = {},
+  onClearAccountData: () -> Unit = {},
   settingsGate: RuntimeSettingsGate,
   runtimeBusy: Boolean,
   appearance: AgentAppAppearance,
@@ -211,6 +222,7 @@ fun SettingsScreen(
   onSaved: () -> Unit,
 ) {
   val strings = LocalAppStrings.current
+  val userConfigurable = modelConfigurationPolicy == "user_configurable"
   var provider by remember { mutableStateOf(ProviderOptions.first()) }
   var endpoint by remember { mutableStateOf(EndpointOptions.first()) }
   var baseUrl by remember { mutableStateOf(provider.defaultBaseUrl) }
@@ -229,10 +241,18 @@ fun SettingsScreen(
   var resultMessage by remember { mutableStateOf<String?>(null) }
   var errorMessage by remember { mutableStateOf<String?>(null) }
 
-  LaunchedEffect(runtimeClient) {
+  LaunchedEffect(runtimeClient, userConfigurable) {
     try {
       val initialSettings = withContext(Dispatchers.IO) {
-        loadInitialModelSettings(runtimeClient::loadModelConfig, secretStore)
+        if (userConfigurable) {
+          loadInitialModelSettings(runtimeClient::loadModelConfig, secretStore)
+        } else {
+          InitialModelSettings(
+            config = runtimeClient.loadModelConfig(),
+            secretSaved = false,
+            secretLookupError = null,
+          )
+        }
       }
       val config = initialSettings.config
       if (config != null) {
@@ -264,9 +284,16 @@ fun SettingsScreen(
     }
   }
 
-  LaunchedEffect(provider.id, secretStore) {
+  LaunchedEffect(provider.id, secretStore, userConfigurable, accountId) {
+    if (!userConfigurable) {
+      secretLookupReady = true
+      return@LaunchedEffect
+    }
     val providerId = provider.id
-    val reference = "model.$providerId.default"
+    val reference = modelSecretReference(
+      providerId = providerId,
+      accountId = accountId,
+    )
     val requestGeneration = secretLookupGeneration + 1
     secretLookupGeneration = requestGeneration
     secretLookupReady = false
@@ -324,6 +351,7 @@ fun SettingsScreen(
         currentSecretId = currentSecretId,
         hasSavedSecret = hasSavedSecret,
         hasNewSecret = newSecret != null,
+        accountId = accountId,
       )
       val settings = ModelSettings(
         providerId = provider.id,
@@ -370,11 +398,13 @@ fun SettingsScreen(
   }
 
   Column(modifier = Modifier.fillMaxSize().background(GaSurface)) {
-    SettingsTopBar(onBack, enabled = settingsInteractionAllowed())
+    SettingsTopBar(onBack, enabled = !saving)
     Column(
       modifier = Modifier
         .weight(1f)
+        .widthIn(max = 720.dp)
         .fillMaxWidth()
+        .align(Alignment.CenterHorizontally)
         .verticalScroll(rememberScrollState())
         .padding(horizontal = 16.dp, vertical = 16.dp),
       verticalArrangement = Arrangement.spacedBy(20.dp),
@@ -414,6 +444,18 @@ fun SettingsScreen(
       )
       HorizontalDivider(color = GaBorder)
 
+      identityStatus?.let { status ->
+        AccountSettingsCard(
+          accountId = checkNotNull(status.accountId),
+          expiresAt = checkNotNull(status.securityContext).expiresAt,
+          onSwitchAccount = onSwitchAccount,
+          onSignOut = onSignOut,
+          onClearAccountData = onClearAccountData,
+        )
+        HorizontalDivider(color = GaBorder)
+      }
+
+      if (userConfigurable) {
       Text(
         strings.text("android.settings.model"),
         color = GaText,
@@ -548,10 +590,17 @@ fun SettingsScreen(
       }
       resultMessage?.let { Text(it, color = GaReady, fontSize = 13.sp) }
       errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 13.sp) }
+      } else {
+        ManagedModelConfigurationCard(
+          providerName = provider.name,
+          modelName = modelName,
+        )
+        errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 13.sp) }
+      }
     }
   }
 
-  if (showSecretDialog) {
+  if (userConfigurable && showSecretDialog) {
     AlertDialog(
       onDismissRequest = {
         dialogApiKey = ""
@@ -604,6 +653,61 @@ fun SettingsScreen(
         }
       },
     )
+  }
+}
+
+@Composable
+private fun ManagedModelConfigurationCard(providerName: String, modelName: String) {
+  val strings = LocalAppStrings.current
+  Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Text(
+      strings.text("android.settings.model"),
+      color = GaText,
+      fontSize = 15.sp,
+      lineHeight = 18.sp,
+      fontWeight = FontWeight.Medium,
+    )
+    Row(
+      modifier = Modifier
+        .fillMaxWidth()
+        .background(GaSurfaceMuted, GaLargeShape)
+        .border(1.dp, GaBorder, GaLargeShape)
+        .padding(16.dp),
+      horizontalArrangement = Arrangement.spacedBy(12.dp),
+      verticalAlignment = Alignment.Top,
+    ) {
+      Icon(
+        Icons.Outlined.Lock,
+        contentDescription = null,
+        tint = GaReady,
+        modifier = Modifier.size(20.dp),
+      )
+      Column(
+        modifier = Modifier.weight(1f),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+      ) {
+        Text(
+          strings.text("android.settings.modelManagedTitle"),
+          color = GaText,
+          fontSize = 15.sp,
+          lineHeight = 20.sp,
+          fontWeight = FontWeight.SemiBold,
+        )
+        Text(
+          strings.text("android.settings.modelManagedDescription"),
+          color = GaTextSecondary,
+          fontSize = 14.sp,
+          lineHeight = 20.sp,
+        )
+        Text(
+          "$providerName · $modelName",
+          color = GaTextSecondary,
+          fontFamily = LocalGaMonoFontFamily.current,
+          fontSize = 13.sp,
+          lineHeight = 18.sp,
+        )
+      }
+    }
   }
 }
 

@@ -67,6 +67,14 @@ impl AutomationToolRuntime {
         })
     }
 
+    pub fn for_scope(&self, scope: AutomationScope) -> Self {
+        Self {
+            scheduler: self.scheduler.clone(),
+            notifications: self.notifications.clone(),
+            scope,
+        }
+    }
+
     pub fn definitions(&self) -> Vec<ToolDefinition> {
         definitions()
     }

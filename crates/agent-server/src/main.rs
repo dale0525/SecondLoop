@@ -11,14 +11,16 @@ use agent_runtime::{
 use agent_server::api;
 use agent_server::owner_api::{OwnerApiConfig, OwnerAuth};
 use agent_server::tenant_skills::{SINGLE_USER_TENANT_ID, TenantSkillRuntime};
-use model_gateway::responses::GatewayHttpClient;
-#[cfg(test)]
 use std::path::PathBuf;
 use std::sync::Arc;
 
 const DEFAULT_DATABASE_URL: &str = "sqlite://agentweave.db?mode=rwc";
+#[cfg(test)]
+#[path = "main_test_fs.rs"]
+mod main_test_fs;
 mod server_app;
 mod server_automation;
+mod server_identity_startup;
 mod server_model_startup;
 #[path = "server_skill_startup.rs"]
 mod server_skill_startup;
@@ -65,7 +67,7 @@ async fn main() -> anyhow::Result<()> {
         .iter()
         .map(|connector| connector.id.clone())
         .collect::<Vec<_>>();
-    let model = GatewayHttpClient::new(model_profile_from_env());
+    let default_model_profile = model_profile_from_env();
     let (state, automation_storage, database_path) = if let Some(managed_skills) = managed_skills {
         let policy = owner_host
             .as_ref()
@@ -93,6 +95,17 @@ async fn main() -> anyhow::Result<()> {
         ];
         let runtime_config = base_runtime_config.excluding_workspace_roots(control_roots);
         let resolved_app = server_app::resolve_app(&runtime.manager, &runtime_config).await?;
+        let credential_root = runtime.data_root.join("credentials");
+        let identity_runtime = server_identity_startup::resolve_identity_runtime(
+            &runtime.storage,
+            &resolved_app,
+            runtime.credential_vault_key.clone(),
+            Some(&credential_root),
+            SINGLE_USER_TENANT_ID,
+        )
+        .await?;
+        let model = resolved_app
+            .effective_model_client(default_model_profile.clone(), identity_runtime.as_ref())?;
         let runtime_config = resolved_app.enforce_runtime_policy(runtime_config);
         let owner_management =
             build_tenant_owner_api_config(owner_host, &runtime, connector_catalog).await?;
@@ -106,6 +119,10 @@ async fn main() -> anyhow::Result<()> {
         )
         .await?
         .with_host_discovery(resolved_app.host_discovery)?;
+        let state = match identity_runtime {
+            Some(identity) => state.with_identity_runtime(identity),
+            None => state,
+        };
         (state, storage, Some(database_path))
     } else {
         let database_url = std::env::var("AGENTWEAVE_DATABASE_URL")
@@ -123,6 +140,18 @@ async fn main() -> anyhow::Result<()> {
         }
         let runtime_config = base_runtime_config.excluding_workspace_roots(control_roots);
         let resolved_app = server_app::resolve_app(&loaded.manager, &runtime_config).await?;
+        let credential_root =
+            server_identity_startup::credential_root_for_database(database_path.as_deref());
+        let identity_runtime = server_identity_startup::resolve_identity_runtime(
+            &storage,
+            &resolved_app,
+            credential_vault_key.clone(),
+            credential_root.as_deref(),
+            SINGLE_USER_TENANT_ID,
+        )
+        .await?;
+        let model = resolved_app
+            .effective_model_client(default_model_profile.clone(), identity_runtime.as_ref())?;
         let runtime_config = resolved_app.enforce_runtime_policy(runtime_config);
         let owner_management =
             build_owner_api_config(owner_host, &loaded, storage.clone(), connector_catalog).await?;
@@ -133,7 +162,6 @@ async fn main() -> anyhow::Result<()> {
                 .await?;
         let attachment_tools =
             server_app::resolve_attachment_tools(&storage, &resolved_app.prompt).await?;
-        let credential_root = server_app::credential_root_for_database(database_path.as_deref());
         let connector_foundation = server_app::resolve_connector_tools(
             &storage,
             &resolved_app.prompt,
@@ -175,6 +203,10 @@ async fn main() -> anyhow::Result<()> {
             )
         }
         .with_host_discovery(resolved_app.host_discovery)?;
+        let state = match identity_runtime {
+            Some(identity) => state.with_identity_runtime(identity),
+            None => state,
+        };
         let state = apply_connector_foundation(state, connector_foundation);
         (state, storage, database_path)
     };
@@ -187,6 +219,41 @@ async fn main() -> anyhow::Result<()> {
         state
     };
     let state = apply_data_protection(state, &database_path, &backup_key)?;
+    let state = if dev_api_enabled {
+        let credential_root =
+            server_identity_startup::credential_root_for_database(database_path.as_deref());
+        let secrets = server_app::resolve_secret_store(
+            credential_vault_key.as_deref(),
+            credential_root.as_deref(),
+        )?;
+        if let Some(secrets) = secrets {
+            let project_root = std::env::var("AGENTWEAVE_APP_ROOT")
+                .ok()
+                .map(PathBuf::from)
+                .map(std::fs::canonicalize)
+                .transpose()?
+                .map(|path| path.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "unconfigured-app-root".into());
+            let project_identity = format!("app={};root={project_root}", state.app_id());
+            let control_plane =
+                agent_server::developer_control_plane::DeveloperControlPlane::cloudflare(
+                    automation_storage.sqlite_pool(),
+                    secrets,
+                    &project_identity,
+                    state.app_id(),
+                    agent_server::developer_control_plane::CloudflareOAuthDefaults::from_environment()?,
+                )
+                .await?;
+            state.with_developer_control_plane(control_plane)
+        } else {
+            tracing::warn!(
+                "Developer Control Plane is unavailable because the persistent Credential Vault is not provisioned"
+            );
+            state
+        }
+    } else {
+        state
+    };
     let state = Arc::new(state.with_skills_root(dev_skills_root));
     let app = api::router_for_transport(state, dev_api_enabled, transport.auth());
     let addr = transport.address();
@@ -412,6 +479,7 @@ async fn reconcile_managed_startup(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::main_test_fs::{make_test_tree_writable, remove_test_dir, unique_test_dir};
     use agent_runtime::platform::PlatformId;
     use agent_runtime::skill_store::{SkillRevisionStore, SkillStorePaths};
     use agent_runtime::turn::{ModelClient, ModelEventStream};
@@ -927,57 +995,5 @@ mod tests {
         )
         .await
         .unwrap();
-    }
-
-    async fn make_test_tree_writable(root: &Path) {
-        let mut entries = tokio::fs::read_dir(root).await.unwrap();
-        while let Some(entry) = entries.next_entry().await.unwrap() {
-            let mut permissions = entry.metadata().await.unwrap().permissions();
-            set_test_writable(&mut permissions, false);
-            tokio::fs::set_permissions(entry.path(), permissions)
-                .await
-                .unwrap();
-        }
-        let mut permissions = tokio::fs::metadata(root).await.unwrap().permissions();
-        set_test_writable(&mut permissions, true);
-        tokio::fs::set_permissions(root, permissions).await.unwrap();
-    }
-
-    fn unique_test_dir(name: &str) -> PathBuf {
-        std::env::temp_dir().join(format!("agentweave-main-{name}-{}", uuid::Uuid::new_v4()))
-    }
-
-    async fn remove_test_dir(path: PathBuf) {
-        if path.exists() {
-            let mut stack = vec![path.clone()];
-            while let Some(current) = stack.pop() {
-                let mut permissions = tokio::fs::symlink_metadata(&current)
-                    .await
-                    .unwrap()
-                    .permissions();
-                set_test_writable(&mut permissions, current.is_dir());
-                tokio::fs::set_permissions(&current, permissions)
-                    .await
-                    .unwrap();
-                if current.is_dir() {
-                    let mut entries = tokio::fs::read_dir(&current).await.unwrap();
-                    while let Some(entry) = entries.next_entry().await.unwrap() {
-                        stack.push(entry.path());
-                    }
-                }
-            }
-            tokio::fs::remove_dir_all(path).await.unwrap();
-        }
-    }
-
-    fn set_test_writable(permissions: &mut std::fs::Permissions, directory: bool) {
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let owner_access = if directory { 0o700 } else { 0o600 };
-            permissions.set_mode(permissions.mode() | owner_access);
-        }
-        #[cfg(not(unix))]
-        permissions.set_readonly(false);
     }
 }

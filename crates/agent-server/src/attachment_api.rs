@@ -3,7 +3,7 @@ use agent_runtime::attachments::{AttachmentError, AttachmentMetadata, MAX_ATTACH
 use axum::{
     Json, Router,
     body::{Body, to_bytes},
-    extract::{Path, Query, Request, State},
+    extract::{Extension, Path, Query, Request, State},
     http::{HeaderMap, HeaderValue, StatusCode, header},
     response::Response,
     routing::get,
@@ -45,9 +45,10 @@ struct AttachmentImportQuery {
 
 async fn list_attachments(
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
     Query(query): Query<AttachmentListQuery>,
 ) -> Result<Json<Vec<AttachmentMetadata>>, ApiError> {
-    let runtime = attachment_runtime(&state)?;
+    let runtime = attachment_runtime(&state, &security)?;
     runtime
         .store()
         .list(&runtime.scope(), query.limit)
@@ -58,10 +59,11 @@ async fn list_attachments(
 
 async fn import_attachment(
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
     Query(query): Query<AttachmentImportQuery>,
     request: Request,
 ) -> Result<Json<AttachmentMetadata>, ApiError> {
-    let runtime = attachment_runtime(&state)?;
+    let runtime = attachment_runtime(&state, &security)?;
     let mime_type = required_header(request.headers(), header::CONTENT_TYPE.as_str())?.to_string();
     let idempotency_key = required_header(request.headers(), IDEMPOTENCY_KEY)?.to_string();
     reject_oversized_content_length(request.headers())?;
@@ -84,9 +86,10 @@ async fn import_attachment(
 
 async fn get_attachment(
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
     Path(attachment_id): Path<String>,
 ) -> Result<Json<AttachmentMetadata>, ApiError> {
-    let runtime = attachment_runtime(&state)?;
+    let runtime = attachment_runtime(&state, &security)?;
     runtime
         .store()
         .get(&runtime.scope(), &attachment_id)
@@ -98,9 +101,10 @@ async fn get_attachment(
 
 async fn get_attachment_content(
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
     Path(attachment_id): Path<String>,
 ) -> Result<Response, ApiError> {
-    let runtime = attachment_runtime(&state)?;
+    let runtime = attachment_runtime(&state, &security)?;
     let metadata = runtime
         .store()
         .get(&runtime.scope(), &attachment_id)
@@ -125,9 +129,10 @@ async fn get_attachment_content(
 
 async fn delete_attachment(
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
     Path(attachment_id): Path<String>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    let runtime = attachment_runtime(&state)?;
+    let runtime = attachment_runtime(&state, &security)?;
     let deleted = runtime
         .store()
         .delete(&runtime.scope(), &attachment_id)
@@ -141,9 +146,11 @@ async fn delete_attachment(
 
 fn attachment_runtime(
     state: &AppState,
+    security: &crate::identity_api::RequestSecurityContext,
 ) -> Result<agent_runtime::attachment_tools::AttachmentToolRuntime, ApiError> {
     state
-        .attachment_tools()
+        .attachment_tools_for(security)
+        .map_err(ApiError::Internal)?
         .ok_or(ApiError::NotFound("Attachments Foundation is disabled"))
 }
 

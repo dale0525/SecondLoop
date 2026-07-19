@@ -14,12 +14,19 @@ import test from "node:test";
 
 import { PROJECT_ROOT, scaffoldAgentApp } from "./scaffold-agent-app.mjs";
 import {
+  computeProjectDesiredHash,
+  hashPublicValue,
+  runtimeProviderProjection,
+} from "./agentweave-project.mjs";
+import {
   packageAgentApp,
   validateAgentAppRelease,
 } from "./package-agent-app.mjs";
 
 const TEST_ROOT = join(PROJECT_ROOT, ".tool");
 const SCRIPT_PATH = join(PROJECT_ROOT, "scripts", "package-agent-app.mjs");
+const CLOUDFLARE_ACCOUNT_ID = "0123456789abcdef0123456789abcdef";
+const MANAGED_ENDPOINT = "https://gateway.example.com/v1";
 
 function makeTempRoot() {
   mkdirSync(TEST_ROOT, { recursive: true });
@@ -35,6 +42,93 @@ function fileMap(root, prefix = "") {
     else result[path] = readFileSync(join(root, path));
   }
   return result;
+}
+
+function configureManagedGateway(appRoot, { writeLock = true } = {}) {
+  const manifestPath = join(appRoot, "agent-app.json");
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  const identity = {
+    id: "agentweave.identity.oidc",
+    version: "1.0.0",
+    publicConfig: {
+      issuer: "https://identity.example.com",
+      clientId: "public-desktop-client",
+      audience: "com.example.release.gateway",
+    },
+  };
+  const entitlement = {
+    id: "agentweave.entitlement.remote",
+    version: "1.0.0",
+    publicConfig: { policyId: "standard" },
+  };
+  const gateway = {
+    id: "agentweave.gateway.cloudflare",
+    version: "1.0.0",
+    publicConfig: { requestLimit: 60 },
+  };
+  const modelAccess = {
+    configurationPolicy: "app_managed",
+    profile: {
+      providerId: "agentweave.gateway.cloudflare",
+      endpointType: "responses",
+      baseUrl: MANAGED_ENDPOINT,
+      modelName: "approved-model",
+      authentication: "user_identity",
+    },
+  };
+  Object.assign(manifest, {
+    modelAccess,
+    identity: { mode: "required", provider: identity },
+    entitlements: { mode: "required", provider: entitlement },
+  });
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+
+  const project = {
+    schemaVersion: 1,
+    providers: { identity, entitlement, gateway },
+    modelAccess,
+    deployment: {
+      provider: "cloudflare",
+      cloudflare: {
+        accountId: CLOUDFLARE_ACCOUNT_ID,
+        workerName: "deployment-ref-worker",
+        environment: "production",
+      },
+    },
+  };
+  writeFileSync(
+    join(appRoot, "agentweave-project.json"),
+    `${JSON.stringify(project, null, 2)}\n`,
+    "utf8",
+  );
+  if (writeLock) {
+    mkdirSync(join(appRoot, ".agentweave"), { recursive: true });
+    const lock = {
+      schemaVersion: 1,
+      desiredHash: computeProjectDesiredHash(project),
+      runtimeProjectionHash: hashPublicValue(runtimeProviderProjection(manifest)),
+      gateway: {
+        id: gateway.id,
+        version: gateway.version,
+        publicConfigHash: hashPublicValue(gateway.publicConfig),
+      },
+      deployment: {
+        provider: "cloudflare",
+        reference: {
+          ...project.deployment.cloudflare,
+          versionId: "f165ce16-42aa-4b95-b544-4d0bc39f49a2",
+          deploymentId: "12ee6020-b9b1-4d11-bcc4-176f3d890d52",
+          endpoint: MANAGED_ENDPOINT,
+        },
+      },
+    };
+    writeFileSync(
+      join(appRoot, ".agentweave", "deployment.lock"),
+      `${JSON.stringify(lock, null, 2)}\n`,
+      "utf8",
+    );
+  }
+  return { manifest, project };
 }
 
 test("Agent App release packaging is deterministic and locks selected packages", () => {
@@ -60,6 +154,9 @@ test("Agent App release packaging is deterministic and locks selected packages",
     assert.deepEqual(lock.hostRequirements.providers, [
       { id: "memory-provider", runtimeVersion: "0.1.0" },
     ]);
+    assert.deepEqual(lock.publicProviderProjection.value, {});
+    assert.equal(lock.publicProviderProjection.manifestSchemaVersion, 1);
+    assert.match(lock.publicProviderProjection.contentHash, /^sha256:[0-9a-f]{64}$/);
     assert.doesNotMatch(JSON.stringify(lock), new RegExp(PROJECT_ROOT.replaceAll("/", "\\/")));
   } finally {
     rmSync(temp, { recursive: true, force: true });
@@ -144,8 +241,18 @@ test("release verification rejects tampering and future lock schemas", () => {
     });
     const lockPath = join(release, "agent-app.lock.json");
     const lock = JSON.parse(readFileSync(lockPath, "utf8"));
-    lock.schemaVersion = 2;
+    lock.publicProviderProjection.contentHash = `sha256:${"0".repeat(64)}`;
     writeFileSync(lockPath, `${JSON.stringify(lock, null, 2)}\n`, "utf8");
+    assert.throws(() => validateAgentAppRelease(release), /public provider projection/);
+
+    rmSync(release, { recursive: true, force: true });
+    packageAgentApp({
+      input: join(PROJECT_ROOT, "examples", "minimal-agent"),
+      output: release,
+    });
+    const futureLock = JSON.parse(readFileSync(lockPath, "utf8"));
+    futureLock.schemaVersion = 2;
+    writeFileSync(lockPath, `${JSON.stringify(futureLock, null, 2)}\n`, "utf8");
     assert.throws(() => validateAgentAppRelease(release), /unsupported Agent App lock schema/);
   } finally {
     rmSync(temp, { recursive: true, force: true });
@@ -167,6 +274,60 @@ test("release packaging excludes credential-shaped files", () => {
       () => packageAgentApp({ input: app, output: join(temp, "release") }),
       /forbidden credential file/,
     );
+  } finally {
+    rmSync(temp, { recursive: true, force: true });
+  }
+});
+
+test("release packaging scans included content for credential assignment markers", () => {
+  const temp = makeTempRoot();
+  try {
+    const app = join(temp, "app");
+    scaffoldAgentApp({ name: "Credential Scan", appId: "com.example.credential-scan", output: app });
+    writeFileSync(
+      join(app, "leak.txt"),
+      "OPENAI_API_KEY=sk-production-value-that-must-not-ship\n",
+      "utf8",
+    );
+    assert.throws(
+      () => packageAgentApp({ input: app, output: join(temp, "release") }),
+      /credential marker|credential assignment marker/,
+    );
+  } finally {
+    rmSync(temp, { recursive: true, force: true });
+  }
+});
+
+test("app-managed packaging requires deployment lock and excludes all developer control-plane files", () => {
+  const temp = makeTempRoot();
+  try {
+    const app = join(temp, "app");
+    scaffoldAgentApp({ name: "Managed Gateway", appId: "com.example.managed-gateway", output: app });
+    configureManagedGateway(app, { writeLock: false });
+    assert.throws(
+      () => packageAgentApp({ input: app, output: join(temp, "missing-lock-release") }),
+      /deployment\.lock is required before packaging/,
+    );
+
+    const { manifest } = configureManagedGateway(app);
+    mkdirSync(join(app, ".github", "workflows"), { recursive: true });
+    mkdirSync(join(app, ".vscode"), { recursive: true });
+    writeFileSync(join(app, ".github", "workflows", "release.yml"), "name: developer-only\n", "utf8");
+    writeFileSync(join(app, ".vscode", "settings.json"), "{}\n", "utf8");
+    writeFileSync(join(app, ".gitignore"), ".agentweave/\n", "utf8");
+
+    const release = join(temp, "release");
+    const result = packageAgentApp({ input: app, output: release });
+    assert.equal(existsSync(join(release, "app", "agentweave-project.json")), false);
+    assert.equal(existsSync(join(release, "app", ".agentweave")), false);
+    assert.equal(existsSync(join(release, "app", ".github")), false);
+    assert.equal(existsSync(join(release, "app", ".vscode")), false);
+    assert.equal(existsSync(join(release, "app", ".gitignore")), false);
+    assert.deepEqual(result.lock.publicProviderProjection.value, runtimeProviderProjection(manifest));
+    const serializedLock = JSON.stringify(result.lock);
+    assert.doesNotMatch(serializedLock, new RegExp(CLOUDFLARE_ACCOUNT_ID));
+    assert.doesNotMatch(serializedLock, /deployment-ref-worker/);
+    validateAgentAppRelease(release);
   } finally {
     rmSync(temp, { recursive: true, force: true });
   }

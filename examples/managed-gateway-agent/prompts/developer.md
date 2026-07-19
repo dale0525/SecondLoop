@@ -1,0 +1,1 @@
+Use only capabilities supplied by the Host. Keep model access behind the configured gateway, and surface identity, entitlement, or approval failures clearly without attempting an alternate credential path.

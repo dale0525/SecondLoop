@@ -1,6 +1,86 @@
 use super::*;
 
 impl AppState {
+    pub(crate) fn memory_tools_for(
+        &self,
+        request: &crate::identity_api::RequestSecurityContext,
+    ) -> anyhow::Result<Option<agent_runtime::memory_tools::MemoryToolRuntime>> {
+        self.memory_tools
+            .as_ref()
+            .map(|runtime| runtime.for_scope(request.memory_scope()?))
+            .transpose()
+    }
+
+    pub(crate) fn task_tools_for(
+        &self,
+        request: &crate::identity_api::RequestSecurityContext,
+    ) -> anyhow::Result<Option<agent_runtime::task_tools::TaskToolRuntime>> {
+        self.task_tools
+            .as_ref()
+            .map(|runtime| runtime.for_scope(request.task_scope()?))
+            .transpose()
+    }
+
+    pub(crate) fn attachment_tools_for(
+        &self,
+        request: &crate::identity_api::RequestSecurityContext,
+    ) -> anyhow::Result<Option<agent_runtime::attachment_tools::AttachmentToolRuntime>> {
+        self.attachment_tools
+            .as_ref()
+            .map(|runtime| Ok(runtime.for_scope(request.attachment_scope()?)))
+            .transpose()
+    }
+
+    pub(crate) fn automation_tools_for(
+        &self,
+        request: &crate::identity_api::RequestSecurityContext,
+    ) -> anyhow::Result<Option<agent_runtime::automation_tools::AutomationToolRuntime>> {
+        self.automation_tools
+            .as_ref()
+            .map(|runtime| Ok(runtime.for_scope(request.automation_scope()?)))
+            .transpose()
+    }
+
+    pub(crate) fn structured_content_for(
+        &self,
+        request: &crate::identity_api::RequestSecurityContext,
+    ) -> agent_runtime::structured_content_tools::StructuredContentToolRuntime {
+        Self::new_structured_content_tools(&self.storage, request.conversation_scope())
+    }
+
+    pub(crate) fn connector_tools_for(
+        &self,
+        request: &crate::identity_api::RequestSecurityContext,
+    ) -> anyhow::Result<Option<agent_runtime::connector_tools::ConnectorToolRuntime>> {
+        let Some(runtime) = &self.connector_tools else {
+            return Ok(None);
+        };
+        if !request.is_authenticated() {
+            return Ok(Some(runtime.clone()));
+        }
+        let provider =
+            agent_runtime::connector_tools::EphemeralConnectorContextProvider::fail_closed(
+                request.credential_scope(),
+                std::time::Duration::from_secs(30),
+            )?;
+        Ok(Some(
+            runtime.with_context_provider(std::sync::Arc::new(provider)),
+        ))
+    }
+
+    pub(crate) async fn oauth_broker_for(
+        &self,
+        request: &crate::identity_api::RequestSecurityContext,
+    ) -> anyhow::Result<Option<agent_runtime::oauth::OAuthBroker>> {
+        let Some(broker) = &self.oauth_broker else {
+            return Ok(None);
+        };
+        if !request.is_authenticated() {
+            return Ok(Some(broker.clone()));
+        }
+        broker.for_scope(request.credential_scope()).await.map(Some)
+    }
+
     pub(super) fn new_structured_content_tools(
         storage: &Storage,
         scope: &ConversationScope,
@@ -14,6 +94,7 @@ impl AppState {
         agent_runtime::structured_content_tools::StructuredContentToolRuntime::new(service)
     }
 
+    #[cfg(test)]
     pub(crate) fn structured_content(
         &self,
     ) -> agent_runtime::structured_content_store::StructuredContentService {
@@ -111,22 +192,6 @@ impl AppState {
         self.memory_tools.clone()
     }
 
-    pub(crate) fn task_tools(&self) -> Option<agent_runtime::task_tools::TaskToolRuntime> {
-        self.task_tools.clone()
-    }
-
-    pub(crate) fn automation_tools(
-        &self,
-    ) -> Option<agent_runtime::automation_tools::AutomationToolRuntime> {
-        self.automation_tools.clone()
-    }
-
-    pub(crate) fn attachment_tools(
-        &self,
-    ) -> Option<agent_runtime::attachment_tools::AttachmentToolRuntime> {
-        self.attachment_tools.clone()
-    }
-
     pub fn has_automation_tools(&self) -> bool {
         self.automation_tools.is_some()
     }
@@ -148,6 +213,9 @@ impl AppState {
     pub(crate) fn connector_tools(
         &self,
     ) -> Option<agent_runtime::connector_tools::ConnectorToolRuntime> {
+        if self.identity_runtime().is_some() {
+            return None;
+        }
         self.connector_tools.clone()
     }
 }
