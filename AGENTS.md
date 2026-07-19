@@ -47,8 +47,8 @@ AgentWeave 是一个 **Agent App Framework**，不是面向某个固定领域的
 - 所有检查必须对应 PR 的最新 head SHA。任何新提交、rebase、merge 或 force-push 都会使旧 head 的检查结论失效，必须等待新 head 重新完成所有必要检查。
 - 外部审查 check 成功只表示审查任务结束，不表示反馈已处理完。合并前必须重新读取线程级 review 状态，确认 unresolved review thread 为 0，并核对没有新出现的 actionable feedback。
 - 合并必须使用预期 head SHA 保护，避免检查完成后分支移动。被跳过的检查只有在其触发条件明确不适用于当前 PR 时才可视为正常，并应在交付说明中记录原因。
-- 当 Codex 已获得某个任务的提交、Pull Request 或合并授权后，只要目标 PR 的最新 head 已满足本节全部门禁（适用检查通过、外部审查完成、actionable feedback 已处理且 unresolved review thread 为 0），Codex 可以自行将 PR 转为 Ready、合并、同步权威提交、删除分支并完成收尾，无需再次向用户请求合并授权。门禁未满足、目标仓库或 head 不明确、需要绕过保护规则、或合并会扩大既定任务范围时，仍必须停下并征求用户确认。
-- 合并后必须删除对应远端和本地 head 分支，执行 `git fetch --all --prune`，切回并快进默认分支。最终审计必须确认相关仓库开放 PR 为 0、相关分支不存在、默认分支与远端一致且工作树干净。
+- 当 Codex 已获得某个任务的明确合并授权后，只要目标 PR 的最新 head 已满足本节全部门禁（适用检查通过、外部审查完成、actionable feedback 已处理且 unresolved review thread 为 0），Codex 可以自行将 PR 转为 Ready、合并、同步权威提交、删除分支并完成收尾，无需再次向用户请求合并授权。门禁未满足、目标仓库或 head 不明确、需要绕过保护规则、或合并会扩大既定任务范围时，仍必须停下并征求用户确认。
+- 合并后必须删除对应远端和本地 head 分支，执行 `git fetch --all --prune`，切回并快进默认分支。最终审计必须确认本任务相关的开放 PR 为 0、相关分支不存在、默认分支与远端一致且工作树干净。
 
 # Repository Instructions
 
