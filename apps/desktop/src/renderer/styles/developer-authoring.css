@@ -1,0 +1,566 @@
+.developer-authoring-dialog {
+  width: min(1040px, calc(100vw - 32px));
+  height: min(760px, calc(100vh - 32px));
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  box-shadow: 0 24px 80px color-mix(in srgb, var(--color-background) 54%, transparent);
+  animation: developer-authoring-arrive 180ms ease-out;
+}
+
+.developer-authoring-header {
+  min-height: 70px;
+  padding: 12px 16px 12px 18px;
+}
+
+.developer-authoring-title,
+.developer-authoring-header-actions,
+.developer-authoring-status,
+.developer-authoring-candidate > div,
+.developer-authoring-error,
+.developer-authoring-complete,
+.developer-authoring-state {
+  display: flex;
+  align-items: center;
+}
+
+.developer-authoring-title {
+  min-width: 0;
+  gap: 12px;
+}
+
+.developer-authoring-title > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.developer-authoring-title h2,
+.developer-authoring-title p,
+.developer-authoring-guide h3,
+.developer-authoring-guide p,
+.developer-authoring-gate h3,
+.developer-authoring-gate p,
+.developer-authoring-complete p {
+  margin: 0;
+}
+
+.developer-authoring-title h2 {
+  font-size: 17px;
+  font-weight: 650;
+  line-height: 23px;
+}
+
+.developer-authoring-title p {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.developer-authoring-mark,
+.developer-authoring-gate-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 30%, var(--color-border));
+  background: color-mix(in srgb, var(--color-primary-soft) 54%, var(--color-surface));
+  color: var(--color-primary-text);
+}
+
+.developer-authoring-mark {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px 12px 12px 4px;
+}
+
+.developer-authoring-header-actions {
+  flex: 0 0 auto;
+  gap: 10px;
+}
+
+.developer-authoring-status {
+  gap: 7px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  padding: 5px 9px;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 16px;
+}
+
+.developer-authoring-status > span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 13%, transparent);
+}
+
+.developer-authoring-workspace {
+  display: grid;
+  min-height: 0;
+  grid-template-columns: 244px minmax(0, 1fr);
+}
+
+.developer-authoring-guide {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 12px;
+  padding: 26px 22px;
+  border-right: 1px solid var(--color-border);
+  background:
+    radial-gradient(circle at 0 0, color-mix(in srgb, var(--color-primary-soft) 64%, transparent), transparent 52%),
+    var(--color-surface-muted);
+}
+
+.developer-authoring-eyebrow {
+  color: var(--color-primary-text);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  line-height: 15px;
+  text-transform: uppercase;
+}
+
+.developer-authoring-guide h3 {
+  max-width: 190px;
+  color: var(--color-text);
+  font-size: 22px;
+  font-weight: 620;
+  letter-spacing: -0.02em;
+  line-height: 28px;
+}
+
+.developer-authoring-guide ol {
+  display: grid;
+  gap: 0;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: authoring-step;
+}
+
+.developer-authoring-guide li {
+  position: relative;
+  min-height: 44px;
+  padding: 3px 0 13px 32px;
+  color: var(--color-text-subtle);
+  counter-increment: authoring-step;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.developer-authoring-guide li::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 50%;
+  background: var(--color-surface);
+  content: counter(authoring-step);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.developer-authoring-guide li:not(:last-child)::after {
+  position: absolute;
+  top: 23px;
+  bottom: 0;
+  left: 11px;
+  width: 1px;
+  background: var(--color-border);
+  content: "";
+}
+
+.developer-authoring-guide li[data-active="true"] {
+  color: var(--color-text);
+}
+
+.developer-authoring-guide li[data-active="true"]::before {
+  border-color: var(--color-primary);
+  background: var(--color-primary-fill);
+  color: var(--color-primary-fill-text);
+}
+
+.developer-authoring-guide p {
+  margin-top: auto;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.developer-authoring-chat {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  background: var(--color-background);
+}
+
+.developer-authoring-chat > .message-list {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 24px 28px 18px;
+}
+
+.developer-authoring-chat .message-bubble,
+.developer-authoring-chat .activity-row {
+  max-width: min(620px, 88%);
+}
+
+.developer-authoring-error {
+  gap: 8px;
+  margin: 0 28px 10px;
+  padding: 9px 11px;
+  border: 1px solid color-mix(in srgb, var(--color-danger) 36%, var(--color-border));
+  border-radius: var(--radius-control);
+  background: var(--color-danger-surface);
+  color: var(--color-danger);
+  font-size: 12px;
+  line-height: 17px;
+}
+
+.developer-authoring-candidate {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 28px 12px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 34%, var(--color-border));
+  border-radius: var(--radius-content);
+  background: color-mix(in srgb, var(--color-primary-soft) 35%, var(--color-surface));
+  box-shadow: inset 3px 0 0 var(--color-primary);
+}
+
+.developer-authoring-candidate > div:first-child {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.developer-authoring-candidate > div:last-child {
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.developer-authoring-candidate span,
+.developer-authoring-candidate small {
+  color: var(--color-text-muted);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.developer-authoring-candidate strong {
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: 14px;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.developer-authoring-candidate small {
+  font-family: var(--font-mono);
+}
+
+.developer-authoring-composer {
+  margin: 0 28px 22px;
+  overflow: hidden;
+  flex: 0 0 auto;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 16px 16px 16px 5px;
+  background: var(--color-surface);
+  box-shadow: 0 8px 28px color-mix(in srgb, var(--color-background) 24%, transparent);
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.developer-authoring-composer:focus-within {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+
+.developer-authoring-composer textarea {
+  display: block;
+  width: 100%;
+  min-height: 76px;
+  max-height: 180px;
+  resize: vertical;
+  padding: 13px 14px 6px;
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 14px;
+  line-height: 21px;
+  outline: 0;
+}
+
+.developer-authoring-composer textarea::placeholder {
+  color: var(--color-text-subtle);
+}
+
+.developer-authoring-composer > div {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 7px 7px 14px;
+}
+
+.developer-authoring-composer small {
+  color: var(--color-text-subtle);
+  font-size: 10px;
+  line-height: 15px;
+}
+
+.developer-authoring-send {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--color-primary-fill);
+  border-radius: 11px;
+  background: var(--color-primary-fill);
+  color: var(--color-primary-fill-text);
+  cursor: pointer;
+}
+
+.developer-authoring-send:hover:not(:disabled) {
+  border-color: var(--color-primary-fill-hover);
+  background: var(--color-primary-fill-hover);
+}
+
+.developer-authoring-send:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.developer-authoring-complete {
+  gap: 12px;
+  margin: 0 28px 24px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 34%, var(--color-border));
+  border-radius: var(--radius-content);
+  background: color-mix(in srgb, var(--color-primary-soft) 42%, var(--color-surface));
+  color: var(--color-primary-text);
+}
+
+.developer-authoring-complete > div {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+}
+
+.developer-authoring-complete p {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 17px;
+}
+
+.developer-authoring-state,
+.developer-authoring-gate {
+  align-self: center;
+  justify-self: center;
+}
+
+.developer-authoring-state {
+  min-height: 240px;
+  justify-content: center;
+  gap: 10px;
+  color: var(--color-text-muted);
+}
+
+.developer-authoring-state-error {
+  color: var(--color-danger);
+}
+
+.developer-authoring-gate {
+  display: grid;
+  width: min(100% - 32px, 440px);
+  place-items: center;
+  gap: 10px;
+  margin: auto;
+  padding: 30px;
+  text-align: center;
+}
+
+.developer-authoring-gate-icon {
+  width: 52px;
+  height: 52px;
+  margin-bottom: 4px;
+  border-radius: 18px 18px 18px 6px;
+}
+
+.developer-authoring-gate h3 {
+  color: var(--color-text);
+  font-size: 22px;
+  line-height: 28px;
+}
+
+.developer-authoring-gate p {
+  color: var(--color-text-muted);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.developer-authoring-gate .developer-primary-button {
+  margin-top: 8px;
+}
+
+@keyframes developer-authoring-arrive {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 8px)) scale(0.99);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@media (max-width: 760px) {
+  .developer-authoring-dialog {
+    height: calc(100vh - 24px);
+  }
+
+  .developer-authoring-header {
+    min-height: 62px;
+    padding-left: 14px;
+  }
+
+  .developer-authoring-mark {
+    width: 34px;
+    height: 34px;
+  }
+
+  .developer-authoring-header .icon-button,
+  .developer-authoring-send {
+    width: 44px;
+    height: 44px;
+  }
+
+  .developer-authoring-title p,
+  .developer-authoring-status {
+    display: none;
+  }
+
+  .developer-authoring-workspace {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .developer-authoring-guide {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 12px;
+    padding: 11px 14px;
+    border-right: 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .developer-authoring-guide h3 {
+    max-width: none;
+    font-size: 15px;
+    line-height: 20px;
+  }
+
+  .developer-authoring-guide ol {
+    display: flex;
+    grid-row: 1 / 3;
+    grid-column: 2;
+    align-items: center;
+    gap: 5px;
+    margin: 0;
+  }
+
+  .developer-authoring-guide li {
+    width: 8px;
+    min-height: 0;
+    height: 8px;
+    overflow: hidden;
+    padding: 0;
+    border-radius: 50%;
+    background: var(--color-border-strong);
+    color: transparent;
+    font-size: 0;
+  }
+
+  .developer-authoring-guide li[data-active="true"] {
+    background: var(--color-primary);
+  }
+
+  .developer-authoring-guide li::before,
+  .developer-authoring-guide li::after,
+  .developer-authoring-guide p {
+    display: none;
+  }
+
+  .developer-authoring-chat > .message-list {
+    padding: 18px 14px 14px;
+  }
+
+  .developer-authoring-chat .message-bubble,
+  .developer-authoring-chat .activity-row {
+    max-width: 92%;
+  }
+
+  .developer-authoring-error,
+  .developer-authoring-candidate,
+  .developer-authoring-composer,
+  .developer-authoring-complete {
+    margin-right: 14px;
+    margin-left: 14px;
+  }
+
+  .developer-authoring-candidate {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .developer-authoring-candidate > div:last-child {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .developer-authoring-candidate .developer-primary-button,
+  .developer-authoring-candidate .developer-secondary-button {
+    min-width: 0;
+    min-height: 44px;
+    padding: 0 9px;
+  }
+
+  .developer-authoring-composer {
+    margin-bottom: 14px;
+  }
+
+  .developer-authoring-complete {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  .developer-authoring-complete .developer-primary-button {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .developer-authoring-dialog {
+    animation: none;
+  }
+}

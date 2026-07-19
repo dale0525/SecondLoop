@@ -4,18 +4,18 @@ export function buildCreateSkillPrompt(root: string): string {
   const safeRoot = safeSkillRootLabel(root);
 
   return [
-    "Use the existing skill-creator skill to create a new AgentWeave skill package.",
+    "Use $skill-creator to guide a natural-language conversation that creates a new AgentWeave skill package.",
     "",
     `Target skills directory: ${safeRoot}/`,
     "",
-    "Requirements:",
-    "- Create the package under the target skills directory.",
+    "Authoring constraints:",
+    "- Ask one focused question at a time until the intended behavior and triggering examples are clear.",
+    "- Plan only reusable resources that the user actually needs.",
     "- SKILL.md is a development authoring asset for Codex guidance.",
-    "- skill.json is the AgentWeave runtime contract for packaged tools.",
-    "- Add or update skill.json only when the package needs runtime tools.",
-    "- Keep generated source files focused and under 1000 physical lines.",
-    "",
-    "After creating the package, run the AgentWeave development skill validation."
+    "- agentweave.json is the AgentWeave package contract.",
+    "- This developer flow can author instruction_only or host_tools_only packages.",
+    "- Keep the generated SKILL.md concise and use imperative instructions.",
+    "- Do not claim files were written or validated; the Host applies and validates the candidate."
   ].join("\n");
 }
 
@@ -47,7 +47,7 @@ export function buildModifySkillPrompt(
       : "- none";
 
   return [
-    "Use the existing skill-creator skill to modify this AgentWeave skill package.",
+    "Use $skill-creator to guide a natural-language conversation that improves this AgentWeave skill package.",
     "",
     `Package path: ${safePackagePath}`,
     `Package name: ${skillPackage.name}`,
@@ -71,7 +71,9 @@ export function buildModifySkillPrompt(
     "Validation warnings:",
     warnings,
     "",
-    "Remember: SKILL.md is a development authoring asset; skill.json is the AgentWeave runtime contract."
+    "Ask one focused question at a time when the requested change is ambiguous.",
+    "Remember: SKILL.md is a development authoring asset; agentweave.json is the AgentWeave package contract.",
+    "Do not claim files were written or validated; the Host applies and validates the candidate."
   ].join("\n");
 }
 

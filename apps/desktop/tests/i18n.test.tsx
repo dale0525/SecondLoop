@@ -22,6 +22,10 @@ describe("desktop localization", () => {
     expect(bundle.locales.map((locale) => locale.id)).toEqual(["en", "zh-CN"]);
     expect(bundle.locales.find((locale) => locale.id === "zh-CN")?.messages["developer.title"])
       .toBe("开发者工具");
+    expect(
+      bundle.locales.find((locale) => locale.id === "zh-CN")
+        ?.messages["developer.authoring.eyebrow"],
+    ).toBe("技能创作");
   });
 
   it("switches language immediately and persists the selection", async () => {
