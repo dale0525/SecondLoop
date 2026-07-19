@@ -553,6 +553,10 @@
   min-height: 0;
 }
 
+.developer-tab-content[hidden] {
+  display: none;
+}
+
 .developer-skills-content {
   display: flex;
   flex-direction: column;

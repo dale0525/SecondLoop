@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -76,6 +78,26 @@ describe("developer skill prompts", () => {
 });
 
 describe("DeveloperTools", () => {
+  it("marks inactive tab panels as hidden", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <DeveloperTools
+        initialInventory={inventoryWith("echo")}
+        initialStatus="available"
+        onBack={() => undefined}
+      />,
+    );
+
+    await user.click(screen.getByRole("tab", { name: "Build" }));
+
+    expect(screen.getByRole("tabpanel", { name: "Build" })).not.toHaveAttribute("hidden");
+    expect(document.querySelector('.developer-tab-content[hidden]')).toBeInTheDocument();
+    const testModuleUrl = import.meta.url;
+    const css = readFileSync(new URL("../src/renderer/styles/developer.css", testModuleUrl), "utf8");
+    expect(css).toMatch(/\.developer-tab-content\[hidden\]\s*\{[^}]*display:\s*none;/);
+  });
+
   it("routes #developer to the developer tools screen", async () => {
     installHostBootstrap();
     installDevApiBridge({ root: "/repo/skills", packages: [] });
