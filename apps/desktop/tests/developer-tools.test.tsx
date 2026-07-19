@@ -93,7 +93,8 @@ describe("DeveloperTools", () => {
 
     expect(screen.getByRole("tabpanel", { name: "Build" })).not.toHaveAttribute("hidden");
     expect(document.querySelector('.developer-tab-content[hidden]')).toBeInTheDocument();
-    const css = readFileSync("src/renderer/styles/developer.css", "utf8");
+    const testModuleUrl = import.meta.url;
+    const css = readFileSync(new URL("../src/renderer/styles/developer.css", testModuleUrl), "utf8");
     expect(css).toMatch(/\.developer-tab-content\[hidden\]\s*\{[^}]*display:\s*none;/);
   });
 
