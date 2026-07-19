@@ -1,8 +1,6 @@
-import { Copy, Pencil, RefreshCw, Sparkles, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { Pencil, RefreshCw, Sparkles, Trash2 } from "lucide-react";
 
 import { DevSkillInventory, DevSkillPackage, DevSkillPackageKind } from "../../api";
-import { buildModifySkillPrompt } from "../../devSkillPrompts";
 import {
   packageHasBlockingDiagnostics,
   packageValidationHeading
@@ -35,8 +33,6 @@ export function SkillPackageDetail({
   onReload
 }: SkillPackageDetailProps): JSX.Element {
   const { t } = useI18n();
-  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
-  const copyLabel = t(copyState === "copied" ? "common.copied" : copyState === "failed" ? "common.copyFailed" : "common.copyPrompt");
 
   if (!inventory || inventory.packages.length === 0 || !skillPackage) {
     return (
@@ -49,7 +45,6 @@ export function SkillPackageDetail({
     );
   }
 
-  const prompt = buildModifySkillPrompt(inventory.root, skillPackage);
   const diagnosticsCount =
     skillPackage.validation.errors.length + skillPackage.validation.warnings.length;
   const hasBlockingDiagnostics = packageHasBlockingDiagnostics(skillPackage);
@@ -58,19 +53,6 @@ export function SkillPackageDetail({
     && skillPackage.hasPackageMetadata
     && !skillPackage.hasRuntimeManifest
     && skillPackage.packageKind !== "invalid";
-
-  const copyPrompt = async () => {
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(prompt);
-        setCopyState("copied");
-        window.setTimeout(() => setCopyState("idle"), 1200);
-      }
-    } catch {
-      setCopyState("failed");
-      window.setTimeout(() => setCopyState("idle"), 1200);
-    }
-  };
 
   return (
     <section className="developer-detail-pane">
@@ -175,10 +157,6 @@ export function SkillPackageDetail({
           <Pencil aria-hidden="true" size={16} />
           <span>{t(editable ? "developer.edit" : "developer.sourceReadOnly")}</span>
         </button>
-        <button className="developer-secondary-button" onClick={() => void copyPrompt()} type="button">
-          <Copy aria-hidden="true" size={16} />
-          <span>{copyLabel}</span>
-        </button>
         <button
           className="developer-secondary-button"
           disabled={isBusy}
@@ -206,12 +184,6 @@ export function SkillPackageDetail({
         </button>
       </section>
 
-      <aside className="developer-prompt-preview" aria-label={t("developer.promptPreview")}>
-        <div className="developer-prompt-preview-header">
-          <span>{t("developer.promptPreview")}</span>
-        </div>
-        <pre>{prompt}</pre>
-      </aside>
     </section>
   );
 }

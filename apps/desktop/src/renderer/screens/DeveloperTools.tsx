@@ -14,13 +14,12 @@ import { AppIconButton } from "../components/AppIconButton";
 import { DeleteSkillDialog } from "../components/developer/DeleteSkillDialog";
 import { DeveloperBuildPanel } from "../components/developer/DeveloperBuildPanel";
 import {
-  SkillEditorDialog,
-  type SkillEditorSaveResult,
-} from "../components/developer/SkillEditorDialog";
+  SkillAuthoringDialog,
+  type SkillAuthoringSaveResult,
+} from "../components/developer/SkillAuthoringDialog";
 import { SkillPackageDetail } from "../components/developer/SkillPackageDetail";
 import { SkillPackageList } from "../components/developer/SkillPackageList";
 import { SettingsModel } from "../components/SettingsModel";
-import { useHostBootstrap } from "../hostBootstrap";
 import { useI18n } from "../i18n/I18nProvider";
 
 export type DevApiProbeStatus = "available" | "loading" | "unavailable";
@@ -41,7 +40,6 @@ export function DeveloperTools({
   onInventoryChange,
 }: DeveloperToolsProps): JSX.Element {
   const { t } = useI18n();
-  const bootstrap = useHostBootstrap();
   const actionFailureMessage = t("developer.actionFailed");
   const [activeTab, setActiveTab] = useState<DeveloperTab>("skills");
   const [inventory, setInventory] = useState<DevSkillInventory | null>(initialInventory);
@@ -167,14 +165,12 @@ export function DeveloperTools({
     }
   }, [actionFailureMessage, adoptInventory, beginOperation, finishOperation]);
 
-  const handleEditorSaved = useCallback((result: SkillEditorSaveResult) => {
+  const handleEditorSaved = useCallback((result: SkillAuthoringSaveResult) => {
     adoptInventory(result.inventory);
     setSelectedId(result.directory);
     if (result.activeGeneration !== null) setActiveSnapshotGeneration(result.activeGeneration);
-    setActionError(result.reloadFailed ? t("developer.editor.reloadFailed") : null);
+    setActionError(result.reloadFailed ? t("developer.authoring.completeReloadFailed") : null);
   }, [adoptInventory, t]);
-
-  const appId = bootstrap.discovery?.identity.appId ?? "app.local";
 
   return (
     <main className="developer-screen" aria-label={t("developer.ariaLabel")}>
@@ -279,10 +275,14 @@ export function DeveloperTools({
         </Tabs.Content>
       </Tabs.Root>
 
-      <SkillEditorDialog
-        appId={appId}
+      <SkillAuthoringDialog
+        inventory={inventory}
         onOpenChange={(open) => {
           if (!open) setEditorTarget(null);
+        }}
+        onRequestModelSettings={() => {
+          setEditorTarget(null);
+          setActiveTab("model");
         }}
         onSaved={handleEditorSaved}
         target={editorTarget}

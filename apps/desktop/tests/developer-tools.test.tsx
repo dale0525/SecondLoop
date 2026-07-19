@@ -29,11 +29,11 @@ describe("developer skill prompts", () => {
   it("builds a create prompt for Codex skill-creator", () => {
     const prompt = buildCreateSkillPrompt("/home/developer/projects/AgentWeave/skills");
 
-    expect(prompt).toContain("Use the existing skill-creator skill");
+    expect(prompt).toContain("Use $skill-creator");
     expect(prompt).toContain("skills/");
     expect(prompt).not.toContain("/home/developer");
     expect(prompt).toContain("SKILL.md is a development authoring asset");
-    expect(prompt).toContain("skill.json is the AgentWeave runtime contract");
+    expect(prompt).toContain("agentweave.json is the AgentWeave package contract");
   });
 
   it("builds a modify prompt with package diagnostics", () => {
@@ -66,7 +66,7 @@ describe("developer skill prompts", () => {
       skillPackage
     );
 
-    expect(prompt).toContain("Use the existing skill-creator skill");
+    expect(prompt).toContain("Use $skill-creator");
     expect(prompt).toContain("Package path: skills/echo");
     expect(prompt).not.toContain("/home/developer");
     expect(prompt).toContain("runtime tools: echo");
@@ -96,6 +96,16 @@ describe("DeveloperTools", () => {
     const testModuleUrl = import.meta.url;
     const css = readFileSync(new URL("../src/renderer/styles/developer.css", testModuleUrl), "utf8");
     expect(css).toMatch(/\.developer-tab-content\[hidden\]\s*\{[^}]*display:\s*none;/);
+  });
+
+  it("keeps mobile Skill Creator icon targets at least 44 pixels", () => {
+    const testModuleUrl = import.meta.url;
+    const css = readFileSync(
+      new URL("../src/renderer/styles/developer-authoring.css", testModuleUrl),
+      "utf8",
+    );
+
+    expect(css).toMatch(/\.developer-authoring-header \.icon-button,\s*\.developer-authoring-send\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px;/);
   });
 
   it("routes #developer to the developer tools screen", async () => {
@@ -252,50 +262,280 @@ describe("DeveloperTools", () => {
     ).toBeInTheDocument();
   });
 
-  it("opens, saves, and reloads an instruction Skill in the simple editor", async () => {
+  it("edits and reloads an instruction Skill through the Skill Creator conversation", async () => {
     const user = userEvent.setup();
     const inventory = inventoryWithInstruction("briefing");
-    const source = {
+    const source = instructionSource("briefing");
+    const candidate = {
       directory: "briefing",
-      sourceRevision: "a".repeat(64),
       manifest: {
-        schemaVersion: 1,
-        id: "com.example.secretary.briefing",
-        version: "0.1.0",
-        displayName: "Briefing",
-        kind: "instruction_only",
-        package: { includeInstructions: true, includeRuntime: false },
-        compatibility: { platforms: ["desktop"] },
-        requires: { packages: [], capabilities: [], runtimeTools: [], connectors: [] }
+        ...source.manifest,
+        displayName: "Daily Briefing",
+        requires: { packages: [], capabilities: [], runtimeTools: [], connectors: [] },
       },
-      skillMd: "---\nname: briefing\ndescription: Prepare a briefing.\n---\n\n# Briefing\n"
+      skillMd: "---\nname: briefing\ndescription: Prepare a concise daily briefing.\n---\n\n# Daily briefing\n\nSummarize verified facts and call out uncertainty.\n",
     };
-    const fetchMock = mockFetch([
-      jsonResponse(inventory),
-      jsonResponse(source),
-      jsonResponse({ inventory, source: { ...source, sourceRevision: "b".repeat(64) } }),
-      jsonResponse(reloadResponse(3, inventory))
-    ]);
+    installHostBootstrap();
+    const startTurn = vi.fn(async (_sessionId: string, _requestId: string, _content: string) => ({
+      reused: false,
+      turn: serverTurn("running"),
+      userMessage: serverMessage("user-message", "user", "Make it concise"),
+    }));
+    const serverRequest = vi.fn(async (operation: string, input?: unknown) => {
+      if (operation === "devSkills.read") return source;
+      if (operation === "sessions.create") return serverSession();
+      if (operation === "turns.events") {
+        return {
+          events: [serverEvent(0, "assistant_message_finished", {
+            text: `The revised skill focuses on concise, verifiable briefings.\n\n<agentweave-skill-draft>${JSON.stringify(candidate)}</agentweave-skill-draft>`,
+          }), serverEvent(1, "turn_finished")],
+          hasMore: false,
+          nextCursor: 1,
+          turn: serverTurn("completed"),
+        };
+      }
+      if (operation === "devSkills.update") {
+        return { inventory, source: { ...source, ...candidate, sourceRevision: "b".repeat(64) } };
+      }
+      if (operation === "devSkills.reload") return reloadResponse(3, inventory);
+      throw new Error(`Unexpected operation: ${operation} ${JSON.stringify(input)}`);
+    });
+    if (!window.agentWeave) throw new Error("Host bootstrap must be installed first");
+    window.agentWeave.server = { request: serverRequest };
+    window.agentWeave.modelSettings = modelSettingsBridge({ saved: true, startTurn });
 
-    render(<DeveloperTools onBack={() => undefined} />);
+    render(
+      <DeveloperTools
+        initialInventory={inventory}
+        initialStatus="available"
+        onBack={() => undefined}
+      />,
+    );
 
-    await user.click(await screen.findByRole("button", { name: "Edit skill" }));
+    await user.click(await screen.findByRole("button", { name: "Edit with Skill Creator" }));
 
-    const dialog = screen.getByRole("dialog", { name: "Edit skill" });
-    const displayName = await within(dialog).findByDisplayValue("Briefing");
-    await user.clear(displayName);
-    await user.type(displayName, "Daily Briefing");
-    await user.click(within(dialog).getByRole("button", { name: "Save and reload" }));
+    const dialog = screen.getByRole("dialog", { name: "Improve with Skill Creator" });
+    const message = await within(dialog).findByRole("textbox", { name: "Message Skill Creator" });
+    await user.type(message, "Make the briefing concise and distinguish facts from uncertainty.");
+    await user.click(within(dialog).getByRole("button", { name: "Send to Skill Creator" }));
 
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Edit skill" })).not.toBeInTheDocument());
+    await user.click(await within(dialog).findByRole("button", { name: "Apply skill" }));
     const snapshot = screen.getByText("Active snapshot 3");
     expect(snapshot).toBeInTheDocument();
-    expect(snapshot.closest(".developer-status-banner")).not.toHaveClass(
-      "developer-status-banner-error",
+    expect(await within(dialog).findByText("Skill saved and active")).toBeInTheDocument();
+    expect(startTurn).toHaveBeenCalledWith(
+      "skill-authoring-session",
+      expect.any(String),
+      expect.stringContaining("Use $skill-creator"),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(2, "/__agentweave/dev/skills/briefing", expect.objectContaining({ method: "GET" }));
-    expect(fetchMock).toHaveBeenNthCalledWith(3, "/__agentweave/dev/skills/briefing", expect.objectContaining({ method: "PUT" }));
-    expect(fetchMock).toHaveBeenNthCalledWith(4, "/__agentweave/dev/skills/reload", expect.objectContaining({ method: "POST" }));
+    expect(startTurn.mock.calls[0]?.[2]).toContain("<existing_skill_source>");
+    expect(serverRequest).toHaveBeenCalledWith("devSkills.update", {
+      directory: "briefing",
+      expectedRevision: source.sourceRevision,
+      manifest: candidate.manifest,
+      skillMd: candidate.skillMd,
+    });
+  });
+
+  it("routes unconfigured Skill Creator users to model settings", async () => {
+    const user = userEvent.setup();
+    const inventory = inventoryWithInstruction("briefing");
+    installHostBootstrap();
+    if (!window.agentWeave) throw new Error("Host bootstrap must be installed first");
+    window.agentWeave.modelSettings = modelSettingsBridge({ saved: false });
+
+    render(
+      <DeveloperTools
+        initialInventory={inventory}
+        initialStatus="available"
+        onBack={() => undefined}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "New skill" }));
+    const dialog = screen.getByRole("dialog", { name: "Create with Skill Creator" });
+    await user.click(await within(dialog).findByRole("button", { name: "Configure model" }));
+
+    expect(screen.queryByRole("dialog", { name: "Create with Skill Creator" })).not.toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Model" })).toHaveAttribute("data-state", "active");
+  });
+
+  it("backs off running turn polls and clears partial messages after failure", async () => {
+    const user = userEvent.setup();
+    const emptyInventory: DevSkillInventory = { root: "/repo/skills", packages: [] };
+    const eventRequestTimes: number[] = [];
+    installHostBootstrap();
+    const startTurn = vi.fn(async () => ({
+      reused: false,
+      turn: serverTurn("running"),
+      userMessage: serverMessage("user-message", "user", "Create a planning skill"),
+    }));
+    const serverRequest = vi.fn(async (operation: string) => {
+      if (operation === "sessions.create") return serverSession();
+      if (operation === "turns.events") {
+        eventRequestTimes.push(Date.now());
+        if (eventRequestTimes.length === 1) {
+          return {
+            events: [serverEvent(0, "assistant_message_finished", {
+              text: "A partial draft that must disappear.",
+            })],
+            hasMore: false,
+            nextCursor: 0,
+            turn: serverTurn("running"),
+          };
+        }
+        return {
+          events: [],
+          hasMore: false,
+          nextCursor: 0,
+          turn: serverTurn("failed"),
+        };
+      }
+      throw new Error(`Unexpected operation: ${operation}`);
+    });
+    if (!window.agentWeave) throw new Error("Host bootstrap must be installed first");
+    window.agentWeave.server = { request: serverRequest };
+    window.agentWeave.modelSettings = modelSettingsBridge({ saved: true, startTurn });
+
+    render(
+      <DeveloperTools
+        initialInventory={emptyInventory}
+        initialStatus="available"
+        onBack={() => undefined}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "New skill" }));
+    const dialog = screen.getByRole("dialog", { name: "Create with Skill Creator" });
+    await user.type(
+      await within(dialog).findByRole("textbox", { name: "Message Skill Creator" }),
+      "Create a planning skill.",
+    );
+    await user.click(within(dialog).getByRole("button", { name: "Send to Skill Creator" }));
+
+    expect(await within(dialog).findByText("A partial draft that must disappear.")).toBeInTheDocument();
+    expect(await within(dialog).findByText(
+      "Skill Creator could not complete that turn. Check the model connection and try again.",
+    )).toBeInTheDocument();
+    expect(within(dialog).queryByText("A partial draft that must disappear.")).not.toBeInTheDocument();
+    expect(eventRequestTimes).toHaveLength(2);
+    expect(eventRequestTimes[1]! - eventRequestTimes[0]!).toBeGreaterThanOrEqual(200);
+  });
+
+  it("disposes an authoring session that finishes creating after the dialog closes", async () => {
+    const user = userEvent.setup();
+    const emptyInventory: DevSkillInventory = { root: "/repo/skills", packages: [] };
+    const createdSession = deferred<ReturnType<typeof serverSession>>();
+    const startTurn = vi.fn(async () => ({}));
+    installHostBootstrap();
+    const serverRequest = vi.fn(async (operation: string) => {
+      if (operation === "sessions.create") return createdSession.promise;
+      if (operation === "sessions.load") {
+        return { events: [], messages: [], session: serverSession() };
+      }
+      if (operation === "sessions.delete") return {};
+      throw new Error(`Unexpected operation: ${operation}`);
+    });
+    if (!window.agentWeave) throw new Error("Host bootstrap must be installed first");
+    window.agentWeave.server = { request: serverRequest };
+    window.agentWeave.modelSettings = modelSettingsBridge({ saved: true, startTurn });
+
+    render(
+      <DeveloperTools
+        initialInventory={emptyInventory}
+        initialStatus="available"
+        onBack={() => undefined}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "New skill" }));
+    const dialog = screen.getByRole("dialog", { name: "Create with Skill Creator" });
+    await user.type(
+      await within(dialog).findByRole("textbox", { name: "Message Skill Creator" }),
+      "Create a planning skill.",
+    );
+    await user.click(within(dialog).getByRole("button", { name: "Send to Skill Creator" }));
+    await waitFor(() => expect(serverRequest).toHaveBeenCalledWith(
+      "sessions.create",
+      expect.any(Object),
+    ));
+
+    await user.click(within(dialog).getByRole("button", { name: "Close Skill Creator" }));
+    expect(screen.queryByRole("dialog", { name: "Create with Skill Creator" })).not.toBeInTheDocument();
+    await act(async () => createdSession.resolve(serverSession()));
+
+    await waitFor(() => expect(serverRequest).toHaveBeenCalledWith(
+      "sessions.delete",
+      expect.objectContaining({ id: "skill-authoring-session" }),
+    ));
+    expect(startTurn).not.toHaveBeenCalled();
+  });
+
+  it("creates a new instruction Skill without asking for package fields", async () => {
+    const user = userEvent.setup();
+    const emptyInventory: DevSkillInventory = { root: "/repo/skills", packages: [] };
+    const publishedInventory = inventoryWithInstruction("decision-log");
+    const prepared = instructionSource("decision-log");
+    const candidate = {
+      directory: prepared.directory,
+      manifest: {
+        ...prepared.manifest,
+        displayName: "Decision Log",
+        compatibility: { platforms: ["desktop"] },
+        requires: { packages: [], capabilities: [], runtimeTools: [], connectors: [] },
+      },
+      skillMd: "---\nname: decision-log\ndescription: Turn rough notes into a concise decision log.\n---\n\n# Decision log\n\nCapture decisions, owners, and unresolved questions.\n",
+    };
+    installHostBootstrap();
+    const startTurn = vi.fn(async (_sessionId: string, _requestId: string, _content: string) => ({
+      reused: false,
+      turn: serverTurn("running"),
+      userMessage: serverMessage("user-message", "user", "Create a decision log skill"),
+    }));
+    const serverRequest = vi.fn(async (operation: string) => {
+      if (operation === "sessions.create") return serverSession();
+      if (operation === "turns.events") {
+        return {
+          events: [serverEvent(0, "assistant_message_finished", {
+            text: `The decision log skill is ready.\n<agentweave-skill-draft>${JSON.stringify(candidate)}</agentweave-skill-draft>`,
+          }), serverEvent(1, "turn_finished")],
+          hasMore: false,
+          nextCursor: 1,
+          turn: serverTurn("completed"),
+        };
+      }
+      if (operation === "devSkills.create") {
+        return { inventory: publishedInventory, source: { ...prepared, ...candidate } };
+      }
+      if (operation === "devSkills.reload") return reloadResponse(4, publishedInventory);
+      throw new Error(`Unexpected operation: ${operation}`);
+    });
+    if (!window.agentWeave) throw new Error("Host bootstrap must be installed first");
+    window.agentWeave.server = { request: serverRequest };
+    window.agentWeave.modelSettings = modelSettingsBridge({ saved: true, startTurn });
+
+    render(
+      <DeveloperTools
+        initialInventory={emptyInventory}
+        initialStatus="available"
+        onBack={() => undefined}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "New skill" }));
+    const dialog = screen.getByRole("dialog", { name: "Create with Skill Creator" });
+    const message = await within(dialog).findByRole("textbox", { name: "Message Skill Creator" });
+    expect(dialog.querySelectorAll("input, select")).toHaveLength(0);
+    expect(within(dialog).queryByText("Package ID")).not.toBeInTheDocument();
+    expect(within(dialog).queryByText("Agent instructions (Markdown)")).not.toBeInTheDocument();
+    await user.type(message, "Turn rough meeting notes into a decision log with owners and open questions.");
+    await user.click(within(dialog).getByRole("button", { name: "Send to Skill Creator" }));
+    await user.click(await within(dialog).findByRole("button", { name: "Apply skill" }));
+
+    expect(startTurn.mock.calls[0]?.[2]).toContain("Use $skill-creator");
+    expect(startTurn.mock.calls[0]?.[2]).not.toContain("<existing_skill_source>");
+    expect(serverRequest).toHaveBeenCalledWith("devSkills.create", candidate);
+    expect(screen.getByText("Active snapshot 4")).toBeInTheDocument();
   });
 
   it("deletes a package after confirmation and refreshes inventory", async () => {
@@ -540,6 +780,72 @@ function expectWorkbenchBusy(isBusy: boolean) {
     .getByRole("main", { name: "Developer Tools" })
     .querySelector("[aria-busy]");
   expect(workbench).toHaveAttribute("aria-busy", String(isBusy));
+}
+
+function modelSettingsBridge(options: {
+  saved: boolean;
+  startTurn?: (sessionId: string, requestId: string, content: string) => Promise<unknown>;
+}): NonNullable<NonNullable<Window["agentWeave"]>["modelSettings"]> {
+  return {
+    clearApiKey: async () => ({}),
+    load: async () => ({
+      apiKeyConfigured: options.saved,
+      baseUrl: "https://models.example.test/v1",
+      endpointType: "responses",
+      modelName: "agent-model",
+      saved: options.saved,
+    }),
+    postSessionMessage: async () => ({}),
+    save: async () => ({}),
+    startSessionTurn: options.startTurn ?? (async () => ({})),
+    testConnection: async () => ({}),
+  };
+}
+
+function serverSession() {
+  return {
+    created_at: "2026-07-19T00:00:00Z",
+    id: "skill-authoring-session",
+    title: "Skill Creator",
+    updated_at: "2026-07-19T00:00:00Z",
+  };
+}
+
+function serverMessage(id: string, role: string, content: string) {
+  return {
+    content,
+    created_at: "2026-07-19T00:00:00Z",
+    id,
+    role,
+    session_id: "skill-authoring-session",
+  };
+}
+
+function serverTurn(status: "running" | "completed" | "failed") {
+  return {
+    assistant_message_id: status === "completed" ? "assistant-message" : null,
+    failure_message: status === "failed" ? "model failed" : null,
+    finished_at: status === "running" ? null : "2026-07-19T00:00:01Z",
+    id: "skill-authoring-turn",
+    request_id: "request-1",
+    session_id: "skill-authoring-session",
+    started_at: "2026-07-19T00:00:00Z",
+    status,
+    updated_at: "2026-07-19T00:00:01Z",
+    user_message_id: "user-message",
+  };
+}
+
+function serverEvent(index: number, type: string, payload: Record<string, unknown> = {}) {
+  return {
+    created_at: "2026-07-19T00:00:01Z",
+    event_index: index,
+    id: `event-${index}`,
+    kind: type,
+    payload: { type, ...payload },
+    session_id: "skill-authoring-session",
+    turn_id: "skill-authoring-turn",
+  };
 }
 
 function deferred<T>() {

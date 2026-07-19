@@ -221,9 +221,7 @@
 .developer-detail-path,
 .developer-file-name,
 .developer-file-state,
-.developer-tool-copy small,
-.developer-dialog-prompt,
-.developer-prompt-preview pre {
+.developer-tool-copy small {
   font-family: var(--font-mono);
 }
 
@@ -395,38 +393,6 @@
   border-top: 1px solid var(--color-border);
 }
 
-.developer-prompt-preview {
-  display: grid;
-  flex: 0 0 auto;
-  gap: 0;
-  overflow: hidden;
-  max-height: 196px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-content);
-  background: var(--color-surface);
-  color: var(--color-text);
-}
-
-.developer-prompt-preview-header {
-  padding: 9px 12px;
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-surface-muted);
-  color: var(--color-text-muted);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 16px;
-}
-
-.developer-prompt-preview pre,
-.developer-dialog-prompt {
-  margin: 0;
-  overflow: auto;
-  padding: 10px 12px;
-  font-size: 12px;
-  line-height: 17px;
-  white-space: pre-wrap;
-}
-
 .developer-empty-state,
 .developer-inline-empty-state {
   border: 1px solid var(--color-border);
@@ -489,13 +455,6 @@
 
 .developer-dialog-body {
   padding: 16px;
-}
-
-.developer-dialog-prompt {
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-control);
-  background: var(--color-surface-muted);
-  color: var(--color-text);
 }
 
 .developer-dialog-footer {
@@ -683,12 +642,6 @@
   font-size: 13px;
 }
 
-.developer-editor-dialog {
-  width: min(860px, calc(100vw - 32px));
-  max-height: min(820px, calc(100vh - 32px));
-  grid-template-rows: auto minmax(0, 1fr) auto;
-}
-
 .developer-dialog-header > div:first-child {
   display: grid;
   gap: 2px;
@@ -696,91 +649,6 @@
 
 .developer-dialog-header p {
   margin: 0;
-  color: var(--color-text-muted);
-  font-size: 13px;
-}
-
-.developer-editor-body {
-  overflow: auto;
-}
-
-.developer-editor-form,
-.developer-editor-grid {
-  display: grid;
-}
-
-.developer-editor-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.developer-editor-field-wide {
-  grid-column: 1 / -1;
-}
-
-.developer-editor-grid .settings-field:first-child {
-  grid-column: 1 / -1;
-}
-
-.developer-editor-grid select,
-.developer-editor-grid textarea {
-  width: 100%;
-  min-height: 44px;
-  padding: 8px 10px;
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-control);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font: inherit;
-}
-
-.developer-editor-grid select:focus-visible,
-.developer-editor-grid textarea:focus-visible {
-  border-color: var(--color-primary);
-}
-
-.developer-editor-instructions {
-  resize: vertical;
-  font-family: var(--font-mono) !important;
-  font-size: 13px !important;
-  line-height: 20px !important;
-}
-
-.developer-editor-state,
-.developer-editor-validation,
-.developer-editor-dirty {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.developer-editor-state {
-  min-height: 160px;
-  justify-content: center;
-  color: var(--color-text-muted);
-}
-
-.developer-editor-state-error,
-.developer-editor-validation {
-  color: var(--color-danger);
-}
-
-.developer-editor-validation {
-  display: grid;
-  margin-top: 14px;
-  padding: 12px 14px;
-  border: 1px solid color-mix(in srgb, var(--color-danger) 36%, var(--color-border));
-  border-radius: var(--radius-control);
-  background: var(--color-danger-surface);
-}
-
-.developer-editor-validation ul {
-  margin: 0;
-  padding-left: 18px;
-}
-
-.developer-editor-dirty {
-  margin-right: auto;
   color: var(--color-text-muted);
   font-size: 13px;
 }
@@ -872,24 +740,14 @@
     padding-top: 16px;
   }
 
-  .developer-prompt-preview {
-    max-height: 164px;
-  }
-
   .developer-dialog-content {
     width: calc(100vw - 24px);
   }
 
-  .developer-editor-dialog {
-    max-height: calc(100vh - 24px);
-  }
-
-  .developer-editor-grid,
   .developer-build-grid {
     grid-template-columns: 1fr;
   }
 
-  .developer-editor-field-wide,
   .developer-build-fact-wide {
     grid-column: auto;
   }
