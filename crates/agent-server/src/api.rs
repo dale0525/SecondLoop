@@ -1,10 +1,11 @@
 pub use crate::api_foundations::AppFoundationRuntimes;
+use crate::model_access_api::validate_model_override;
 use crate::owner_api::OwnerApiConfig;
 use agent_runtime::{
     app_definition::AgentAppHostDiscovery,
     events::RuntimeEvent,
     prompt_composer::AppPromptConfig,
-    session::{ConversationScope, Message, messages_to_model_history},
+    session::{ConversationScope, messages_to_model_history},
     skill::SkillRegistry,
     skill_catalog::SkillCatalog,
     skill_manager::SkillManager,
@@ -16,18 +17,13 @@ use agent_runtime::{
 };
 use axum::{
     Json, Router,
-    extract::{Path, State},
-    http::{HeaderValue, Method, StatusCode, header},
+    extract::{Extension, Path, State},
+    http::{HeaderValue, Method, header},
     middleware,
-    response::{IntoResponse, Response},
     routing::{get, post},
 };
 use futures::StreamExt;
-use model_gateway::{
-    provider::{EndpointType, ProviderProfile},
-    responses::{GatewayHttpClient, GatewayRequest},
-};
-use serde::{Deserialize, Serialize};
+use model_gateway::responses::GatewayHttpClient;
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::PathBuf,
@@ -36,15 +32,34 @@ use std::{
 use tokio::sync::Mutex;
 use tower_http::cors::CorsLayer;
 
+#[cfg(test)]
+use axum::response::{IntoResponse, Response};
+#[cfg(test)]
+use model_gateway::provider::EndpointType;
+
 mod runtime_tools;
+mod turn_models;
+use turn_models::{
+    SharedModelClient, TurnModelClient, agent_turn_error, assistant_text_from_events,
+    provider_profile_from_request, test_connection_gateway_request,
+};
+#[path = "api_types.rs"]
+mod types;
+pub(crate) use types::ApiError;
+pub use types::{
+    AppDiagnosticsResponse, ErrorResponse, ModelConnectionTestRequest, ModelConnectionTestResponse,
+    UserMessageRequest, UserMessageResponse,
+};
 #[cfg(test)]
 mod test_support;
 #[cfg(test)]
 use test_support::{DeterministicAgent, default_runtime_config};
+
 #[derive(Clone)]
 pub struct AppState {
     storage: Storage,
     agent: Arc<dyn AgentRunner>,
+    model: Option<Arc<dyn ModelClient>>,
     skill_manager: SkillManager,
     skills_root: Option<PathBuf>,
     runtime_config: RuntimeConfig,
@@ -69,6 +84,8 @@ pub struct AppState {
         Option<Arc<agent_runtime::mail_imap_smtp_accounts::ImapSmtpMailAccountManager>>,
     pub(crate) automation: Option<crate::automation_api::AutomationApiState>,
     pub(crate) oauth_broker: Option<agent_runtime::oauth::OAuthBroker>,
+    identity_runtime: Option<crate::identity_api::IdentityRuntime>,
+    developer_control_plane: Option<Arc<crate::developer_control_plane::DeveloperControlPlane>>,
 }
 
 impl AppState {
@@ -129,8 +146,9 @@ impl AppState {
             connector_tools,
             mail_actions,
         } = foundations;
+        let model: Arc<dyn ModelClient> = Arc::new(model);
         let mut runner = TurnRunner::new_with_manager_and_config(
-            model,
+            SharedModelClient(model.clone()),
             skill_manager.clone(),
             runtime_config.clone(),
         )
@@ -164,6 +182,7 @@ impl AppState {
         Self {
             storage,
             agent: Arc::new(runner),
+            model: Some(model),
             skill_manager,
             skills_root: None,
             runtime_config,
@@ -187,6 +206,8 @@ impl AppState {
             mail_account_manager: None,
             automation: None,
             oauth_broker: None,
+            identity_runtime: None,
+            developer_control_plane: None,
         }
     }
 
@@ -252,8 +273,9 @@ impl AppState {
             connector_tools,
             mail_actions,
         } = foundations;
+        let model: Arc<dyn ModelClient> = Arc::new(model);
         let mut runner = TurnRunner::new_with_manager_and_config(
-            model,
+            SharedModelClient(model.clone()),
             skill_manager.clone(),
             runtime_config.clone(),
         )
@@ -288,6 +310,7 @@ impl AppState {
         Self {
             storage,
             agent: Arc::new(runner),
+            model: Some(model),
             skill_manager,
             skills_root: None,
             runtime_config,
@@ -311,6 +334,8 @@ impl AppState {
             mail_account_manager: None,
             automation: None,
             oauth_broker: None,
+            identity_runtime: None,
+            developer_control_plane: None,
         }
     }
 
@@ -353,6 +378,7 @@ impl AppState {
         Self {
             storage,
             agent,
+            model: None,
             skill_manager,
             skills_root: None,
             runtime_config: default_runtime_config(),
@@ -376,6 +402,8 @@ impl AppState {
             mail_account_manager: None,
             automation: None,
             oauth_broker: None,
+            identity_runtime: None,
+            developer_control_plane: None,
         }
     }
 
@@ -416,6 +444,22 @@ impl AppState {
 
     pub fn with_oauth_broker(mut self, oauth_broker: agent_runtime::oauth::OAuthBroker) -> Self {
         self.oauth_broker = Some(oauth_broker);
+        self
+    }
+
+    pub fn with_identity_runtime(
+        mut self,
+        identity_runtime: crate::identity_api::IdentityRuntime,
+    ) -> Self {
+        self.identity_runtime = Some(identity_runtime);
+        self
+    }
+
+    pub fn with_developer_control_plane(
+        mut self,
+        control_plane: crate::developer_control_plane::DeveloperControlPlane,
+    ) -> Self {
+        self.developer_control_plane = Some(Arc::new(control_plane));
         self
     }
     pub fn with_task_foundation(
@@ -488,84 +532,6 @@ impl AppState {
     }
 }
 
-#[derive(Debug, Serialize)]
-pub struct AppDiagnosticsResponse {
-    pub app_id: String,
-    pub version: String,
-    pub display_name: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct UserMessageRequest {
-    pub content: String,
-    #[serde(default)]
-    pub model_settings: Option<ModelConnectionTestRequest>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct UserMessageResponse {
-    pub accepted: bool,
-    pub user_message: Message,
-    pub assistant_message: Message,
-    pub events: Vec<RuntimeEvent>,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ModelConnectionTestRequest {
-    #[serde(default)]
-    pub api_key: Option<String>,
-    pub base_url: String,
-    pub endpoint_type: EndpointType,
-    pub model_name: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct ModelConnectionTestResponse {
-    pub ok: bool,
-    pub message: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct ErrorResponse {
-    pub error: String,
-}
-
-#[derive(Debug)]
-pub(crate) enum ApiError {
-    BadRequest(&'static str),
-    Conflict(&'static str),
-    ConnectionFailed(anyhow::Error),
-    NotFound(&'static str),
-    PayloadTooLarge(&'static str),
-    Internal(anyhow::Error),
-}
-
-impl IntoResponse for ApiError {
-    fn into_response(self) -> Response {
-        let (status, error) = match self {
-            Self::BadRequest(message) => (StatusCode::BAD_REQUEST, message.to_string()),
-            Self::Conflict(message) => (StatusCode::CONFLICT, message.to_string()),
-            Self::ConnectionFailed(error) => (
-                StatusCode::BAD_GATEWAY,
-                format!("connection failed: {error}"),
-            ),
-            Self::NotFound(message) => (StatusCode::NOT_FOUND, message.to_string()),
-            Self::PayloadTooLarge(message) => (StatusCode::PAYLOAD_TOO_LARGE, message.to_string()),
-            Self::Internal(error) => {
-                tracing::error!(?error, "agent-server request failed");
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "internal server error".to_string(),
-                )
-            }
-        };
-
-        (status, Json(ErrorResponse { error })).into_response()
-    }
-}
-
 pub fn router(state: Arc<AppState>) -> Router {
     router_for_transport(state, false, None)
 }
@@ -579,29 +545,39 @@ pub fn router_for_transport(
     include_dev_routes: bool,
     transport_auth: Option<crate::local_transport::TransportAuth>,
 ) -> Router {
-    let mut router = Router::new()
-        .route("/health", get(|| async { "ok" }))
-        .route("/model/test", post(test_model_connection))
-        .route("/host/bootstrap", get(host_bootstrap))
-        .route("/diagnostics/app", get(app_diagnostics))
+    let user_router = Router::new()
         .route("/sessions/{session_id}/messages", post(post_message))
         .merge(crate::conversation_api::routes())
-        .merge(crate::turn_api::routes());
-    router = router
+        .merge(crate::turn_api::routes())
         .merge(crate::foundation_api::router())
         .merge(crate::task_api::router())
         .merge(crate::attachment_api::router())
         .merge(crate::data_protection_api::router())
         .merge(crate::automation_api::router())
         .merge(crate::structured_content_api::router())
-        .merge(crate::oauth_api::protected_router());
+        .merge(crate::oauth_api::protected_router())
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            crate::identity_api::require_identity,
+        ));
+    let mut router = Router::new()
+        .route("/health", get(|| async { "ok" }))
+        .route("/model/test", post(test_model_connection))
+        .route("/host/bootstrap", get(host_bootstrap))
+        .route("/diagnostics/app", get(app_diagnostics))
+        .merge(crate::identity_api::routes())
+        .merge(user_router);
     if let Some(owner_routes) = crate::owner_api::router(&state) {
         router = router.merge(owner_routes);
     }
     if include_dev_routes {
-        router = router.merge(crate::dev_api::routes());
+        router = router
+            .merge(crate::dev_api::routes())
+            .merge(crate::developer_control_plane_api::routes());
     }
-    let callback_router = crate::oauth_api::callback_router();
+    let callback_router = crate::oauth_api::callback_router().route_layer(
+        middleware::from_fn_with_state(state.clone(), crate::identity_api::require_identity),
+    );
     let router = match transport_auth {
         Some(auth) => router
             .route_layer(middleware::from_fn_with_state(
@@ -647,8 +623,29 @@ impl AppState {
         &self.app_prompt
     }
 
+    pub fn app_id(&self) -> &str {
+        &self.app_prompt.identity.app_id
+    }
+
     pub(crate) fn host_discovery(&self) -> Option<&AgentAppHostDiscovery> {
         self.host_discovery.as_ref()
+    }
+
+    pub(crate) fn identity_runtime(&self) -> Option<&crate::identity_api::IdentityRuntime> {
+        self.identity_runtime.as_ref()
+    }
+
+    pub(crate) fn developer_control_plane(
+        &self,
+    ) -> Option<&crate::developer_control_plane::DeveloperControlPlane> {
+        self.developer_control_plane.as_deref()
+    }
+
+    pub(crate) fn allows_user_model_configuration(&self) -> bool {
+        self.host_discovery.as_ref().is_none_or(|discovery| {
+            discovery.access.model_access.configuration_policy
+                == agent_runtime::app_manifest::AgentAppModelConfigurationPolicy::UserConfigurable
+        })
     }
 
     pub(crate) fn conversation_scope(&self) -> &ConversationScope {
@@ -711,8 +708,14 @@ pub(crate) fn desktop_cors_layer() -> CorsLayer {
 }
 
 async fn test_model_connection(
+    State(state): State<Arc<AppState>>,
     Json(request): Json<ModelConnectionTestRequest>,
 ) -> Result<Json<ModelConnectionTestResponse>, ApiError> {
+    if !state.allows_user_model_configuration() {
+        return Err(ApiError::BadRequest(
+            "model settings are managed by the Agent App",
+        ));
+    }
     let profile = provider_profile_from_request(request)?;
     let client = GatewayHttpClient::new(profile);
 
@@ -739,9 +742,17 @@ async fn test_model_connection(
 async fn post_message(
     Path(session_id): Path<String>,
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
     Json(request): Json<UserMessageRequest>,
 ) -> Result<Json<UserMessageResponse>, ApiError> {
-    post_message_for_actor(session_id, state, request, ActorContext::anonymous()).await
+    post_message_for_actor_scoped(
+        session_id,
+        state,
+        request,
+        ActorContext::anonymous(),
+        security,
+    )
+    .await
 }
 
 pub(crate) async fn post_message_for_actor(
@@ -750,11 +761,24 @@ pub(crate) async fn post_message_for_actor(
     request: UserMessageRequest,
     actor: ActorContext,
 ) -> Result<Json<UserMessageResponse>, ApiError> {
+    let security = crate::identity_api::RequestSecurityContext::local(state.conversation_scope());
+    post_message_for_actor_scoped(session_id, state, request, actor, security).await
+}
+
+async fn post_message_for_actor_scoped(
+    session_id: String,
+    state: Arc<AppState>,
+    request: UserMessageRequest,
+    actor: ActorContext,
+    security: crate::identity_api::RequestSecurityContext,
+) -> Result<Json<UserMessageResponse>, ApiError> {
+    validate_model_override(&state, request.model_settings.is_some())?;
+    let scope = security.conversation_scope();
     let conversation_lock = state.conversation_lock(&session_id).await;
     let _conversation_guard = conversation_lock.lock().await;
     let session_exists = state
         .storage
-        .session_exists_scoped(state.conversation_scope(), &session_id)
+        .session_exists_scoped(scope, &session_id)
         .await
         .map_err(ApiError::Internal)?;
     if !session_exists {
@@ -763,17 +787,19 @@ pub(crate) async fn post_message_for_actor(
 
     let history = state
         .storage
-        .list_scoped_messages(state.conversation_scope(), &session_id)
+        .list_scoped_messages(scope, &session_id)
         .await
         .map_err(ApiError::Internal)?;
     let history = messages_to_model_history(&history).map_err(ApiError::Internal)?;
-    let events = run_agent_turn_for_actor(&state, &session_id, &request, actor, history).await?;
+    let events =
+        run_agent_turn_for_actor_scoped(&state, &session_id, &request, actor, history, &security)
+            .await?;
     let assistant_text = assistant_text_from_events(&events)
         .ok_or_else(|| ApiError::Internal(anyhow::anyhow!("agent turn did not finish")))?;
     let (user_message, assistant_message) = state
         .storage
         .append_scoped_turn_with_events(
-            state.conversation_scope(),
+            scope,
             &session_id,
             &request.content,
             &assistant_text,
@@ -790,6 +816,7 @@ pub(crate) async fn post_message_for_actor(
     }))
 }
 
+#[cfg(test)]
 async fn run_agent_turn_for_actor(
     state: &AppState,
     session_id: &str,
@@ -797,9 +824,22 @@ async fn run_agent_turn_for_actor(
     actor: ActorContext,
     history: Vec<serde_json::Value>,
 ) -> Result<Vec<RuntimeEvent>, ApiError> {
-    run_agent_turn_internal(state, session_id, request, actor, history, None).await
+    let security = crate::identity_api::RequestSecurityContext::local(state.conversation_scope());
+    run_agent_turn_for_actor_scoped(state, session_id, request, actor, history, &security).await
 }
 
+async fn run_agent_turn_for_actor_scoped(
+    state: &AppState,
+    session_id: &str,
+    request: &UserMessageRequest,
+    actor: ActorContext,
+    history: Vec<serde_json::Value>,
+    security: &crate::identity_api::RequestSecurityContext,
+) -> Result<Vec<RuntimeEvent>, ApiError> {
+    run_agent_turn_internal(state, session_id, request, actor, history, security, None).await
+}
+
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn run_agent_turn_observed_for_actor(
     state: &AppState,
     session_id: &str,
@@ -807,6 +847,7 @@ pub(crate) async fn run_agent_turn_observed_for_actor(
     request: &UserMessageRequest,
     actor: ActorContext,
     history: Vec<serde_json::Value>,
+    security: &crate::identity_api::RequestSecurityContext,
     observer: RuntimeEventObserver,
 ) -> Result<Vec<RuntimeEvent>, ApiError> {
     run_agent_turn_internal(
@@ -815,6 +856,7 @@ pub(crate) async fn run_agent_turn_observed_for_actor(
         request,
         actor,
         history,
+        security,
         Some((turn_id, observer)),
     )
     .await
@@ -826,8 +868,10 @@ async fn run_agent_turn_internal(
     request: &UserMessageRequest,
     actor: ActorContext,
     history: Vec<serde_json::Value>,
+    security: &crate::identity_api::RequestSecurityContext,
     observer: Option<(&str, RuntimeEventObserver)>,
 ) -> Result<Vec<RuntimeEvent>, ApiError> {
+    validate_model_override(state, request.model_settings.is_some())?;
     let build_request = |turn_id: Option<&str>| {
         let request = TurnRequest::new(&request.content)
             .with_session_id(session_id)
@@ -838,124 +882,86 @@ async fn run_agent_turn_internal(
             None => request,
         }
     };
-    if let Some(model_settings) = request.model_settings.clone() {
-        let profile = provider_profile_from_request(model_settings)?;
-        let mut runner = TurnRunner::new_with_manager_and_config(
-            GatewayHttpClient::new(profile),
-            state.skill_manager(),
-            state.runtime_config.clone(),
-        )
-        .with_app_prompt(state.app_prompt.clone());
-        if let Some(owner_management) = state.owner_management() {
-            runner = runner.with_skill_management(owner_management.management_service());
+    let model = if let Some(model_settings) = request.model_settings.clone() {
+        TurnModelClient::Override(GatewayHttpClient::new(provider_profile_from_request(
+            model_settings,
+        )?))
+    } else if let Some(model) = &state.model {
+        TurnModelClient::Shared(SharedModelClient(model.clone()))
+    } else {
+        if security.is_authenticated() {
+            return Err(ApiError::Internal(anyhow::anyhow!(
+                "authenticated turn has no Host-owned model runtime"
+            )));
         }
-        if let Some(memory) = &state.memory_tools {
-            runner = runner
-                .with_memory_tools(memory.clone())
-                .with_memory_candidate_extractor(Arc::new(
-                    agent_runtime::memory_lifecycle::ExplicitMemoryCandidateExtractor,
-                ));
-        }
-        if let Some(tasks) = &state.task_tools {
-            runner = runner.with_task_tools(tasks.clone());
-        }
-        if let Some(automation) = &state.automation_tools {
-            runner = runner.with_automation_tools(automation.clone());
-        }
-        runner = runner.with_structured_content_tools(state.structured_content_tools.clone());
-        if let Some(attachments) = &state.attachment_tools {
-            runner = runner.with_attachment_tools(attachments.clone());
-        }
-        if let Some(connectors) = &state.connector_tools {
-            runner = runner.with_connector_tools(connectors.clone());
-        }
-        if let Some(actions) = &state.mail_actions {
-            runner = runner.with_mail_actions(actions.clone());
-        }
-
         return match observer {
             Some((turn_id, observer)) => {
-                runner
+                state
+                    .agent
                     .run_request_observed(build_request(Some(turn_id)), observer)
                     .await
             }
-            None => runner.run_request(build_request(None)).await,
+            None => state.agent.run_request(build_request(None)).await,
         }
         .map_err(agent_turn_error);
+    };
+
+    let mut runner = TurnRunner::new_with_manager_and_config(
+        model,
+        state.skill_manager(),
+        state.runtime_config.clone(),
+    )
+    .with_app_prompt(state.app_prompt.clone());
+    if let Some(owner_management) = state.owner_management() {
+        runner = runner.with_skill_management(owner_management.management_service());
+    }
+    if let Some(memory) = state
+        .memory_tools_for(security)
+        .map_err(ApiError::Internal)?
+    {
+        runner = runner
+            .with_memory_tools(memory)
+            .with_memory_candidate_extractor(Arc::new(
+                agent_runtime::memory_lifecycle::ExplicitMemoryCandidateExtractor,
+            ));
+    }
+    if let Some(tasks) = state.task_tools_for(security).map_err(ApiError::Internal)? {
+        runner = runner.with_task_tools(tasks);
+    }
+    if let Some(automation) = state
+        .automation_tools_for(security)
+        .map_err(ApiError::Internal)?
+    {
+        runner = runner.with_automation_tools(automation);
+    }
+    runner = runner.with_structured_content_tools(state.structured_content_for(security));
+    if let Some(attachments) = state
+        .attachment_tools_for(security)
+        .map_err(ApiError::Internal)?
+    {
+        runner = runner.with_attachment_tools(attachments);
+    }
+    if let Some(connectors) = state
+        .connector_tools_for(security)
+        .map_err(ApiError::Internal)?
+    {
+        runner = runner.with_connector_tools(connectors);
+    }
+    if !security.is_authenticated()
+        && let Some(actions) = &state.mail_actions
+    {
+        runner = runner.with_mail_actions(actions.clone());
     }
 
     match observer {
         Some((turn_id, observer)) => {
-            state
-                .agent
+            runner
                 .run_request_observed(build_request(Some(turn_id)), observer)
                 .await
         }
-        None => state.agent.run_request(build_request(None)).await,
+        None => runner.run_request(build_request(None)).await,
     }
     .map_err(agent_turn_error)
-}
-
-fn agent_turn_error(error: anyhow::Error) -> ApiError {
-    let message = error.to_string();
-    if message.contains("model_endpoint_does_not_support_tools") {
-        ApiError::BadRequest("model endpoint does not support runtime tools")
-    } else if message.contains("upstream model request failed") {
-        ApiError::ConnectionFailed(error)
-    } else {
-        ApiError::Internal(error)
-    }
-}
-
-fn assistant_text_from_events(events: &[RuntimeEvent]) -> Option<String> {
-    events.iter().find_map(|event| {
-        if let RuntimeEvent::AssistantMessageFinished { text } = event {
-            Some(text.clone())
-        } else {
-            None
-        }
-    })
-}
-
-fn provider_profile_from_request(
-    request: ModelConnectionTestRequest,
-) -> Result<ProviderProfile, ApiError> {
-    let base_url = request.base_url.trim();
-    if base_url.is_empty() {
-        return Err(ApiError::BadRequest("base URL is required"));
-    }
-
-    let model = request.model_name.trim();
-    if model.is_empty() {
-        return Err(ApiError::BadRequest("model name is required"));
-    }
-
-    Ok(ProviderProfile {
-        id: "settings-test".into(),
-        name: "Settings Test".into(),
-        endpoint_type: request.endpoint_type,
-        base_url: base_url.to_string(),
-        model: model.to_string(),
-        api_key: request.api_key.and_then(|api_key| {
-            let trimmed = api_key.trim();
-            if trimmed.is_empty() {
-                None
-            } else {
-                Some(trimmed.to_string())
-            }
-        }),
-        headers: BTreeMap::new(),
-    })
-}
-
-fn test_connection_gateway_request() -> GatewayRequest {
-    GatewayRequest {
-        input: vec![serde_json::json!({
-            "role": "user",
-            "content": "Reply with ok to confirm this connection."
-        })],
-        tools: Vec::new(),
-    }
 }
 
 #[cfg(test)]
@@ -965,6 +971,10 @@ mod tests;
 #[cfg(test)]
 #[path = "api_host_bootstrap_tests.rs"]
 mod host_bootstrap_tests;
+
+#[cfg(test)]
+#[path = "model_access_api_tests.rs"]
+mod model_access_tests;
 
 #[cfg(test)]
 #[path = "api_conversation_tests.rs"]

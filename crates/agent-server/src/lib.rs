@@ -11,11 +11,20 @@ mod dev_api;
 mod dev_skill_authoring;
 mod dev_skill_authoring_error;
 pub mod dev_skills;
+pub mod developer_control_plane;
+mod developer_control_plane_api;
+mod developer_control_plane_deployment;
+mod developer_control_plane_oauth;
+mod developer_gateway_projection;
+mod developer_sensitive_store;
 mod event_visibility;
 mod foundation_api;
+pub mod identity_api;
 pub mod local_transport;
+mod model_access_api;
 mod oauth_api;
 pub mod owner_api;
+pub mod provider_catalog;
 pub mod skill_release;
 mod structured_content_api;
 mod task_api;
@@ -30,6 +39,8 @@ mod turn_api;
 mod api_attachment_tests;
 #[cfg(test)]
 mod api_data_protection_tests;
+#[cfg(test)]
+mod developer_control_plane_tests;
 #[cfg(test)]
 mod skill_release_tests;
 #[cfg(test)]

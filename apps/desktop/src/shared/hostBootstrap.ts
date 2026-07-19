@@ -1,5 +1,39 @@
 export const HOST_BOOTSTRAP_LOAD_CHANNEL = "agentweave:host-bootstrap:load";
-export const HOST_DISCOVERY_SCHEMA_VERSION = 1;
+export const HOST_DISCOVERY_SCHEMA_VERSION = 2;
+
+export type JsonValue = null | boolean | number | string | readonly JsonValue[] | {
+  readonly [key: string]: JsonValue;
+};
+
+export type AgentAppProviderBinding = Readonly<{
+  id: string;
+  publicConfig: Readonly<Record<string, JsonValue>>;
+  version: string;
+}>;
+
+export type AgentAppModelProfile = Readonly<{
+  authentication: "none" | "user_identity";
+  baseUrl: string;
+  endpointType: "responses" | "chat_completions" | "completion";
+  headers: Readonly<Record<string, string>>;
+  modelName: string;
+  providerId: string;
+}>;
+
+export type AgentAppHostAccess = Readonly<{
+  entitlements: Readonly<{
+    mode: "disabled" | "required";
+    provider: AgentAppProviderBinding | null;
+  }>;
+  identity: Readonly<{
+    mode: "local_single_user" | "required";
+    provider: AgentAppProviderBinding | null;
+  }>;
+  modelAccess: Readonly<{
+    configurationPolicy: "user_configurable" | "app_managed";
+    profile: AgentAppModelProfile | null;
+  }>;
+}>;
 
 export type AgentAppHostIdentity = Readonly<{
   accentColor: string | null;
@@ -32,6 +66,7 @@ export type AgentAppHostRequirements = Readonly<{
 }>;
 
 export type AgentAppHostDiscovery = Readonly<{
+  access: AgentAppHostAccess;
   features: readonly string[];
   identity: AgentAppHostIdentity;
   manifestSha256: string;
@@ -39,7 +74,7 @@ export type AgentAppHostDiscovery = Readonly<{
   policy: AgentAppHostPolicy;
   requirements: AgentAppHostRequirements;
   runtimeVersion: string;
-  schemaVersion: 1;
+  schemaVersion: 2;
 }>;
 
 export function parseHostDiscovery(value: unknown): AgentAppHostDiscovery {
@@ -52,6 +87,7 @@ export function parseHostDiscovery(value: unknown): AgentAppHostDiscovery {
     "features",
     "requirements",
     "policy",
+    "access",
   ]);
   if (root.schemaVersion !== HOST_DISCOVERY_SCHEMA_VERSION) {
     throw new Error("Host discovery schema is unsupported");
@@ -77,6 +113,97 @@ export function parseHostDiscovery(value: unknown): AgentAppHostDiscovery {
     features: stringSet(root.features, "Features"),
     requirements: parseRequirements(root.requirements),
     policy: parsePolicy(root.policy),
+    access: parseAccess(root.access),
+  });
+}
+
+function parseAccess(value: unknown): AgentAppHostAccess {
+  const access = exactRecord(value, "Host access configuration", [
+    "modelAccess",
+    "identity",
+    "entitlements",
+  ]);
+  const modelAccess = exactRecord(access.modelAccess, "Model access", [
+    "configurationPolicy",
+    "profile",
+  ]);
+  const identity = exactRecord(access.identity, "Identity configuration", ["mode", "provider"]);
+  const entitlements = exactRecord(access.entitlements, "Entitlement configuration", [
+    "mode",
+    "provider",
+  ]);
+  const identityMode = enumValue(identity.mode, "Identity mode", [
+    "local_single_user",
+    "required",
+  ] as const);
+  const entitlementMode = enumValue(entitlements.mode, "Entitlement mode", [
+    "disabled",
+    "required",
+  ] as const);
+  const identityProvider = nullableProvider(identity.provider, "Identity provider");
+  const entitlementProvider = nullableProvider(entitlements.provider, "Entitlement provider");
+  if ((identityMode === "required") !== (identityProvider !== null)) {
+    throw new Error("Identity provider does not match the configured mode");
+  }
+  if ((entitlementMode === "required") !== (entitlementProvider !== null)) {
+    throw new Error("Entitlement provider does not match the configured mode");
+  }
+  return Object.freeze({
+    modelAccess: Object.freeze({
+      configurationPolicy: enumValue(
+        modelAccess.configurationPolicy,
+        "Model configuration policy",
+        ["user_configurable", "app_managed"] as const,
+      ),
+      profile: modelAccess.profile === null ? null : parseModelProfile(modelAccess.profile),
+    }),
+    identity: Object.freeze({ mode: identityMode, provider: identityProvider }),
+    entitlements: Object.freeze({ mode: entitlementMode, provider: entitlementProvider }),
+  });
+}
+
+function nullableProvider(value: unknown, label: string): AgentAppProviderBinding | null {
+  if (value === null) return null;
+  const provider = exactRecord(value, label, ["id", "version", "publicConfig"]);
+  return Object.freeze({
+    id: boundedString(provider.id, `${label} identifier`, 256),
+    version: boundedString(provider.version, `${label} version`, 256),
+    publicConfig: publicJsonObject(provider.publicConfig, `${label} public configuration`),
+  });
+}
+
+function parseModelProfile(value: unknown): AgentAppModelProfile {
+  const profile = exactRecord(value, "Model profile", [
+    "providerId",
+    "endpointType",
+    "baseUrl",
+    "modelName",
+    "authentication",
+    "headers",
+  ]);
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(boundedString(profile.baseUrl, "Model base URL", 2048));
+  } catch {
+    throw new Error("Model base URL is invalid");
+  }
+  if (!["http:", "https:"].includes(parsedUrl.protocol) || parsedUrl.username || parsedUrl.password) {
+    throw new Error("Model base URL is invalid");
+  }
+  return Object.freeze({
+    providerId: boundedString(profile.providerId, "Model provider identifier", 256),
+    endpointType: enumValue(profile.endpointType, "Model endpoint type", [
+      "responses",
+      "chat_completions",
+      "completion",
+    ] as const),
+    baseUrl: parsedUrl.toString().replace(/\/$/, ""),
+    modelName: boundedString(profile.modelName, "Model name", 4096),
+    authentication: enumValue(profile.authentication, "Model authentication", [
+      "none",
+      "user_identity",
+    ] as const),
+    headers: stringRecord(profile.headers, "Model headers", 32),
   });
 }
 
@@ -179,6 +306,84 @@ function stringSet(value: unknown, label: string): readonly string[] {
     throw new Error(`${label} contain duplicates`);
   }
   return Object.freeze(strings);
+}
+
+function stringRecord(
+  value: unknown,
+  label: string,
+  maximumEntries: number,
+): Readonly<Record<string, string>> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${label} are invalid`);
+  }
+  const entries = Object.entries(value as Record<string, unknown>);
+  if (entries.length > maximumEntries) throw new Error(`${label} are invalid`);
+  const result: Record<string, string> = {};
+  for (const [key, item] of entries) {
+    const name = boundedString(key, `${label} name`, 256);
+    const normalized = name.replace(/[^A-Za-z0-9]/g, "").toLowerCase();
+    if (
+      normalized === "authorization"
+      || normalized === "proxyauthorization"
+      || normalized.includes("apikey")
+      || normalized.includes("token")
+      || normalized.includes("secret")
+      || normalized.includes("credential")
+    ) {
+      throw new Error(`${label} contain a sensitive field`);
+    }
+    if (typeof item !== "string" || item.length > 4096) {
+      throw new Error(`${label} are invalid`);
+    }
+    result[name] = item;
+  }
+  return Object.freeze(result);
+}
+
+function publicJsonObject(value: unknown, label: string): Readonly<Record<string, JsonValue>> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${label} is invalid`);
+  }
+  const encoded = JSON.stringify(value);
+  if (encoded.length > 65_536) throw new Error(`${label} is too large`);
+  return validateJsonObject(value as Record<string, unknown>, label, 0);
+}
+
+function validateJsonObject(
+  value: Record<string, unknown>,
+  label: string,
+  depth: number,
+): Readonly<Record<string, JsonValue>> {
+  if (depth > 16) throw new Error(`${label} is too deeply nested`);
+  const result: Record<string, JsonValue> = {};
+  for (const [key, item] of Object.entries(value)) {
+    const normalized = key.replace(/[^A-Za-z0-9]/g, "").toLowerCase();
+    if (
+      normalized.includes("password")
+      || normalized.includes("secret")
+      || normalized.includes("oauth")
+      || normalized.includes("token")
+      || normalized.includes("credential")
+      || ["apikey", "accesskey", "privatekey", "clientkey"].includes(normalized)
+    ) {
+      throw new Error(`${label} contains a credential-shaped field`);
+    }
+    result[key] = validateJsonValue(item, label, depth + 1);
+  }
+  return Object.freeze(result);
+}
+
+function validateJsonValue(value: unknown, label: string, depth: number): JsonValue {
+  if (value === null || typeof value === "boolean" || typeof value === "string") return value;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (Array.isArray(value)) {
+    if (depth > 16) throw new Error(`${label} is too deeply nested`);
+    return Object.freeze(value.map((item) => validateJsonValue(item, label, depth + 1)));
+  }
+  if (value && typeof value === "object") {
+    return validateJsonObject(value as Record<string, unknown>, label, depth);
+  }
+  throw new Error(`${label} contains a non-JSON value`);
 }
 
 function exactRecord(

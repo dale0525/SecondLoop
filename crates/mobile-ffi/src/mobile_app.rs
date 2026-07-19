@@ -22,6 +22,26 @@ pub(crate) fn runtime_inventory(
                 )
             })
             .collect(),
+        providers: [
+            (
+                identity_oidc::OIDC_IDENTITY_PROVIDER_ID.to_string(),
+                env!("CARGO_PKG_VERSION").parse()?,
+            ),
+            (
+                entitlement_providers::HTTP_ENTITLEMENT_PROVIDER_ID.to_string(),
+                env!("CARGO_PKG_VERSION").parse()?,
+            ),
+            (
+                entitlement_providers::STATIC_ENTITLEMENT_PROVIDER_ID.to_string(),
+                env!("CARGO_PKG_VERSION").parse()?,
+            ),
+            (
+                entitlement_providers::STRIPE_PROJECTION_PROVIDER_ID.to_string(),
+                env!("CARGO_PKG_VERSION").parse()?,
+            ),
+        ]
+        .into_iter()
+        .collect(),
         capabilities: init.capabilities.names().iter().cloned().collect(),
         runtime_tools: snapshot
             .registry()

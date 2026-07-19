@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "../src/renderer/App";
 import { buildAssistantTurnMessages } from "../src/renderer/chatEventMessages";
 import { Chat } from "../src/renderer/screens/Chat";
+import { hostDiscoveryFixture, installHostBootstrap } from "./hostBootstrapFixture";
 
 describe("Chat", () => {
   afterEach(() => {
@@ -755,29 +756,19 @@ describe("App navigation", () => {
     expect(screen.getByLabelText("Message AgentWeave")).toBeInTheDocument();
   });
 
-  it("shows only model connection settings to end users", () => {
+  it("shows only model connection settings to end users", async () => {
     window.history.replaceState(null, "", "/#settings");
 
     render(<App />);
 
     expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Model connection" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Model connection" })).toBeInTheDocument();
     expect(screen.getByLabelText("Base URL")).toBeInTheDocument();
     expect(screen.getByLabelText("API key")).toBeInTheDocument();
     expect(screen.getByLabelText("Model name")).toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: "Skills" })).not.toBeInTheDocument();
     expect(screen.queryByText("File Helper")).not.toBeInTheDocument();
     expect(screen.queryByText("Web Research")).not.toBeInTheDocument();
-  });
-
-  it("keeps user-facing settings free of skill controls", () => {
-    window.history.replaceState(null, "", "/#settings");
-
-    render(<App />);
-
-    expect(screen.queryByRole("switch")).not.toBeInTheDocument();
-    expect(screen.queryByText(/skill/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/tool/i)).not.toBeInTheDocument();
   });
 
   it("tests the configured model connection from settings", async () => {

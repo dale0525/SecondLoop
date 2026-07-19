@@ -7,7 +7,8 @@
   "main": "dist-electron/main.cjs",
   "scripts": {
     "build": "vite build && npm run build:electron",
-    "build:electron": "vite build --config vite.electron.config.ts --mode electron-main && vite build --config vite.electron.config.ts --mode electron-preload && vite build --config vite.electron.config.ts --mode electron-approval-preload && node scripts/check-preload-bundles.mjs",
+    "build:electron": "npm run build:gateway && vite build --config vite.electron.config.ts --mode electron-main && vite build --config vite.electron.config.ts --mode electron-preload && vite build --config vite.electron.config.ts --mode electron-approval-preload && node scripts/check-preload-bundles.mjs",
+    "build:gateway": "node ../../scripts/build-cloudflare-gateway.mjs",
     "dev": "vite",
     "package:macos": "node scripts/package-macos.mjs",
     "start": "electron .",
@@ -38,6 +39,7 @@
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
     "electron": "^43.1.0",
+    "esbuild": "^0.21.5",
     "jsdom": "^25.0.1",
     "typescript": "^5.7.2",
     "vite": "^5.4.11",

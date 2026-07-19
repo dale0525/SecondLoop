@@ -1,6 +1,19 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { ApprovalObservationResult } from "../shared/approvalObservation";
 import {
+  DEVELOPER_ACCESS_REQUEST_CHANNEL,
+  type DeveloperAccessOperation,
+} from "../shared/developerAccess";
+import {
+  DEVELOPER_PROJECT_LOAD_CHANNEL,
+  DEVELOPER_PROJECT_PACKAGE_CHANNEL,
+  DEVELOPER_PROJECT_SAVE_CHANNEL,
+  DEVELOPER_PROJECT_SHOW_OUTPUT_CHANNEL,
+  type DeveloperPackageReceipt,
+  type DeveloperProjectSaveRequest,
+  type DeveloperProjectSnapshot,
+} from "../shared/developerProject";
+import {
   ATTACHMENT_PICK_IMPORT_CHANNEL,
   parseAttachmentMetadata,
   type AttachmentMetadata,
@@ -20,6 +33,15 @@ import {
   HOST_BOOTSTRAP_LOAD_CHANNEL,
   type AgentAppHostDiscovery,
 } from "../shared/hostBootstrap";
+import {
+  IDENTITY_LOGOUT_CHANNEL,
+  IDENTITY_START_CHANNEL,
+  IDENTITY_STATUS_CHANNEL,
+  parseIdentityAuthorizationStart,
+  parseIdentitySessionStatus,
+  type IdentityAuthorizationStart,
+  type IdentitySessionStatus,
+} from "../shared/identity";
 import {
   parseSidecarStatus,
   SIDECAR_ENSURE_RUNNING_CHANNEL,
@@ -46,9 +68,23 @@ export type DesktopPreloadApi = {
     restoreBackup: () => Promise<BackupRestoreReceipt | null>;
     status: () => Promise<DataProtectionStatus>;
   };
+  developerProject: {
+    load: () => Promise<DeveloperProjectSnapshot>;
+    packageApp: () => Promise<DeveloperPackageReceipt>;
+    save: (request: DeveloperProjectSaveRequest) => Promise<DeveloperProjectSnapshot>;
+    showOutput: () => Promise<void>;
+  };
+  developerAccess: {
+    request: (operation: DeveloperAccessOperation, input?: unknown) => Promise<unknown>;
+  };
   getRuntimeInfo: () => DesktopRuntimeInfo;
   hostBootstrap: {
     load: () => Promise<AgentAppHostDiscovery>;
+  };
+  identity: {
+    logout: () => Promise<IdentitySessionStatus>;
+    start: () => Promise<IdentityAuthorizationStart>;
+    status: () => Promise<IdentitySessionStatus>;
   };
   sidecar: {
     ensureRunning: () => Promise<SidecarStatus>;
@@ -98,10 +134,41 @@ export const desktopPreloadApi: DesktopPreloadApi = Object.freeze({
       await ipcRenderer.invoke(DATA_PROTECTION_STATUS_CHANNEL) as unknown,
     ),
   }),
+  developerProject: Object.freeze({
+    load: () => ipcRenderer.invoke(
+      DEVELOPER_PROJECT_LOAD_CHANNEL,
+    ) as Promise<DeveloperProjectSnapshot>,
+    packageApp: () => ipcRenderer.invoke(
+      DEVELOPER_PROJECT_PACKAGE_CHANNEL,
+    ) as Promise<DeveloperPackageReceipt>,
+    save: (request: DeveloperProjectSaveRequest) => ipcRenderer.invoke(
+      DEVELOPER_PROJECT_SAVE_CHANNEL,
+      request,
+    ) as Promise<DeveloperProjectSnapshot>,
+    showOutput: () => ipcRenderer.invoke(DEVELOPER_PROJECT_SHOW_OUTPUT_CHANNEL) as Promise<void>,
+  }),
+  developerAccess: Object.freeze({
+    request: (operation: DeveloperAccessOperation, input?: unknown) =>
+      ipcRenderer.invoke(DEVELOPER_ACCESS_REQUEST_CHANNEL, {
+        operation,
+        ...(input === undefined ? {} : { input }),
+      }) as Promise<unknown>,
+  }),
   getRuntimeInfo: () => runtimeInfo,
   hostBootstrap: Object.freeze({
     load: () =>
       ipcRenderer.invoke(HOST_BOOTSTRAP_LOAD_CHANNEL) as Promise<AgentAppHostDiscovery>
+  }),
+  identity: Object.freeze({
+    logout: async () => parseIdentitySessionStatus(
+      await ipcRenderer.invoke(IDENTITY_LOGOUT_CHANNEL) as unknown,
+    ),
+    start: async () => parseIdentityAuthorizationStart(
+      await ipcRenderer.invoke(IDENTITY_START_CHANNEL) as unknown,
+    ),
+    status: async () => parseIdentitySessionStatus(
+      await ipcRenderer.invoke(IDENTITY_STATUS_CHANNEL) as unknown,
+    ),
   }),
   sidecar: Object.freeze({
     ensureRunning: async () => parseSidecarStatus(

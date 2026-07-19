@@ -1,0 +1,185 @@
+// @vitest-environment node
+
+import { createServer } from "node:http";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { parseDesktopRedirectUri } from "../src/main/identityCallbackServer";
+import { registerIdentityController } from "../src/main/identityController";
+import {
+  IDENTITY_LOGOUT_CHANNEL,
+  IDENTITY_START_CHANNEL,
+  IDENTITY_STATUS_CHANNEL,
+} from "../src/shared/identity";
+import type { AgentAppHostDiscovery } from "../src/shared/hostBootstrap";
+
+const disposers: Array<() => void> = [];
+
+afterEach(() => {
+  for (const dispose of disposers.splice(0)) dispose();
+});
+
+describe("desktop identity controller", () => {
+  it("keeps the authorization URL and callback credentials in Main", async () => {
+    const port = await unusedPort();
+    const redirectUri = `http://127.0.0.1:${port}/identity/callback`;
+    const handlers = new Map<string, (event: { sender: { id: number } }) => unknown>();
+    const callbacks: unknown[] = [];
+    const openExternal = vi.fn(async () => undefined);
+    const ensureCredentialVault = vi.fn(async () => undefined);
+    const sidecarRequest = vi.fn(async (pathname: string, init?: RequestInit) => {
+      if (pathname === "/identity/authorization") {
+        return jsonResponse({
+          authorizationUrl: "https://identity.example/authorize?state=secret-state",
+          expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        });
+      }
+      if (pathname === "/identity/callback") {
+        callbacks.push(JSON.parse(String(init?.body)) as unknown);
+        return jsonResponse({ state: "signed_in", account: account() });
+      }
+      if (pathname === "/identity/status") {
+        return jsonResponse({ state: "signed_out", account: null });
+      }
+      if (pathname === "/identity/logout") {
+        return jsonResponse({
+          status: { state: "signed_out", account: null },
+          endSessionUrl: null,
+          remoteRevocation: "succeeded",
+        });
+      }
+      return new Response("not found", { status: 404 });
+    });
+    const dispose = registerIdentityController({
+      ensureCredentialVault,
+      ipcMain: {
+        handle: (channel, handler) => handlers.set(channel, handler),
+        removeHandler: (channel) => handlers.delete(channel),
+      },
+      loadHostDiscovery: async () => discovery(redirectUri),
+      openExternal,
+      requesterWebContents: { id: 7 },
+      sidecarRequest,
+    });
+    disposers.push(dispose);
+
+    const start = await handlers.get(IDENTITY_START_CHANNEL)!({ sender: { id: 7 } });
+
+    expect(start).toMatchObject({ state: "waiting" });
+    expect(JSON.stringify(start)).not.toContain("secret-state");
+    expect(ensureCredentialVault).toHaveBeenCalledOnce();
+    expect(openExternal).toHaveBeenCalledWith(
+      "https://identity.example/authorize?state=secret-state",
+    );
+
+    const callback = `${redirectUri}?code=secret-code&state=secret-state`;
+    const response = await fetch(callback, { redirect: "error" });
+    expect(response.status).toBe(200);
+    expect(callbacks).toEqual([{ callbackUrl: callback }]);
+
+    expect(await handlers.get(IDENTITY_STATUS_CHANNEL)!({ sender: { id: 7 } }))
+      .toEqual({ state: "signed_out", account: null });
+    expect(await handlers.get(IDENTITY_LOGOUT_CHANNEL)!({ sender: { id: 7 } }))
+      .toEqual({ state: "signed_out", account: null });
+  });
+
+  it("accepts only a fixed literal IPv4 loopback callback", () => {
+    expect(parseDesktopRedirectUri("http://127.0.0.1:43122/identity/callback").port)
+      .toBe("43122");
+    for (const value of [
+      "http://localhost:43122/identity/callback",
+      "http://127.0.0.1/identity/callback",
+      "https://127.0.0.1:43122/identity/callback",
+      "http://127.0.0.1:43122/",
+      "http://127.0.0.1:43122/identity/callback?next=x",
+    ]) {
+      expect(() => parseDesktopRedirectUri(value)).toThrow(/fixed 127\.0\.0\.1/);
+    }
+  });
+
+  it("rejects identity IPC from a different renderer", async () => {
+    const handlers = new Map<string, (event: { sender: { id: number } }) => unknown>();
+    const dispose = registerIdentityController({
+      ipcMain: {
+        handle: (channel, handler) => handlers.set(channel, handler),
+        removeHandler: (channel) => handlers.delete(channel),
+      },
+      loadHostDiscovery: async () => discovery("http://127.0.0.1:43122/identity/callback"),
+      openExternal: vi.fn(),
+      requesterWebContents: { id: 7 },
+      sidecarRequest: vi.fn(),
+    });
+    disposers.push(dispose);
+
+    await expect(handlers.get(IDENTITY_STATUS_CHANNEL)!({ sender: { id: 8 } }))
+      .rejects.toThrow(/requester window/);
+  });
+});
+
+function account() {
+  return {
+    id: `usr_${"a".repeat(64)}`,
+    authenticatedAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + 60_000).toISOString(),
+  };
+}
+
+function discovery(redirectUri: string): AgentAppHostDiscovery {
+  return {
+    schemaVersion: 2,
+    manifestSha256: "a".repeat(64),
+    runtimeVersion: "0.1.0",
+    platform: "desktop",
+    identity: {
+      appId: "com.example.app",
+      packageId: "com.example.app",
+      version: "1.0.0",
+      displayName: "Example",
+      shortName: null,
+      description: null,
+      accentColor: null,
+    },
+    features: [],
+    requirements: { packages: [], capabilities: [], runtimeTools: [], connectors: [] },
+    policy: {
+      backgroundExecution: "disabled",
+      externalSideEffects: "deny",
+      memoryPersistence: "local_only",
+      network: "declared_only",
+      skillManagement: "disabled",
+    },
+    access: {
+      modelAccess: { configurationPolicy: "app_managed", profile: null },
+      identity: {
+        mode: "required",
+        provider: {
+          id: "agentweave.identity.oidc",
+          version: "^0.1.0",
+          publicConfig: {
+            preset: "generic",
+            issuer: "https://identity.example",
+            clientId: "client",
+            audience: "https://gateway.example",
+            scopes: ["openid"],
+            redirectUri,
+          },
+        },
+      },
+      entitlements: { mode: "required", provider: null },
+    },
+  };
+}
+
+function jsonResponse(value: unknown): Response {
+  return new Response(JSON.stringify(value), {
+    headers: { "content-type": "application/json" },
+  });
+}
+
+async function unusedPort(): Promise<number> {
+  const server = createServer();
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("test listener is unavailable");
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  return address.port;
+}

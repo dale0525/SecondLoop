@@ -62,6 +62,9 @@ enum RuntimeRequest {
         config: MobileModelConfigDto,
     },
     LoadModelConfig,
+    RefreshSecurityContext {
+        security_context: agent_runtime::identity::SecurityContext,
+    },
     ListMemories {
         #[serde(default)]
         query: String,
@@ -192,6 +195,10 @@ pub fn invoke_runtime_json(handle: i64, request_json: &str) -> String {
                 Ok(Value::Null)
             }
             RuntimeRequest::LoadModelConfig => serde_json::to_value(runtime.load_model_config()?),
+            RuntimeRequest::RefreshSecurityContext { security_context } => {
+                runtime.refresh_security_context(security_context)?;
+                Ok(Value::Null)
+            }
             RuntimeRequest::ListMemories { query, limit } => {
                 Ok(runtime.list_memories(&query, limit)?)
             }

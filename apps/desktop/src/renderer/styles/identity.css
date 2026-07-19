@@ -1,0 +1,69 @@
+.identity-gate {
+  position: relative;
+  display: grid;
+  min-height: 100%;
+  place-items: center;
+  overflow: auto;
+  padding: 48px var(--space-page);
+  background:
+    radial-gradient(circle at 50% 22%, color-mix(in srgb, var(--color-primary) 10%, transparent), transparent 34%),
+    linear-gradient(180deg, var(--color-background), color-mix(in srgb, var(--color-surface) 72%, var(--color-background)));
+}
+
+.identity-gate::before {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--color-border) 35%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--color-border) 35%, transparent) 1px, transparent 1px);
+  background-size: 44px 44px;
+  content: "";
+  mask-image: linear-gradient(to bottom, black, transparent 72%);
+  pointer-events: none;
+}
+
+.identity-gate-card {
+  z-index: 1;
+  width: min(100%, 500px);
+  border: 1px solid var(--color-border-strong);
+  box-shadow: 0 24px 80px color-mix(in srgb, black 20%, transparent);
+}
+
+.identity-gate-mark,
+.settings-identity-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 28%, var(--color-border));
+  background: color-mix(in srgb, var(--color-primary) 11%, var(--color-surface));
+  color: var(--color-primary-text);
+}
+
+.identity-gate-mark {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+}
+
+.settings-identity-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+}
+
+@media (max-width: 640px) {
+  .identity-gate {
+    align-items: start;
+    padding: 72px var(--space-page-mobile) 28px;
+  }
+
+  .identity-gate-card {
+    width: 100%;
+  }
+
+  .identity-gate button,
+  .settings-identity-panel button {
+    min-height: 44px;
+  }
+}

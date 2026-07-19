@@ -11,7 +11,7 @@ use agent_runtime::{
 };
 use axum::{
     Json, Router,
-    extract::{Path, Query, State},
+    extract::{Extension, Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -70,6 +70,13 @@ impl TurnCoordinator {
             active.by_session.remove(session_id);
         }
         active.cancellations.remove(turn_id);
+    }
+
+    pub(crate) async fn cancel_all(&self) {
+        let active = self.inner.lock().await;
+        for cancellation in active.cancellations.values() {
+            cancellation.cancel();
+        }
     }
 }
 
@@ -132,14 +139,21 @@ struct CancelTurnResponse {
 async fn start_turn(
     Path(session_id): Path<String>,
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
     Json(request): Json<StartTurnRequest>,
 ) -> Result<Response, ApiError> {
     validate_start_request(&request)?;
+    if request.model_settings.is_some() && !state.allows_user_model_configuration() {
+        return Err(ApiError::BadRequest(
+            "model settings are managed by the Agent App",
+        ));
+    }
     let conversation_lock = state.conversation_lock(&session_id).await;
     let guard = conversation_lock.lock_owned().await;
+    let scope = security.conversation_scope();
     if !state
         .storage()
-        .session_exists_scoped(state.conversation_scope(), &session_id)
+        .session_exists_scoped(scope, &session_id)
         .await
         .map_err(ApiError::Internal)?
     {
@@ -147,18 +161,13 @@ async fn start_turn(
     }
     let history = state
         .storage()
-        .list_scoped_messages(state.conversation_scope(), &session_id)
+        .list_scoped_messages(scope, &session_id)
         .await
         .map_err(ApiError::Internal)?;
     let history = messages_to_model_history(&history).map_err(ApiError::Internal)?;
     let started = state
         .storage()
-        .begin_scoped_turn(
-            state.conversation_scope(),
-            &session_id,
-            &request.request_id,
-            &request.content,
-        )
+        .begin_scoped_turn(scope, &session_id, &request.request_id, &request.content)
         .await
         .map_err(|error| {
             if error.to_string() == TURN_REQUEST_CONFLICT_MESSAGE {
@@ -197,18 +206,21 @@ async fn start_turn(
         started.turn.id,
         request,
         history,
+        security,
         cancellation,
         guard,
     ));
     Ok((StatusCode::ACCEPTED, Json(response)).into_response())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn run_turn(
     state: Arc<AppState>,
     session_id: String,
     turn_id: String,
     request: StartTurnRequest,
     history: Vec<serde_json::Value>,
+    security: crate::identity_api::RequestSecurityContext,
     cancellation: CancellationToken,
     _guard: tokio::sync::OwnedMutexGuard<()>,
 ) {
@@ -227,6 +239,7 @@ async fn run_turn(
         &user_request,
         ActorContext::anonymous(),
         history,
+        &security,
         observer,
     );
     tokio::pin!(execution);
@@ -238,7 +251,7 @@ async fn run_turn(
                 let Some(event) = event else { continue };
                 if is_terminal_event(&event) { continue; }
                 if state.storage().append_scoped_turn_event(
-                    state.conversation_scope(),
+                    security.conversation_scope(),
                     &session_id,
                     &turn_id,
                     &event,
@@ -258,7 +271,7 @@ async fn run_turn(
         }
         if state
             .storage()
-            .append_scoped_turn_event(state.conversation_scope(), &session_id, &turn_id, &event)
+            .append_scoped_turn_event(security.conversation_scope(), &session_id, &turn_id, &event)
             .await
             .is_err()
         {
@@ -269,7 +282,7 @@ async fn run_turn(
     if let Err(error) = state
         .storage()
         .finish_scoped_turn(
-            state.conversation_scope(),
+            security.conversation_scope(),
             &session_id,
             &turn_id,
             ConversationTurnCompletion {
@@ -367,6 +380,7 @@ fn finalize_outcome(
 async fn list_turn_events(
     Path((session_id, turn_id)): Path<(String, String)>,
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
     Query(query): Query<TurnEventsQuery>,
 ) -> Result<Json<TurnEventsResponse>, ApiError> {
     if query.after < -1 || !(1..=100).contains(&query.limit) || query.wait_ms > MAX_WAIT_MS {
@@ -378,7 +392,7 @@ async fn list_turn_events(
         let page = state
             .storage()
             .list_scoped_turn_events_page(
-                state.conversation_scope(),
+                security.conversation_scope(),
                 &session_id,
                 &turn_id,
                 after,
@@ -409,10 +423,11 @@ async fn list_turn_events(
 async fn cancel_turn(
     Path((session_id, turn_id)): Path<(String, String)>,
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
 ) -> Result<Json<CancelTurnResponse>, ApiError> {
     let turn = state
         .storage()
-        .get_scoped_turn(state.conversation_scope(), &session_id, &turn_id)
+        .get_scoped_turn(security.conversation_scope(), &session_id, &turn_id)
         .await
         .map_err(ApiError::Internal)?
         .ok_or(ApiError::NotFound("turn not found"))?;

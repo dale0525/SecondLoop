@@ -13,8 +13,13 @@ class RuntimeBridge(
   private val configuredActorContext: RuntimeActorContext = RuntimeActorContext(),
   private val publicationFileSystem: SkillPublicationFileSystem = AndroidSkillPublicationFileSystem(),
   private val configuredApproverContext: RuntimeActorContext? = null,
+  private val configuredSecurityContext: RuntimeSecurityContext? = null,
+  private val configuredGatewayCredentialProvider: RuntimeGatewayCredentialProvider? = null,
 ) {
-  fun initRequest(actorContext: RuntimeActorContext = configuredActorContext): RuntimeInitRequest {
+  fun initRequest(
+    actorContext: RuntimeActorContext = configuredActorContext,
+    securityContext: RuntimeSecurityContext? = configuredSecurityContext,
+  ): RuntimeInitRequest {
     val filesDir = context.filesDir
     val installedBundle = SkillAssetInstaller(filesDir, skillAssets, publicationFileSystem).installVerifiedBundle()
     val installedApp = AgentAppAssetInstaller(
@@ -32,11 +37,15 @@ class RuntimeBridge(
       quarantineSkillsDir = filesDir.resolve("skill-quarantine").absolutePath,
       skillPolicy = configuredSkillPolicy,
       actorContext = actorContext,
+      securityContext = securityContext,
     )
   }
 
-  fun load(): RuntimeClient {
-    val response = native.initialize(initRequest().toJson().toString())
+  fun load(
+    securityContext: RuntimeSecurityContext? = configuredSecurityContext,
+    gatewayCredentialProvider: RuntimeGatewayCredentialProvider? = configuredGatewayCredentialProvider,
+  ): RuntimeClient {
+    val response = native.initialize(initRequest(securityContext = securityContext).toJson().toString())
     var allocatedHandle: Long? = null
     var approverHandle: Long? = null
     try {
@@ -50,7 +59,9 @@ class RuntimeBridge(
         "Runtime initialization data contains unexpected fields"
       }
       val approverClient = configuredApproverContext?.let { approver ->
-        val approverEnvelope = responseEnvelope(native.initialize(initRequest(approver).toJson().toString()))
+        val approverEnvelope = responseEnvelope(
+          native.initialize(initRequest(approver, securityContext).toJson().toString()),
+        )
         approverHandle = approverEnvelope.getJSONObject("data").getLong("handle")
         RuntimeApprovalClient(checkNotNull(approverHandle), native, approver, configuredSkillPolicy)
       }
@@ -61,6 +72,8 @@ class RuntimeBridge(
         actorContext = configuredActorContext,
         skillPolicy = configuredSkillPolicy,
         approverClient = approverClient,
+        securityContext = securityContext,
+        gatewayCredentialProvider = gatewayCredentialProvider,
       )
     } catch (error: Exception) {
       approverHandle?.let { handle -> runCatching { responseEnvelope(native.close(handle)) } }
@@ -78,6 +91,8 @@ class RuntimeClient internal constructor(
   val actorContext: RuntimeActorContext = RuntimeActorContext(),
   val skillPolicy: RuntimeSkillPolicy = RuntimeSkillPolicy(),
   private val approverClient: RuntimeApprovalClient? = null,
+  val securityContext: RuntimeSecurityContext? = null,
+  val gatewayCredentialProvider: RuntimeGatewayCredentialProvider? = null,
 ) : AutoCloseable {
   private val closed = AtomicBoolean(false)
   val approverAccess: RuntimeApproverAccess? get() = approverClient?.access
@@ -242,6 +257,14 @@ class RuntimeClient internal constructor(
     )
     val data = envelope.opt("data")
     return if (data == null || data == JSONObject.NULL) null else (data as JSONObject).toModelConfig()
+  }
+
+  fun refreshSecurityContext(securityContext: RuntimeSecurityContext) {
+    invokeUnit(
+      JSONObject()
+        .put("operation", "refresh_security_context")
+        .put("security_context", securityContext.toJson()),
+    )
   }
 
   fun listMemories(query: String = "", limit: Int = 50): List<RuntimeMemory> =
@@ -431,6 +454,7 @@ private fun RuntimeInitRequest.toJson(): JSONObject =
     .put("actor_context", actorContext.toJson())
     .put("platform", platform)
     .put("capabilities", JSONArray(capabilities))
+    .put("security_context", securityContext?.toJson() ?: JSONObject.NULL)
 
 private fun RuntimeSkillPolicy.toJson(): JSONObject =
   JSONObject()
@@ -448,6 +472,23 @@ private fun RuntimeActorContext.toJson(): JSONObject =
     .put("tenant_id", tenantId)
     .put("device_id", deviceId)
     .put("grants", JSONArray(grants))
+
+private fun RuntimeSecurityContext.toJson(): JSONObject =
+  JSONObject()
+    .put("schemaVersion", schemaVersion)
+    .put("providerId", providerId)
+    .put("appId", appId)
+    .put("tenantId", tenantId)
+    .put("audience", audience)
+    .put(
+      "principal",
+      JSONObject()
+        .put("issuer", principal.issuer)
+        .put("subject", principal.subject),
+    )
+    .put("grantedScopes", JSONArray(grantedScopes))
+    .put("authenticatedAt", authenticatedAt)
+    .put("expiresAt", expiresAt)
 
 private fun RuntimeModelConfig.toJson(): JSONObject =
   JSONObject()
@@ -517,6 +558,9 @@ private fun JSONObject.toDiagnostics(): RuntimeDiagnostics =
     activeSnapshotGeneration = optLong("active_snapshot_generation", 0L),
     quarantinedCount = optInt("quarantined_count", 0),
     lastReloadStatus = optString("last_reload_status", "not_loaded"),
+    modelConfigurationPolicy = optString("model_configuration_policy", "user_configurable"),
+    identityMode = optString("identity_mode", "local_single_user"),
+    accountId = if (isNull("account_id")) null else optString("account_id").takeIf(String::isNotEmpty),
   )
 
 private fun JSONObject.toSkill(): RuntimeSkill =

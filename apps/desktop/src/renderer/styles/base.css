@@ -160,6 +160,15 @@ input:focus-visible,
     padding-inline: var(--space-page-mobile);
   }
 
+  .top-bar .icon-button {
+    width: 44px;
+    height: 44px;
+  }
+
+  .top-bar-spacer {
+    width: 44px;
+  }
+
   .top-bar-title p {
     white-space: normal;
     overflow-wrap: anywhere;

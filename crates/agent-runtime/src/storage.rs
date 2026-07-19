@@ -102,6 +102,12 @@ impl Storage {
         &self.protection
     }
 
+    /// Host infrastructure may share the pool for separately versioned, scope-safe extensions.
+    /// Callers remain responsible for their own migrations and must not modify Runtime tables.
+    pub fn sqlite_pool(&self) -> SqlitePool {
+        self.pool.clone()
+    }
+
     pub fn local_memory_provider(&self) -> crate::memory_sqlite::SqliteMemoryProvider {
         crate::memory_sqlite::SqliteMemoryProvider::from_pool(self.pool.clone())
     }

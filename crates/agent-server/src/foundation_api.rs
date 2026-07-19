@@ -5,7 +5,7 @@ use agent_runtime::mail_imap_smtp::{ImapSmtpMailConfig, MailTlsMode};
 use agent_runtime::mail_imap_smtp_accounts::IMAP_SMTP_PROVIDER_ID;
 use axum::{
     Json, Router,
-    extract::{Path, Query, State},
+    extract::{Extension, Path, Query, State},
     routing::{get, post},
 };
 use serde::{Deserialize, Deserializer, Serialize};
@@ -267,6 +267,7 @@ struct ResolveFoundationActionRequest {
 
 async fn list_memories(
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
     Query(query): Query<MemoryListQuery>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     if query.limit == 0 || query.limit > 100 {
@@ -275,7 +276,8 @@ async fn list_memories(
         ));
     }
     let runtime = state
-        .memory_tools()
+        .memory_tools_for(&security)
+        .map_err(ApiError::Internal)?
         .ok_or(ApiError::NotFound("Memory Foundation is disabled"))?;
     runtime
         .execute(
@@ -289,10 +291,12 @@ async fn list_memories(
 
 async fn get_memory(
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
     Path(memory_id): Path<String>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let runtime = state
-        .memory_tools()
+        .memory_tools_for(&security)
+        .map_err(ApiError::Internal)?
         .ok_or(ApiError::NotFound("Memory Foundation is disabled"))?;
     let value = runtime
         .execute(
@@ -309,11 +313,13 @@ async fn get_memory(
 
 async fn forget_memory(
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
     Path(memory_id): Path<String>,
     Json(request): Json<ForgetMemoryRequest>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let runtime = state
-        .memory_tools()
+        .memory_tools_for(&security)
+        .map_err(ApiError::Internal)?
         .ok_or(ApiError::NotFound("Memory Foundation is disabled"))?;
     runtime
         .execute(
@@ -331,9 +337,11 @@ async fn forget_memory(
 
 async fn export_memories(
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let runtime = state
-        .memory_tools()
+        .memory_tools_for(&security)
+        .map_err(ApiError::Internal)?
         .ok_or(ApiError::NotFound("Memory Foundation is disabled"))?;
     runtime
         .execute(

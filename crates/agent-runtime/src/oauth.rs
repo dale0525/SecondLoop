@@ -333,6 +333,27 @@ impl OAuthBroker {
         Ok(broker)
     }
 
+    /// Creates a Host-bound view for another authenticated user without sharing account bindings.
+    /// Provider registrations and the encrypted vault are shared, while every persisted OAuth
+    /// state, credential and connector binding remains isolated by `CredentialScope`.
+    pub async fn for_scope(&self, scope: CredentialScope) -> anyhow::Result<Self> {
+        scope.validate()?;
+        if let Err(error) = self.vault.cleanup_pending_secret_material(&scope).await {
+            tracing::warn!(error = %error, "credential secret cleanup remains pending");
+        }
+        let broker = Self {
+            callback_url: self.callback_url.clone(),
+            owner_id: Uuid::new_v4().to_string(),
+            providers: self.providers.clone(),
+            refresh_lock: Arc::new(AsyncMutex::new(())),
+            scope,
+            store: self.store.clone(),
+            vault: self.vault.clone(),
+        };
+        broker.recover_interrupted(Utc::now()).await?;
+        Ok(broker)
+    }
+
     pub async fn start(
         &self,
         request: OAuthAuthorizationRequest,

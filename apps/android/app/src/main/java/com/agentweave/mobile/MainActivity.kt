@@ -1,41 +1,41 @@
 package com.agentweave.mobile
 
-import android.content.Context
-import android.os.Bundle
 import android.Manifest
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
-import androidx.activity.SystemBarStyle
-import androidx.activity.result.contract.ActivityResultContracts
+import android.os.Bundle
 import androidx.activity.ComponentActivity
-import androidx.activity.enableEdgeToEdge
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewmodel.CreationExtras
-import com.agentweave.mobile.runtime.RuntimeBridge
-import com.agentweave.mobile.runtime.RuntimeClient
 import com.agentweave.mobile.runtime.AndroidAgentAppAppearanceStore
 import com.agentweave.mobile.runtime.AndroidAgentAppLocalizationStore
-import com.agentweave.mobile.secrets.AndroidKeystoreModelSecretStore
-import com.agentweave.mobile.ui.AppRoot
 import com.agentweave.mobile.ui.AgentWeaveTheme
+import com.agentweave.mobile.ui.AppRoot
+import com.agentweave.mobile.ui.IdentityFailureScreen
+import com.agentweave.mobile.ui.IdentityLoadingScreen
+import com.agentweave.mobile.ui.IdentityRequiredScreen
 import com.agentweave.mobile.ui.LocalAppStrings
-import com.agentweave.mobile.ui.RuntimeTurnGate
-import com.agentweave.mobile.ui.RuntimeSettingsGate
 
 class MainActivity : ComponentActivity() {
   private val requestNotifications =
     registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+  private lateinit var runtimeViewModel: RuntimeHostViewModel
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
@@ -43,94 +43,111 @@ class MainActivity : ComponentActivity() {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
       requestNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
-    val runtimeViewModel = ViewModelProvider(
+    runtimeViewModel = ViewModelProvider(
       this,
-      RuntimeClientViewModel.factory { RuntimeDependencies.runtimeLoader(this) },
-    )[RuntimeClientViewModel::class.java]
-    val client = runtimeViewModel.client
-    val diagnostics = client.diagnostics()
-    val secretStore = AndroidKeystoreModelSecretStore(this)
+      RuntimeHostViewModel.factory(this),
+    )[RuntimeHostViewModel::class.java]
+    consumeIdentityCallback(intent)
+
     val appearanceStore = AndroidAgentAppAppearanceStore(this)
     val appearance = appearanceStore.appearance
     val localizationStore = AndroidAgentAppLocalizationStore(this)
     val localization = localizationStore.localization
     setContent {
+      val hostState by runtimeViewModel.state.collectAsState()
       var selectedThemeId by remember { mutableStateOf(appearanceStore.selectedTheme()) }
       var selectedLocaleId by remember { mutableStateOf(localizationStore.selectedLocale()) }
+
+      LaunchedEffect(runtimeViewModel) {
+        runtimeViewModel.browserEvents.collect { url ->
+          runCatching {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+          }.onFailure {
+            runtimeViewModel.onBrowserLaunchFailed()
+          }
+        }
+      }
+
       CompositionLocalProvider(LocalAppStrings provides localization.strings(selectedLocaleId)) {
         AgentWeaveTheme(appearance, selectedThemeId) {
-        val selectedTheme = appearance.themes.firstOrNull { it.id == selectedThemeId }
-        val lightTheme = selectedTheme?.type == "light" || selectedTheme?.type == "hcLight"
-        SideEffect {
-          val systemBarStyle = if (lightTheme) {
-            SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT)
-          } else {
-            SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+          val selectedTheme = appearance.themes.firstOrNull { it.id == selectedThemeId }
+          val lightTheme = selectedTheme?.type == "light" || selectedTheme?.type == "hcLight"
+          SideEffect {
+            val style = if (lightTheme) {
+              SystemBarStyle.light(
+                android.graphics.Color.TRANSPARENT,
+                android.graphics.Color.TRANSPARENT,
+              )
+            } else {
+              SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+            }
+            enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
           }
-          enableEdgeToEdge(
-            statusBarStyle = systemBarStyle,
-            navigationBarStyle = systemBarStyle,
-          )
-        }
-        AppRoot(
-          runtimeClient = client,
-          turnGate = runtimeViewModel.turnGate,
-          settingsGate = runtimeViewModel.settingsGate,
-          initialDiagnostics = diagnostics,
-          secretStore = secretStore,
-          appearance = appearance,
-          selectedThemeId = selectedThemeId,
-          localization = localization,
-          selectedLocaleId = selectedLocaleId,
-          onThemeSelected = { themeId ->
-            appearanceStore.selectTheme(themeId)
-            selectedThemeId = appearance.admittedTheme(themeId)
-          },
-          onLocaleSelected = { localeId ->
-            localizationStore.selectLocale(localeId)
-            selectedLocaleId = localization.admittedLocale(localeId)
-          },
-          modifier = Modifier
+
+          val modifier = Modifier
             .background(MaterialTheme.colorScheme.background)
-            .safeDrawingPadding(),
-        )
+            .safeDrawingPadding()
+          when (val state = hostState) {
+            RuntimeHostState.Loading -> IdentityLoadingScreen(modifier)
+            is RuntimeHostState.AuthenticationRequired -> IdentityRequiredScreen(
+              appDisplayName = state.appDisplayName,
+              phase = state.phase,
+              errorMessage = state.errorMessage,
+              onSignIn = runtimeViewModel::beginSignIn,
+              modifier = modifier,
+            )
+            is RuntimeHostState.Failed -> IdentityFailureScreen(
+              appDisplayName = state.appDisplayName,
+              message = state.message,
+              onRetry = runtimeViewModel::retryInitialization,
+              modifier = modifier,
+            )
+            is RuntimeHostState.Ready -> {
+              val session = state.session
+              AppRoot(
+                runtimeClient = session.client,
+                turnGate = session.turnGate,
+                settingsGate = session.settingsGate,
+                initialDiagnostics = session.diagnostics,
+                secretStore = session.secretStore,
+                identityStatus = session.identityStatus,
+                onSwitchAccount = runtimeViewModel::beginSignIn,
+                onSignOut = runtimeViewModel::signOut,
+                onClearAccountData = runtimeViewModel::clearAccountData,
+                appearance = appearance,
+                selectedThemeId = selectedThemeId,
+                localization = localization,
+                selectedLocaleId = selectedLocaleId,
+                onThemeSelected = { themeId ->
+                  appearanceStore.selectTheme(themeId)
+                  selectedThemeId = appearance.admittedTheme(themeId)
+                },
+                onLocaleSelected = { localeId ->
+                  localizationStore.selectLocale(localeId)
+                  selectedLocaleId = localization.admittedLocale(localeId)
+                },
+                modifier = modifier,
+              )
+            }
+          }
         }
       }
     }
   }
-}
 
-private class RuntimeClientViewModel(
-  val client: RuntimeClient,
-  val turnGate: RuntimeTurnGate = RuntimeTurnGate(),
-  val settingsGate: RuntimeSettingsGate = RuntimeSettingsGate(),
-) : ViewModel() {
-  override fun onCleared() {
-    turnGate.close()
-    settingsGate.close()
-    client.close()
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    setIntent(intent)
+    consumeIdentityCallback(intent)
   }
 
-  companion object {
-    fun factory(load: () -> RuntimeClient): ViewModelProvider.Factory =
-      object : ViewModelProvider.Factory {
-        override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
-          require(modelClass == RuntimeClientViewModel::class.java) {
-            "unsupported ViewModel: ${modelClass.name}"
-          }
-          @Suppress("UNCHECKED_CAST")
-          return RuntimeClientViewModel(load()) as T
-        }
-      }
+  override fun onResume() {
+    super.onResume()
+    if (::runtimeViewModel.isInitialized) runtimeViewModel.onHostResume()
   }
-}
 
-internal object RuntimeDependencies {
-  private val defaultLoader: (Context) -> RuntimeClient = { context -> RuntimeBridge(context).load() }
-
-  var runtimeLoader: (Context) -> RuntimeClient = defaultLoader
-
-  fun reset() {
-    runtimeLoader = defaultLoader
+  private fun consumeIdentityCallback(intent: Intent?) {
+    intent?.dataString?.let(runtimeViewModel::handleIdentityCallback)
+    intent?.data = null
   }
 }

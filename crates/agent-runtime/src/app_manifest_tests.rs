@@ -48,6 +48,43 @@ fn valid_manifest() -> Value {
     })
 }
 
+fn valid_v2_manifest() -> Value {
+    let mut value = valid_manifest();
+    value["schemaVersion"] = json!(2);
+    value["modelAccess"] = json!({
+        "configurationPolicy": "app_managed",
+        "profile": {
+            "providerId": "example.gateway",
+            "endpointType": "responses",
+            "baseUrl": "https://gateway.example.test/v1",
+            "modelName": "assistant-model",
+            "authentication": "user_identity",
+            "headers": {"X-App-Version": "1"}
+        }
+    });
+    value["identity"] = json!({
+        "mode": "required",
+        "provider": {
+            "id": "agentweave.identity.oidc",
+            "version": "^1.0.0",
+            "publicConfig": {
+                "issuer": "https://identity.example.test",
+                "clientId": "public-desktop-client",
+                "audience": "com.example.secretary.gateway"
+            }
+        }
+    });
+    value["entitlements"] = json!({
+        "mode": "required",
+        "provider": {
+            "id": "agentweave.entitlements.http",
+            "version": "^1.0.0",
+            "publicConfig": {"endpoint": "https://access.example.test/v1"}
+        }
+    });
+    value
+}
+
 fn manifest_bytes(value: &Value) -> Vec<u8> {
     serde_json::to_vec(value).unwrap()
 }
@@ -126,14 +163,163 @@ fn rejects_unknown_fields_at_root_and_nested_levels() {
 #[test]
 fn rejects_unsupported_schema_versions() {
     let mut value = valid_manifest();
-    value["schemaVersion"] = json!(2);
+    value["schemaVersion"] = json!(3);
 
     let error = AgentAppManifest::parse_json(&manifest_bytes(&value)).unwrap_err();
 
     assert!(
         error
             .to_string()
-            .contains("unsupported agent app manifest schema version 2")
+            .contains("unsupported agent app manifest schema version 3")
+    );
+}
+
+#[test]
+fn parses_complete_v2_access_configuration() {
+    let manifest = AgentAppManifest::parse_json(&manifest_bytes(&valid_v2_manifest())).unwrap();
+
+    assert_eq!(manifest.schema_version, 2);
+    assert_eq!(
+        manifest
+            .identity
+            .as_ref()
+            .and_then(|identity| identity.provider.as_ref())
+            .unwrap()
+            .id
+            .as_str(),
+        "agentweave.identity.oidc"
+    );
+    assert_eq!(
+        manifest
+            .model_access
+            .as_ref()
+            .and_then(|access| access.profile.as_ref())
+            .unwrap()
+            .authentication,
+        AgentAppModelAuthentication::UserIdentity
+    );
+}
+
+#[test]
+fn v1_cannot_smuggle_v2_access_fields() {
+    let mut value = valid_manifest();
+    value["identity"] = json!({"mode": "local_single_user", "provider": null});
+
+    let error = AgentAppManifest::parse_json(&manifest_bytes(&value)).unwrap_err();
+
+    assert!(
+        error
+            .to_string()
+            .contains("schema version 1 cannot declare")
+    );
+}
+
+#[test]
+fn v2_requires_every_access_section() {
+    for missing in ["modelAccess", "identity", "entitlements"] {
+        let mut value = valid_v2_manifest();
+        value.as_object_mut().unwrap().remove(missing);
+        let error = AgentAppManifest::parse_json(&manifest_bytes(&value)).unwrap_err();
+        assert!(
+            error.to_string().contains(missing),
+            "unexpected error when {missing} is missing: {error:#}"
+        );
+    }
+}
+
+#[test]
+fn provider_modes_require_exact_provider_presence() {
+    let mut missing = valid_v2_manifest();
+    missing["identity"]["provider"] = Value::Null;
+    assert!(
+        AgentAppManifest::parse_json(&manifest_bytes(&missing))
+            .unwrap_err()
+            .to_string()
+            .contains("requires a provider")
+    );
+
+    let mut unexpected = valid_v2_manifest();
+    unexpected["entitlements"]["mode"] = json!("disabled");
+    assert!(
+        AgentAppManifest::parse_json(&manifest_bytes(&unexpected))
+            .unwrap_err()
+            .to_string()
+            .contains("provider is forbidden")
+    );
+}
+
+#[test]
+fn remote_app_managed_profile_requires_identity_and_entitlements() {
+    let mut anonymous = valid_v2_manifest();
+    anonymous["modelAccess"]["profile"]["authentication"] = json!("none");
+    assert!(
+        AgentAppManifest::parse_json(&manifest_bytes(&anonymous))
+            .unwrap_err()
+            .to_string()
+            .contains("requires user_identity")
+    );
+
+    let mut unmetered = valid_v2_manifest();
+    unmetered["entitlements"] = json!({"mode": "disabled", "provider": null});
+    assert!(
+        AgentAppManifest::parse_json(&manifest_bytes(&unmetered))
+            .unwrap_err()
+            .to_string()
+            .contains("requires entitlements.mode=required")
+    );
+}
+
+#[test]
+fn loopback_app_managed_profile_can_be_device_local() {
+    let mut value = valid_v2_manifest();
+    value["modelAccess"]["profile"]["baseUrl"] = json!("http://127.0.0.1:11434/v1");
+    value["modelAccess"]["profile"]["authentication"] = json!("none");
+    value["identity"] = json!({"mode": "local_single_user", "provider": null});
+    value["entitlements"] = json!({"mode": "disabled", "provider": null});
+
+    AgentAppManifest::parse_json(&manifest_bytes(&value)).unwrap();
+}
+
+#[test]
+fn model_profile_rejects_insecure_remote_urls_and_sensitive_headers() {
+    let mut insecure = valid_v2_manifest();
+    insecure["modelAccess"]["profile"]["baseUrl"] = json!("http://gateway.example.test/v1");
+    assert!(
+        AgentAppManifest::parse_json(&manifest_bytes(&insecure))
+            .unwrap_err()
+            .to_string()
+            .contains("must use HTTPS")
+    );
+
+    let mut sensitive = valid_v2_manifest();
+    sensitive["modelAccess"]["profile"]["headers"] =
+        json!({"Authorization": "must-not-be-packaged"});
+    assert!(
+        AgentAppManifest::parse_json(&manifest_bytes(&sensitive))
+            .unwrap_err()
+            .to_string()
+            .contains("sensitive header")
+    );
+}
+
+#[test]
+fn provider_public_config_is_bounded_and_cannot_contain_credentials() {
+    let mut scalar = valid_v2_manifest();
+    scalar["identity"]["provider"]["publicConfig"] = json!("not-an-object");
+    assert!(
+        AgentAppManifest::parse_json(&manifest_bytes(&scalar))
+            .unwrap_err()
+            .to_string()
+            .contains("must be an object")
+    );
+
+    let mut secret = valid_v2_manifest();
+    secret["identity"]["provider"]["publicConfig"]["apiKey"] = json!("forbidden");
+    assert!(
+        AgentAppManifest::parse_json(&manifest_bytes(&secret))
+            .unwrap_err()
+            .to_string()
+            .contains("must not contain credential field")
     );
 }
 

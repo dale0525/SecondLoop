@@ -49,6 +49,7 @@ import com.agentweave.mobile.runtime.RuntimeClient
 import com.agentweave.mobile.runtime.AgentAppAppearance
 import com.agentweave.mobile.runtime.AgentAppLocalization
 import com.agentweave.mobile.runtime.RuntimeDiagnostics
+import com.agentweave.mobile.runtime.MobileIdentityStatus
 import com.agentweave.mobile.runtime.RuntimeSkill
 import com.agentweave.mobile.runtime.RuntimeSkillPackageSummary
 import com.agentweave.mobile.runtime.androidMvpCapabilities
@@ -195,6 +196,10 @@ fun AppRoot(
   settingsGate: RuntimeSettingsGate,
   initialDiagnostics: RuntimeDiagnostics,
   secretStore: ModelSecretStore,
+  identityStatus: MobileIdentityStatus? = null,
+  onSwitchAccount: () -> Unit = {},
+  onSignOut: () -> Unit = {},
+  onClearAccountData: () -> Unit = {},
   appearance: AgentAppAppearance,
   selectedThemeId: String,
   localization: AgentAppLocalization,
@@ -284,6 +289,12 @@ fun AppRoot(
             AppTab.Settings -> SettingsScreen(
               runtimeClient = runtimeClient,
               secretStore = secretStore,
+              modelConfigurationPolicy = diagnostics.modelConfigurationPolicy,
+              accountId = diagnostics.accountId,
+              identityStatus = identityStatus,
+              onSwitchAccount = onSwitchAccount,
+              onSignOut = onSignOut,
+              onClearAccountData = onClearAccountData,
               settingsGate = settingsGate,
               runtimeBusy = chatSending,
               appearance = appearance,

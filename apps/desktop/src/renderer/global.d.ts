@@ -8,8 +8,18 @@ import type {
   DataProtectionStatus,
 } from "../shared/dataProtection";
 import type { AgentAppHostDiscovery } from "../shared/hostBootstrap";
+import type {
+  IdentityAuthorizationStart,
+  IdentitySessionStatus,
+} from "../shared/identity";
+import type {
+  DeveloperPackageReceipt,
+  DeveloperProjectSaveRequest,
+  DeveloperProjectSnapshot,
+} from "../shared/developerProject";
 import type { SidecarStatus } from "../shared/sidecarStatus";
 import type { SidecarApiOperation } from "../shared/sidecarApi";
+import type { DeveloperAccessOperation } from "../shared/developerAccess";
 
 export {};
 
@@ -27,8 +37,22 @@ declare global {
         restoreBackup(): Promise<BackupRestoreReceipt | null>;
         status(): Promise<DataProtectionStatus>;
       };
+      developerProject?: {
+        load(): Promise<DeveloperProjectSnapshot>;
+        packageApp(): Promise<DeveloperPackageReceipt>;
+        save(request: DeveloperProjectSaveRequest): Promise<DeveloperProjectSnapshot>;
+        showOutput(): Promise<void>;
+      };
+      developerAccess?: {
+        request(operation: DeveloperAccessOperation, input?: unknown): Promise<unknown>;
+      };
       hostBootstrap?: {
         load(): Promise<AgentAppHostDiscovery>;
+      };
+      identity?: {
+        logout(): Promise<IdentitySessionStatus>;
+        start(): Promise<IdentityAuthorizationStart>;
+        status(): Promise<IdentitySessionStatus>;
       };
       sidecar?: {
         ensureRunning(): Promise<SidecarStatus>;

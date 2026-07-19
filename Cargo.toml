@@ -3,6 +3,9 @@ resolver = "2"
 members = [
   "crates/model-gateway",
   "crates/agent-runtime",
+  "crates/agent-devkit",
+  "crates/entitlement-providers",
+  "crates/identity-oidc",
   "crates/storage-sqlcipher",
   "crates/provider-adapters",
   "crates/agent-server",

@@ -127,6 +127,7 @@ describe("DeveloperTools", () => {
 
     render(<App />);
 
+    await waitFor(() => expect(document.title).toBe("Secretary"));
     await user.click(screen.getByRole("button", { name: "Open settings" }));
 
     expect(

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   chmodSync,
+  cpSync,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -15,14 +16,22 @@ import { join } from "node:path";
 import test from "node:test";
 
 import {
+  androidAppAssetPaths,
   androidSkillAssetPaths,
   androidRustLibraryPaths,
   androidNdkHostTag,
   createAndroidRustBuildConfig,
   makeAndroidGeneratedAssetsWritable,
+  prepareAndroidAppAssetsAt,
   prepareAndroidSkillAssetsAt,
   runAndroidBuildSequence,
 } from "./build-android-rust.mjs";
+import {
+  computeProjectDesiredHash,
+  hashPublicValue,
+  runtimeProviderProjection,
+} from "./agentweave-project.mjs";
+import { PROJECT_ROOT } from "./scaffold-agent-app.mjs";
 
 test("Android NDK host tag follows the supported host platform", () => {
   assert.equal(androidNdkHostTag("darwin"), "darwin-x86_64");
@@ -95,6 +104,79 @@ test("Android skill bundle uses the generated main asset directory", () => {
     compatibilityManifest: "/project/apps/android/app/build/generated/skillAssets/main/skills/skill-bundle.json",
     compatibilityLock: "/project/apps/android/app/build/generated/skillAssets/main/skills/skill-bundle.lock",
   });
+});
+
+test("Android Agent App assets use a verified platform-specific package", () => {
+  assert.deepEqual(androidAppAssetPaths("/project"), {
+    assetRoot: "/project/apps/android/app/build/generated/skillAssets/main/agent-app",
+    packageRoot: "/project/apps/android/app/build/generated/skillAssets/main/agent-app/package",
+    hashFile: "/project/apps/android/app/build/generated/skillAssets/main/agent-app/app.sha256",
+  });
+});
+
+test("Android app-managed packaging requires a verified lock and excludes developer state", () => {
+  mkdirSync(join(PROJECT_ROOT, ".tool"), { recursive: true });
+  const root = mkdtempSync(join(PROJECT_ROOT, ".tool", "android-managed-assets-"));
+  try {
+    const reference = join(PROJECT_ROOT, "examples", "managed-gateway-agent");
+    assert.throws(
+      () => prepareAndroidAppAssetsAt(root, { input: reference }),
+      /deployment\.lock is required before packaging/,
+    );
+
+    const input = join(root, "managed-android-app");
+    cpSync(reference, input, { recursive: true });
+    const manifestPath = join(input, "agent-app.json");
+    const projectPath = join(input, "agentweave-project.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    const project = JSON.parse(readFileSync(projectPath, "utf8"));
+    manifest.compatibility.platforms = ["android"];
+    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    mkdirSync(join(input, ".agentweave"));
+    writeFileSync(
+      join(input, ".agentweave", "deployment.lock"),
+      `${JSON.stringify(managedDeploymentLock(project, manifest), null, 2)}\n`,
+    );
+    assert.throws(
+      () => prepareAndroidAppAssetsAt(root, { input }),
+      /private reverse-domain scheme/,
+    );
+
+    manifest.identity.provider.publicConfig.redirectUri =
+      "com.example.managed-gateway-agent:/oidc/callback";
+    project.providers.identity.publicConfig.redirectUri =
+      "com.example.managed-gateway-agent:/oidc/callback";
+    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    writeFileSync(projectPath, `${JSON.stringify(project, null, 2)}\n`);
+    writeFileSync(
+      join(input, ".agentweave", "deployment.lock"),
+      `${JSON.stringify(managedDeploymentLock(project, manifest), null, 2)}\n`,
+    );
+
+    const result = prepareAndroidAppAssetsAt(root, { input });
+    const packaged = JSON.parse(readFileSync(join(result.packageRoot, "agent-app.json"), "utf8"));
+    assert.deepEqual(packaged.compatibility.platforms, ["android"]);
+    assert.equal(existsSync(join(result.packageRoot, "agentweave-project.json")), false);
+    assert.equal(existsSync(join(result.packageRoot, ".agentweave")), false);
+    assert.match(readFileSync(result.hashFile, "utf8"), /^[0-9a-f]{64}\n$/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("Android packaging rejects an App that omits the android platform", () => {
+  mkdirSync(join(PROJECT_ROOT, ".tool"), { recursive: true });
+  const root = mkdtempSync(join(PROJECT_ROOT, ".tool", "android-platform-assets-"));
+  try {
+    assert.throws(
+      () => prepareAndroidAppAssetsAt(root, {
+        input: join(PROJECT_ROOT, "examples", "minimal-agent"),
+      }),
+      /declares the android platform/,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("Android build prepares skill assets before compiling Rust", () => {
@@ -233,4 +315,26 @@ function writeSkillFixture(skillsRoot, name, platforms) {
     compatibility: { platforms },
   }));
   writeFileSync(join(root, "SKILL.md"), `# ${name}\n`);
+}
+
+function managedDeploymentLock(project, manifest) {
+  return {
+    schemaVersion: 1,
+    desiredHash: computeProjectDesiredHash(project),
+    runtimeProjectionHash: hashPublicValue(runtimeProviderProjection(manifest)),
+    gateway: {
+      id: project.providers.gateway.id,
+      version: project.providers.gateway.version,
+      publicConfigHash: hashPublicValue(project.providers.gateway.publicConfig),
+    },
+    deployment: {
+      provider: "cloudflare",
+      reference: {
+        ...project.deployment.cloudflare,
+        versionId: "version-verified",
+        deploymentId: "deployment-verified",
+        endpoint: manifest.modelAccess.profile.baseUrl,
+      },
+    },
+  };
 }

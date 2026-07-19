@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "providers": {
+    "identity": null,
+    "entitlement": null,
+    "gateway": null
+  },
+  "modelAccess": {
+    "configurationPolicy": "user_configurable"
+  },
+  "deployment": null
+}

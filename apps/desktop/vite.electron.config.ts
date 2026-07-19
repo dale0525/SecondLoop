@@ -38,6 +38,7 @@ export function getElectronBuildConfig(mode: string): UserConfig {
           "node:crypto",
           "node:fs",
           "node:fs/promises",
+          "node:http",
           "node:path",
           "node:stream",
           "node:url",

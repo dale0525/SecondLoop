@@ -9,6 +9,8 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 agent-runtime = { path = "../agent-runtime" }
+entitlement-providers = { path = "../entitlement-providers" }
+identity-oidc = { path = "../identity-oidc" }
 anyhow.workspace = true
 async-trait.workspace = true
 chrono.workspace = true
@@ -16,13 +18,15 @@ hex.workspace = true
 model-gateway = { path = "../model-gateway" }
 serde.workspace = true
 serde_json.workspace = true
+sqlx.workspace = true
+thiserror.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
+url.workspace = true
 uuid.workspace = true
 zeroize.workspace = true
 
 [dev-dependencies]
-sqlx.workspace = true
 tempfile = "3"
 
 [target.'cfg(target_os = "android")'.dependencies]

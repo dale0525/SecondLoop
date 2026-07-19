@@ -2,6 +2,7 @@ import { parseHostDiscovery, type AgentAppHostDiscovery } from "../src/shared/ho
 
 export function hostDiscoveryFixture(
   overrides: {
+    access?: AgentAppHostDiscovery["access"];
     externalSideEffects?: "deny" | "require_approval" | "allow_by_policy";
     features?: string[];
     memoryPersistence?: "disabled" | "local_only" | "configured_provider";
@@ -9,7 +10,7 @@ export function hostDiscoveryFixture(
   } = {},
 ): AgentAppHostDiscovery {
   return parseHostDiscovery({
-    schemaVersion: 1,
+    schemaVersion: 2,
     manifestSha256: "a".repeat(64),
     runtimeVersion: "0.1.0",
     platform: "desktop",
@@ -43,6 +44,20 @@ export function hostDiscoveryFixture(
       backgroundExecution: "disabled",
       memoryPersistence: overrides.memoryPersistence ?? "local_only",
       skillManagement: overrides.skillManagement ?? "runtime_policy",
+    },
+    access: overrides.access ?? {
+      modelAccess: {
+        configurationPolicy: "user_configurable",
+        profile: null,
+      },
+      identity: {
+        mode: "local_single_user",
+        provider: null,
+      },
+      entitlements: {
+        mode: "disabled",
+        provider: null,
+      },
     },
   });
 }

@@ -181,6 +181,7 @@ When reporting a potential security issue, do not include real credentials, mail
 - [Developing Agent Apps](./DEVELOPING_AGENT_APPS.md): Manifests, prompts, Skills, themes, fonts, and release artifacts.
 - [Minimal Agent](./examples/minimal-agent/README.md): the smallest consumer application.
 - [Secretary Agent](./examples/secretary-agent/README.md): a reference app combining Mail, Memory, and an app-private Skill.
+- [Managed Gateway Agent](./examples/managed-gateway-agent/README.md): an app-managed model path with replaceable identity, entitlement, and Cloudflare gateway providers.
 - [Mail Connector Setup](./MAIL_CONNECTOR_SETUP.md): local IMAP/SMTP and Credential Vault configuration.
 - [Local Data Protection and Backup](./DATA_PROTECTION.md): encrypted backup, trusted Desktop key handling, and restart-safe restore.
 - [Repository collaboration rules](./AGENTS.md): architecture boundaries, tooling, coding, and repository-level constraints.

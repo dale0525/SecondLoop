@@ -20,7 +20,7 @@ import { PROJECT_ROOT } from "./scaffold-agent-app.mjs";
 
 const TEST_ROOT = join(PROJECT_ROOT, ".tool");
 
-function fixture() {
+function fixture({ schemaVersion = 2 } = {}) {
   mkdirSync(TEST_ROOT, { recursive: true });
   const root = mkdtempSync(join(TEST_ROOT, "packaged-sidecar-"));
   const bundleRoot = join(root, "Fixture.app");
@@ -32,7 +32,8 @@ function fixture() {
   mkdirSync(join(sidecarPath, ".."), { recursive: true });
   writeFileSync(sidecarPath, "fixture", "utf8");
   chmodSync(sidecarPath, 0o755);
-  writeFileSync(join(appRoot, "agent-app.json"), `${JSON.stringify({
+  const manifest = {
+    schemaVersion,
     appId: "com.example.fixture",
     package: { id: "com.example.fixture.app", version: "1.2.3" },
     requires: {
@@ -41,7 +42,42 @@ function fixture() {
       runtimeTools: ["memory_search", "memory_get"],
     },
     branding: { displayName: "Fixture" },
-  }, null, 2)}\n`, "utf8");
+  };
+  if (schemaVersion === 2) {
+    Object.assign(manifest, {
+      modelAccess: {
+        configurationPolicy: "app_managed",
+        profile: {
+          providerId: "fixture-gateway",
+          endpointType: "responses",
+          baseUrl: "https://gateway.example.test/v1",
+          modelName: "fixture-model",
+          authentication: "user_identity",
+          headers: { "x-fixture": "enabled" },
+        },
+      },
+      identity: {
+        mode: "required",
+        provider: {
+          id: "agentweave.identity.oidc",
+          version: "^1.0.0",
+          publicConfig: {
+            issuer: "https://identity.example.test",
+            clientId: "fixture-client",
+          },
+        },
+      },
+      entitlements: {
+        mode: "required",
+        provider: {
+          id: "agentweave.entitlements.http",
+          version: "1.0.0",
+          publicConfig: { baseUrl: "https://entitlements.example.test" },
+        },
+      },
+    });
+  }
+  writeFileSync(join(appRoot, "agent-app.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
   return { bundleRoot, root };
 }
 
@@ -55,6 +91,9 @@ test("packaged sidecar plan is bound to App resources and manifest identity", ()
     assert.equal(plan.expected.packageId, "com.example.fixture.app");
     assert.equal(plan.expected.displayName, "Fixture");
     assert.deepEqual(plan.expected.capabilities, ["memory-provider", "host-tools"]);
+    assert.equal(plan.expected.access.modelAccess.configurationPolicy, "app_managed");
+    assert.equal(plan.expected.access.identity.provider.id, "agentweave.identity.oidc");
+    assert.equal(plan.expected.access.entitlements.provider.id, "agentweave.entitlements.http");
   } finally {
     rmSync(item.root, { force: true, recursive: true });
   }
@@ -69,9 +108,41 @@ test("packaged discovery must match identity and declared capability sets", () =
     capabilities: ["host-tools", "memory-provider"],
     runtimeTools: ["memory_get", "memory_search"],
     connectors: ["fixture-connector"],
+    access: {
+      modelAccess: {
+        configurationPolicy: "app_managed",
+        profile: {
+          providerId: "fixture-gateway",
+          endpointType: "responses",
+          baseUrl: "https://gateway.example.test/v1",
+          modelName: "fixture-model",
+          authentication: "user_identity",
+          headers: { "x-fixture": "enabled" },
+        },
+      },
+      identity: {
+        mode: "required",
+        provider: {
+          id: "agentweave.identity.oidc",
+          version: "^1.0.0",
+          publicConfig: {
+            issuer: "https://identity.example.test",
+            clientId: "fixture-client",
+          },
+        },
+      },
+      entitlements: {
+        mode: "required",
+        provider: {
+          id: "agentweave.entitlements.http",
+          version: "1.0.0",
+          publicConfig: { baseUrl: "https://entitlements.example.test" },
+        },
+      },
+    },
   };
   const discovery = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     platform: "desktop",
     identity: {
       appId: "com.example.fixture",
@@ -83,6 +154,13 @@ test("packaged discovery must match identity and declared capability sets", () =
       capabilities: ["memory-provider", "host-tools"],
       runtimeTools: ["memory_search", "memory_get"],
       connectors: ["fixture-connector"],
+    },
+    access: {
+      ...expected.access,
+      entitlements: {
+        ...expected.access.entitlements,
+        provider: { ...expected.access.entitlements.provider, version: "^1.0.0" },
+      },
     },
   };
 
@@ -98,6 +176,64 @@ test("packaged discovery must match identity and declared capability sets", () =
     }, expected),
     /capabilities do not match/,
   );
+  assert.throws(
+    () => assertPackagedDiscovery({ ...discovery, schemaVersion: 1 }, expected),
+    /platform contract is invalid/,
+  );
+  assert.throws(
+    () => assertPackagedDiscovery({
+      ...discovery,
+      access: {
+        ...discovery.access,
+        modelAccess: {
+          ...discovery.access.modelAccess,
+          profile: { ...discovery.access.modelAccess.profile, modelName: "wrong-model" },
+        },
+      },
+    }, expected),
+    /access does not match/,
+  );
+  assert.throws(
+    () => assertPackagedDiscovery({
+      ...discovery,
+      access: {
+        ...discovery.access,
+        identity: {
+          ...discovery.access.identity,
+          provider: {
+            ...discovery.access.identity.provider,
+            publicConfig: { issuer: "https://wrong.example.test", clientId: "fixture-client" },
+          },
+        },
+      },
+    }, expected),
+    /access does not match/,
+  );
+  assert.throws(
+    () => assertPackagedDiscovery({
+      ...discovery,
+      access: {
+        ...discovery.access,
+        entitlements: { mode: "disabled", provider: null },
+      },
+    }, expected),
+    /access does not match/,
+  );
+});
+
+test("schema v1 packaged Apps require the safe default access projection", () => {
+  const item = fixture({ schemaVersion: 1 });
+  try {
+    const plan = packagedSidecarPlan(item.bundleRoot);
+
+    assert.deepEqual(plan.expected.access, {
+      modelAccess: { configurationPolicy: "user_configurable", profile: null },
+      identity: { mode: "local_single_user", provider: null },
+      entitlements: { mode: "disabled", provider: null },
+    });
+  } finally {
+    rmSync(item.root, { force: true, recursive: true });
+  }
 });
 
 test("packaged sidecar plan rejects an incomplete App bundle", () => {

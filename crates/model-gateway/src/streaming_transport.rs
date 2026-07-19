@@ -530,6 +530,18 @@ mod tests {
     use std::collections::BTreeMap;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
+    struct StaticGatewayCredential;
+
+    #[async_trait::async_trait]
+    impl crate::responses::GatewayCredentialProvider for StaticGatewayCredential {
+        async fn bearer_token(
+            &self,
+        ) -> Result<crate::responses::GatewayBearerToken, crate::responses::GatewayCredentialError>
+        {
+            crate::responses::GatewayBearerToken::new("identity-assertion-sentinel")
+        }
+    }
+
     #[test]
     fn decoder_preserves_utf8_across_chunks_and_parses_multiple_frames() {
         let mut decoder = SseDecoder::default();
@@ -643,7 +655,20 @@ mod tests {
         let server = tokio::spawn(async move {
             let (mut socket, _) = listener.accept().await.unwrap();
             let mut request = vec![0u8; 16 * 1024];
-            let _ = socket.read(&mut request).await.unwrap();
+            let read = socket.read(&mut request).await.unwrap();
+            let request = String::from_utf8_lossy(&request[..read]).to_ascii_lowercase();
+            let request_id_headers = request
+                .lines()
+                .filter(|line| line.starts_with("x-agentweave-request-id:"))
+                .collect::<Vec<_>>();
+            assert_eq!(request_id_headers.len(), 1);
+            let request_id = request_id_headers[0]
+                .split_once(':')
+                .map(|(_, value)| value.trim())
+                .unwrap();
+            assert!(uuid::Uuid::parse_str(request_id).is_ok());
+            assert!(!request.contains("renderer-controlled-request-id"));
+            assert!(request.contains("authorization: bearer identity-assertion-sentinel"));
             socket
                 .write_all(
                     b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n",
@@ -665,15 +690,21 @@ mod tests {
                 .await
                 .unwrap();
         });
-        let client = GatewayHttpClient::new(ProviderProfile {
-            id: "stream-test".into(),
-            name: "Stream test".into(),
-            endpoint_type: EndpointType::Responses,
-            base_url: format!("http://{address}/v1"),
-            model: "test".into(),
-            api_key: None,
-            headers: BTreeMap::new(),
-        });
+        let client = GatewayHttpClient::with_credential_provider(
+            ProviderProfile {
+                id: "stream-test".into(),
+                name: "Stream test".into(),
+                endpoint_type: EndpointType::Responses,
+                base_url: format!("http://{address}/v1"),
+                model: "test".into(),
+                api_key: None,
+                headers: BTreeMap::from([(
+                    crate::responses::AGENTWEAVE_REQUEST_ID_HEADER.into(),
+                    "renderer-controlled-request-id".into(),
+                )]),
+            },
+            std::sync::Arc::new(StaticGatewayCredential),
+        );
         let mut stream = client
             .stream(GatewayRequest {
                 input: vec![serde_json::json!({ "role": "user", "content": "hello" })],

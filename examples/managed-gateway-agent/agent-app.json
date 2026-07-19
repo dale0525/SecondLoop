@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 2,
+  "appId": "com.example.managed-gateway-agent",
+  "package": {
+    "id": "com.example.managed-gateway-agent.app",
+    "version": "0.1.0"
+  },
+  "compatibility": {
+    "runtime": ">=0.1.0, <0.2.0",
+    "platforms": [
+      "desktop"
+    ]
+  },
+  "requires": {
+    "packages": [],
+    "capabilities": [],
+    "runtimeTools": [],
+    "connectors": []
+  },
+  "features": [],
+  "policy": {
+    "externalSideEffects": "deny",
+    "network": "declared_only",
+    "backgroundExecution": "disabled",
+    "memoryPersistence": "disabled",
+    "skillManagement": "disabled"
+  },
+  "modelAccess": {
+    "configurationPolicy": "app_managed",
+    "profile": {
+      "providerId": "cloudflare-gateway",
+      "endpointType": "responses",
+      "baseUrl": "https://managed-gateway-agent.example.workers.dev/v1",
+      "modelName": "approved-model",
+      "authentication": "user_identity",
+      "headers": {}
+    }
+  },
+  "identity": {
+    "mode": "required",
+    "provider": {
+      "id": "agentweave.identity.oidc",
+      "version": "0.1.0",
+      "publicConfig": {
+        "preset": "generic",
+        "issuer": "https://identity.example.test",
+        "clientId": "managed-gateway-agent",
+        "audience": "https://managed-gateway-agent.example.workers.dev",
+        "scopes": [
+          "openid",
+          "profile",
+          "offline_access"
+        ],
+        "redirectUri": "http://127.0.0.1:8978/agentweave/identity/callback",
+        "gatewayAlgorithm": "RS256",
+        "gatewayDeviceMode": "disabled",
+        "gatewayRequireNbf": false
+      }
+    }
+  },
+  "entitlements": {
+    "mode": "required",
+    "provider": {
+      "id": "agentweave.entitlements.http",
+      "version": "0.1.0",
+      "publicConfig": {
+        "baseUrl": "https://entitlements.example.test",
+        "timeoutMilliseconds": 10000,
+        "maxResponseBytes": 65536
+      }
+    }
+  },
+  "branding": {
+    "displayName": "Managed Gateway Agent",
+    "shortName": "Managed Agent",
+    "description": "Reference Agent App with developer-managed model access through a replaceable identity, entitlement, and gateway stack.",
+    "accentColor": "#2E6B5D"
+  },
+  "instructions": {
+    "system": "prompts/system.md",
+    "developer": "prompts/developer.md",
+    "additional": []
+  }
+}

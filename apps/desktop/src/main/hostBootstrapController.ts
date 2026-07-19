@@ -34,7 +34,7 @@ export function registerHostBootstrapController(
   return () => options.ipcMain.removeHandler(HOST_BOOTSTRAP_LOAD_CHANNEL);
 }
 
-async function loadHostBootstrap(
+export async function loadHostBootstrap(
   options: HostBootstrapControllerOptions,
 ): Promise<AgentAppHostDiscovery> {
   let response: Response;

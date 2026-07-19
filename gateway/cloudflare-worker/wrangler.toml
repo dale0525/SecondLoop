@@ -1,0 +1,131 @@
+name = "agentweave-model-gateway"
+main = "src/index.js"
+compatibility_date = "2025-06-01"
+
+[vars]
+GATEWAY_CONFIG_JSON = '''
+{
+  "schemaVersion": 1,
+  "environment": "production",
+  "deploymentId": "replace-with-deployment-id",
+  "configurationId": "replace-with-configuration-id",
+  "auth": {
+    "mode": "required",
+    "providers": [{
+      "id": "primary-oidc",
+      "kind": "oidc",
+      "issuer": "https://identity.example.com/",
+      "audience": "replace-with-app-audience",
+      "jwksUrl": "https://identity.example.com/.well-known/jwks.json",
+      "algorithm": "RS256",
+      "clockSkewSeconds": 30,
+      "requireNbf": true,
+      "projection": {
+        "subjectClaim": "sub",
+        "tenantClaim": "org_id",
+        "deviceClaim": "device_id",
+        "deviceMode": "required_verified",
+        "rolesClaim": "roles"
+      }
+    }]
+  },
+  "entitlements": {
+    "mode": "static"
+  },
+  "upstream": {
+    "baseUrl": "https://api.openai.com",
+    "allowedBaseUrls": ["https://api.openai.com"],
+    "secretBinding": "UPSTREAM_API_KEY",
+    "secretHeader": "authorization",
+    "secretPrefix": "Bearer ",
+    "requestHeaders": ["accept"],
+    "staticHeaders": {},
+    "responseHeaders": ["content-type", "retry-after"]
+  },
+  "routes": [{
+    "id": "responses",
+    "path": "/v1/responses",
+    "upstreamPath": "/v1/responses",
+    "methods": ["POST"],
+    "models": ["replace-with-allowed-model"],
+    "tokenField": "max_output_tokens",
+    "allowedToolTypes": ["function"],
+    "wireProtocol": "agentweave_responses_v1",
+    "modelUnitWeights": {"replace-with-allowed-model": 1}
+  }],
+  "limits": {
+    "maxBodyBytes": 1048576,
+    "maxOutputTokens": 8192,
+    "maxTools": 64,
+    "reservationTtlSeconds": 900,
+    "requestBaseUnits": 0,
+    "reservationRetentionSeconds": 2592000,
+    "idempotencyRetentionSeconds": 31536000,
+    "maintenanceBatchSize": 250
+  },
+  "bindings": {
+    "entitlements": "ENTITLEMENTS",
+    "concurrency": "CONCURRENCY"
+  },
+  "rateLimit": {
+    "required": true,
+    "deploymentBinding": "GATEWAY_DEPLOYMENT_RATE_LIMITER",
+    "tenantBinding": "GATEWAY_TENANT_RATE_LIMITER",
+    "subjectBinding": "GATEWAY_RATE_LIMITER",
+    "deviceBinding": "GATEWAY_DEVICE_RATE_LIMITER"
+  },
+  "concurrency": {
+    "deploymentLimit": 1000,
+    "tenantLimit": 100,
+    "deviceLimit": 2
+  },
+  "controls": {
+    "modelRequestsEnabled": true
+  }
+}
+'''
+
+[[d1_databases]]
+binding = "ENTITLEMENTS"
+database_name = "agentweave-model-gateway"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
+
+[[durable_objects.bindings]]
+name = "CONCURRENCY"
+class_name = "ConcurrencyLimiter"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ConcurrencyLimiter"]
+
+[[ratelimits]]
+name = "GATEWAY_EDGE_RATE_LIMITER"
+namespace_id = "1001"
+simple = { limit = 120, period = 60 }
+
+[[ratelimits]]
+name = "GATEWAY_DEPLOYMENT_RATE_LIMITER"
+namespace_id = "1002"
+simple = { limit = 1000, period = 60 }
+
+[[ratelimits]]
+name = "GATEWAY_TENANT_RATE_LIMITER"
+namespace_id = "1003"
+simple = { limit = 300, period = 60 }
+
+[[ratelimits]]
+name = "GATEWAY_RATE_LIMITER"
+namespace_id = "1004"
+simple = { limit = 60, period = 60 }
+
+[[ratelimits]]
+name = "GATEWAY_DEVICE_RATE_LIMITER"
+namespace_id = "1005"
+simple = { limit = 30, period = 60 }
+
+[version_metadata]
+binding = "CF_VERSION_METADATA"
+
+[triggers]
+crons = ["*/15 * * * *"]

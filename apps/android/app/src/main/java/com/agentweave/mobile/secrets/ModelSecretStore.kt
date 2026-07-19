@@ -60,8 +60,8 @@ class AndroidKeystoreModelSecretStore internal constructor(
   private val keyProvider: () -> SecretKey,
   private val directorySync: (File) -> Unit,
 ) : ModelSecretStore {
-  constructor(context: Context) : this(
-    directory = File(context.noBackupFilesDir, SECRET_DIRECTORY_NAME),
+  constructor(context: Context, accountId: String? = null) : this(
+    directory = modelSecretDirectory(context, accountId),
     keyProvider = AndroidKeystoreKeyProvider::getOrCreate,
     directorySync = ::syncDirectory,
   )
@@ -208,7 +208,6 @@ class AndroidKeystoreModelSecretStore internal constructor(
   }
 
   private companion object {
-    const val SECRET_DIRECTORY_NAME = "model-secrets"
     const val CIPHER_TRANSFORMATION = "AES/GCM/NoPadding"
     const val GCM_TAG_BITS = 128
     const val MAX_SECRET_BYTES = 16 * 1024
@@ -219,6 +218,12 @@ class AndroidKeystoreModelSecretStore internal constructor(
     val MAGIC = byteArrayOf(0x47, 0x41, 0x4d, 0x53)
     const val FORMAT_VERSION: Byte = 1
   }
+}
+
+private fun modelSecretDirectory(context: Context, accountId: String?): File {
+  if (accountId == null) return File(context.noBackupFilesDir, "model-secrets")
+  require(OPAQUE_ACCOUNT_ID.matches(accountId)) { "model secret account scope is invalid" }
+  return File(context.noBackupFilesDir, "model-secrets-$accountId")
 }
 
 private object AndroidKeystoreKeyProvider {
@@ -266,3 +271,5 @@ private fun requireValidSecretId(secretId: String) {
   require(secretId.isNotBlank()) { "model secret id is required" }
   require(secretId.length <= 256) { "model secret id is too long" }
 }
+
+private val OPAQUE_ACCOUNT_ID = Regex("^usr_[0-9a-f]{64}$")

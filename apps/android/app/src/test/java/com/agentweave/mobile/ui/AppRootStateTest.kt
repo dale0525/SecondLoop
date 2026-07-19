@@ -2,6 +2,10 @@ package com.agentweave.mobile.ui
 
 import com.agentweave.mobile.model.ModelSettings
 import com.agentweave.mobile.runtime.RuntimeMessage
+import com.agentweave.mobile.runtime.RuntimeGatewayCredentialProvider
+import com.agentweave.mobile.runtime.RuntimeGatewayCredential
+import com.agentweave.mobile.runtime.RuntimePrincipalIdentity
+import com.agentweave.mobile.runtime.RuntimeSecurityContext
 import com.agentweave.mobile.runtime.RuntimeModelConfig
 import com.agentweave.mobile.runtime.RuntimeSkill
 import com.agentweave.mobile.secrets.InMemoryModelSecretStore
@@ -86,6 +90,49 @@ class AppRootStateTest {
         hasNewSecret = true,
       ),
     )
+  }
+
+  @Test
+  fun authenticatedAccountsUseDistinctModelSecretReferences() {
+    val accountA = "usr_${"a".repeat(64)}"
+    val accountB = "usr_${"b".repeat(64)}"
+
+    assertEquals(
+      "model.$accountA.openai.default",
+      modelSecretReference("openai", accountA),
+    )
+    assertEquals(
+      "model.$accountB.openai.default",
+      modelSecretReference("openai", accountB),
+    )
+  }
+
+  @Test
+  fun managedModelTurnsUseOnlyTheTransientGatewayAssertion() {
+    val forbiddenStore = object : ModelSecretStore {
+      override fun saveSecret(secretId: String, value: String) = error("not used")
+      override fun loadSecret(secretId: String): String? = error("secret store must not be read")
+      override fun deleteSecret(secretId: String) = error("not used")
+    }
+
+    val credential = resolveTurnCredential(
+      modelConfigurationPolicy = "app_managed",
+      modelConfig = RuntimeModelConfig(
+        providerId = "cloudflare-gateway",
+        providerName = "Cloudflare gateway",
+        endpointType = "responses",
+        baseUrl = "https://gateway.example.test/v1",
+        modelName = "approved-model",
+        secretId = null,
+      ),
+      secretStore = forbiddenStore,
+      gatewayCredentialProvider = RuntimeGatewayCredentialProvider {
+        RuntimeGatewayCredential("  short-lived-assertion  ", gatewaySecurityContext())
+      },
+    )
+
+    assertEquals("short-lived-assertion", credential.bearerToken)
+    assertEquals("account-a", credential.securityContext?.principal?.subject)
   }
 
   @Test
@@ -317,5 +364,19 @@ class AppRootStateTest {
     modelName = "gpt-5.4",
     secretId = "model.openai.default",
     apiKey = apiKey,
+  )
+
+  private fun gatewaySecurityContext() = RuntimeSecurityContext(
+    providerId = "agentweave.identity.oidc",
+    appId = "com.example.managed",
+    tenantId = "local",
+    audience = "https://gateway.example.test",
+    principal = RuntimePrincipalIdentity(
+      issuer = "https://identity.example.test",
+      subject = "account-a",
+    ),
+    grantedScopes = listOf("openid"),
+    authenticatedAt = "2026-07-19T08:00:00Z",
+    expiresAt = "2026-07-19T09:00:00Z",
   )
 }

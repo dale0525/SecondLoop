@@ -6,6 +6,7 @@ import { SettingsDeveloperTools } from "../components/SettingsDeveloperTools";
 import { SettingsModel } from "../components/SettingsModel";
 import { SettingsFoundation } from "../components/SettingsFoundation";
 import { SettingsHostBootstrap } from "../components/SettingsHostBootstrap";
+import { SettingsIdentity } from "../components/SettingsIdentity";
 import { useHostBootstrap } from "../hostBootstrap";
 import { SettingsLanguage } from "../components/SettingsLanguage";
 import { useI18n } from "../i18n/I18nProvider";
@@ -34,6 +35,8 @@ export function Settings({
 }: SettingsProps): JSX.Element {
   const { t } = useI18n();
   const bootstrap = useHostBootstrap();
+  const userCanConfigureModel = bootstrap.status === "unavailable"
+    || bootstrap.discovery?.access.modelAccess.configurationPolicy === "user_configurable";
   return (
     <main className="settings-screen" aria-label={t("settings.title")}>
       <header className="top-bar settings-top-bar">
@@ -47,6 +50,7 @@ export function Settings({
       </header>
       <div className="settings-shell">
         <SettingsHostBootstrap />
+        {bootstrap.discovery?.access.identity.mode === "required" ? <SettingsIdentity /> : null}
         <SettingsAppearance />
         <SettingsLanguage />
         <SettingsFoundation
@@ -55,7 +59,7 @@ export function Settings({
           onOpenActions={onOpenActions}
           onOpenMemory={onOpenMemory}
         />
-        <SettingsModel />
+        {userCanConfigureModel ? <SettingsModel /> : null}
         {bootstrap.features.skillManagement && canInspectOwnerSkills(ownerPolicy) ? (
           <section className="settings-panel" aria-labelledby="settings-owner-title">
             <div className="settings-panel-heading">

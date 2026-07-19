@@ -8,7 +8,7 @@ use agent_runtime::structured_content_error::{StructuredContentError, Structured
 use agent_runtime::structured_content_store::StructuredActionClaim;
 use axum::{
     Json, Router,
-    extract::{Path, State},
+    extract::{Extension, Path, State},
     http::header,
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -59,9 +59,11 @@ pub(crate) enum StructuredActionHostDirective {
 async fn list_structured_content(
     Path(session_id): Path<String>,
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
 ) -> Result<Json<Vec<StructuredContent>>, ApiError> {
     state
-        .structured_content()
+        .structured_content_for(&security)
+        .service()
         .replay(&session_id, StructuredContentAudience::User)
         .await
         .map(Json)
@@ -71,9 +73,10 @@ async fn list_structured_content(
 async fn accept_structured_action(
     Path((session_id, binding_id)): Path<(String, String)>,
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
     Json(request): Json<AcceptStructuredActionRequest>,
 ) -> Result<Response, ApiError> {
-    let service = state.structured_content();
+    let service = state.structured_content_for(&security).service();
     match service
         .claim_action(&session_id, &binding_id, request.input, Utc::now())
         .await
@@ -86,7 +89,7 @@ async fn accept_structured_action(
             }))
         }
         StructuredActionClaim::Execute(execution) => {
-            match execute_action(&state, &execution).await {
+            match execute_action(&state, &security, &execution).await {
                 Ok((result, directive)) => {
                     let receipt = service
                         .complete_action(&execution, result, Utc::now())
@@ -111,23 +114,41 @@ async fn accept_structured_action(
 
 async fn execute_action(
     state: &AppState,
+    security: &crate::identity_api::RequestSecurityContext,
     execution: &StructuredActionExecution,
 ) -> Result<(Value, Option<StructuredActionHostDirective>), ApiError> {
     match execution.intent {
-        StructuredActionIntent::OauthStart => execute_oauth_start(state, execution).await,
-        StructuredActionIntent::OauthStatus => execute_oauth_status(state, execution).await,
-        StructuredActionIntent::OauthCancel => execute_oauth_cancel(state, execution).await,
+        StructuredActionIntent::OauthStart => execute_oauth_start(state, security, execution).await,
+        StructuredActionIntent::OauthStatus => {
+            execute_oauth_status(state, security, execution).await
+        }
+        StructuredActionIntent::OauthCancel => {
+            execute_oauth_cancel(state, security, execution).await
+        }
         StructuredActionIntent::ScheduleCreate => {
-            execute_automation(state, "schedule_create", execution.parameters.clone()).await
+            execute_automation(
+                state,
+                security,
+                "schedule_create",
+                execution.parameters.clone(),
+            )
+            .await
         }
         StructuredActionIntent::ScheduleStatus => {
-            execute_automation(state, "schedule_set_status", execution.parameters.clone()).await
+            execute_automation(
+                state,
+                security,
+                "schedule_set_status",
+                execution.parameters.clone(),
+            )
+            .await
         }
     }
 }
 
 async fn execute_oauth_start(
     state: &AppState,
+    security: &crate::identity_api::RequestSecurityContext,
     execution: &StructuredActionExecution,
 ) -> Result<(Value, Option<StructuredActionHostDirective>), ApiError> {
     let request: OAuthAuthorizationRequest =
@@ -135,7 +156,9 @@ async fn execute_oauth_start(
             .map_err(|_| ApiError::BadRequest("OAuth structured action parameters are invalid"))?;
     validate_oauth_constraints(&execution.constraints, &request)?;
     let start = state
-        .oauth_broker()
+        .oauth_broker_for(security)
+        .await
+        .map_err(ApiError::Internal)?
         .ok_or(ApiError::NotFound("OAuth authorization is disabled"))?
         .start(request, Utc::now())
         .await
@@ -158,13 +181,22 @@ async fn execute_oauth_start(
 
 async fn execute_oauth_status(
     state: &AppState,
+    security: &crate::identity_api::RequestSecurityContext,
     execution: &StructuredActionExecution,
 ) -> Result<(Value, Option<StructuredActionHostDirective>), ApiError> {
     let parameters: OAuthAuthorizationId = serde_json::from_value(execution.parameters.clone())
         .map_err(|_| ApiError::BadRequest("OAuth structured action parameters are invalid"))?;
-    ensure_owned_oauth_authorization(state, execution, &parameters.authorization_id).await?;
+    ensure_owned_oauth_authorization_for_scope(
+        state,
+        security,
+        execution,
+        &parameters.authorization_id,
+    )
+    .await?;
     let view = state
-        .oauth_broker()
+        .oauth_broker_for(security)
+        .await
+        .map_err(ApiError::Internal)?
         .ok_or(ApiError::NotFound("OAuth authorization is disabled"))?
         .status(&parameters.authorization_id)
         .await
@@ -178,13 +210,22 @@ async fn execute_oauth_status(
 
 async fn execute_oauth_cancel(
     state: &AppState,
+    security: &crate::identity_api::RequestSecurityContext,
     execution: &StructuredActionExecution,
 ) -> Result<(Value, Option<StructuredActionHostDirective>), ApiError> {
     let parameters: OAuthAuthorizationId = serde_json::from_value(execution.parameters.clone())
         .map_err(|_| ApiError::BadRequest("OAuth structured action parameters are invalid"))?;
-    ensure_owned_oauth_authorization(state, execution, &parameters.authorization_id).await?;
+    ensure_owned_oauth_authorization_for_scope(
+        state,
+        security,
+        execution,
+        &parameters.authorization_id,
+    )
+    .await?;
     let broker = state
-        .oauth_broker()
+        .oauth_broker_for(security)
+        .await
+        .map_err(ApiError::Internal)?
         .ok_or(ApiError::NotFound("OAuth authorization is disabled"))?;
     let current = broker
         .status(&parameters.authorization_id)
@@ -205,11 +246,13 @@ async fn execute_oauth_cancel(
 
 async fn execute_automation(
     state: &AppState,
+    security: &crate::identity_api::RequestSecurityContext,
     tool_name: &str,
     parameters: Value,
 ) -> Result<(Value, Option<StructuredActionHostDirective>), ApiError> {
     let result = state
-        .automation_tools()
+        .automation_tools_for(security)
+        .map_err(ApiError::Internal)?
         .ok_or(ApiError::NotFound("Automation Foundation is disabled"))?
         .execute(tool_name, parameters)
         .await
@@ -297,13 +340,15 @@ fn validate_oauth_view_constraints(
     Ok(())
 }
 
-async fn ensure_owned_oauth_authorization(
+async fn ensure_owned_oauth_authorization_for_scope(
     state: &AppState,
+    security: &crate::identity_api::RequestSecurityContext,
     execution: &StructuredActionExecution,
     authorization_id: &str,
 ) -> Result<(), ApiError> {
     let owned = state
-        .structured_content()
+        .structured_content_for(security)
+        .service()
         .owns_oauth_authorization(
             &execution.session_id,
             &execution.content_id,
@@ -317,6 +362,16 @@ async fn ensure_owned_oauth_authorization(
         ));
     }
     Ok(())
+}
+
+#[cfg(test)]
+async fn ensure_owned_oauth_authorization(
+    state: &AppState,
+    execution: &StructuredActionExecution,
+    authorization_id: &str,
+) -> Result<(), ApiError> {
+    let security = crate::identity_api::RequestSecurityContext::local(state.conversation_scope());
+    ensure_owned_oauth_authorization_for_scope(state, &security, execution, authorization_id).await
 }
 
 fn no_store_json<T: Serialize>(value: T) -> Response {

@@ -68,8 +68,9 @@ describe("owner principal route gating", () => {
   });
 
   it("uses the authenticated principal for an authorized owner route", async () => {
-    installBridge();
+    const bridge = installBridge();
     render(<App />);
+    await waitFor(() => expect(bridge.principal).toHaveBeenCalledTimes(1));
     await userEvent.click(screen.getByRole("button", { name: "Open settings" }));
     await userEvent.click(await screen.findByRole("button", { name: "Manage skills" }));
     expect(await screen.findByRole("main", { name: "Owner Skills" })).toBeInTheDocument();

@@ -177,22 +177,63 @@ export function prepareAndroidAppAssetsAt(root, {
   rmSync(paths.assetRoot, { recursive: true, force: true });
   mkdirSync(paths.assetRoot, { recursive: true });
   const releaseRoot = join(paths.assetRoot, ".release-staging");
-  packageAgentApp({
-    input,
-    output: releaseRoot,
-    runtimeVersion: "0.1.0",
-    locales,
-    defaultLocale,
-  });
-  copyRegularTree(join(releaseRoot, "app"), paths.packageRoot);
-  copyFileSync(
-    join(releaseRoot, "agent-app.lock.json"),
-    join(paths.assetRoot, "agent-app.lock.json"),
-  );
-  rmSync(releaseRoot, { recursive: true, force: true });
+  try {
+    packageAgentApp({
+      input,
+      output: releaseRoot,
+      runtimeVersion: "0.1.0",
+      locales,
+      defaultLocale,
+    });
+    const packagedRoot = join(releaseRoot, "app");
+    const manifest = JSON.parse(readFileSync(join(packagedRoot, "agent-app.json"), "utf8"));
+    if (!Array.isArray(manifest?.compatibility?.platforms)
+      || !manifest.compatibility.platforms.includes("android")) {
+      throw new Error("Android packaging requires an Agent App that declares the android platform");
+    }
+    validateAndroidIdentityRedirect(manifest);
+    copyRegularTree(packagedRoot, paths.packageRoot);
+    copyFileSync(
+      join(releaseRoot, "agent-app.lock.json"),
+      join(paths.assetRoot, "agent-app.lock.json"),
+    );
+  } finally {
+    rmSync(releaseRoot, { recursive: true, force: true });
+  }
   const contentHash = hashRegularTree(paths.packageRoot);
   writeFileSync(paths.hashFile, `${contentHash}\n`, { encoding: "utf8", mode: 0o600 });
   return { ...paths, contentHash };
+}
+
+export function validateAndroidIdentityRedirect(manifest) {
+  if (manifest?.identity?.mode !== "required") return null;
+  const provider = manifest.identity.provider;
+  if (provider?.id !== "agentweave.identity.oidc") {
+    throw new Error("Android required identity provider is unavailable");
+  }
+  const redirect = provider?.publicConfig?.redirectUri;
+  let url;
+  try {
+    url = new URL(redirect);
+  } catch {
+    throw new Error("Android OIDC redirectUri is invalid");
+  }
+  const scheme = url.protocol.slice(0, -1);
+  if (
+    !scheme.includes(".")
+    || url.host !== ""
+    || url.username !== ""
+    || url.password !== ""
+    || url.pathname === ""
+    || url.pathname === "/"
+    || url.search !== ""
+    || url.hash !== ""
+  ) {
+    throw new Error(
+      "Android OIDC redirectUri must use a private reverse-domain scheme and callback path",
+    );
+  }
+  return scheme;
 }
 
 export function prepareAndroidSkillAssetsAt(root, runBundle) {

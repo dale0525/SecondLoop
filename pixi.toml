@@ -29,7 +29,7 @@ release-macos = "node apps/desktop/scripts/release-macos.mjs"
 package-macos-minimal = "node apps/desktop/scripts/package-macos.mjs --input examples/minimal-agent --output dist/macos/minimal --overwrite"
 package-macos-secretary = "node apps/desktop/scripts/package-macos.mjs --input examples/secretary-agent --output dist/macos/secretary --overwrite"
 store-server-secret = "cargo run -p agent-server --bin store-secret --"
-validate-agent-assets = "node scripts/scaffold-agent-app.mjs --validate catalog/foundation-skills.json && node scripts/scaffold-agent-app.mjs --validate examples/minimal-agent && node scripts/scaffold-agent-app.mjs --validate examples/secretary-agent"
+validate-agent-assets = "node scripts/scaffold-agent-app.mjs --validate catalog/foundation-skills.json && node scripts/scaffold-agent-app.mjs --validate examples/minimal-agent && node scripts/scaffold-agent-app.mjs --validate examples/secretary-agent && node scripts/scaffold-agent-app.mjs --validate examples/managed-gateway-agent"
 
 [dependencies]
 nodejs = ">=22,<23"

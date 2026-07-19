@@ -44,8 +44,33 @@ class AgentAutomationWorker(
   parameters: WorkerParameters,
 ) : CoroutineWorker(appContext, parameters) {
   override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
-    val client = runCatching { RuntimeBridge(applicationContext).load() }
+    val identity = runCatching { MobileIdentityBridge.load(applicationContext) }
       .getOrElse { return@withContext Result.retry() }
+    val identityResolution = try {
+      resolveBackgroundIdentity(identity.status(), identity::refresh)
+    } catch (_: Exception) {
+      runCatching { identity.close() }
+      return@withContext Result.retry()
+    }
+    if (identityResolution == BackgroundIdentityResolution.Skip) {
+      runCatching { identity.close() }
+      return@withContext Result.success()
+    }
+    if (identityResolution == BackgroundIdentityResolution.Retry) {
+      runCatching { identity.close() }
+      return@withContext Result.retry()
+    }
+    val securityContext = (identityResolution as? BackgroundIdentityResolution.Authenticated)
+      ?.securityContext
+    val gatewayProvider = securityContext?.let {
+      RuntimeGatewayCredentialProvider(identity::gatewayCredential)
+    }
+    val client = runCatching {
+      RuntimeBridge(applicationContext).load(securityContext, gatewayProvider)
+    }.getOrElse {
+      runCatching { identity.close() }
+      return@withContext Result.retry()
+    }
     try {
       client.runSchedulerTick()
       if (!notificationsAllowed(applicationContext)) return@withContext Result.success()
@@ -58,6 +83,7 @@ class AgentAutomationWorker(
       Result.retry()
     } finally {
       runCatching { client.close() }
+      runCatching { identity.close() }
     }
   }
 
@@ -92,6 +118,43 @@ class AgentAutomationWorker(
         WORKER_ID,
         failure.message ?: "Android notification delivery failed",
       )
+    }
+  }
+}
+
+internal sealed interface BackgroundIdentityResolution {
+  data object Local : BackgroundIdentityResolution
+  data class Authenticated(
+    val securityContext: RuntimeSecurityContext,
+  ) : BackgroundIdentityResolution
+  data object Skip : BackgroundIdentityResolution
+  data object Retry : BackgroundIdentityResolution
+}
+
+internal fun resolveBackgroundIdentity(
+  initial: MobileIdentityStatus,
+  refresh: () -> MobileIdentityStatus,
+): BackgroundIdentityResolution = when (initial.state) {
+  MobileIdentitySessionState.NotRequired -> BackgroundIdentityResolution.Local
+  MobileIdentitySessionState.SignedIn -> BackgroundIdentityResolution.Authenticated(
+    checkNotNull(initial.securityContext),
+  )
+  MobileIdentitySessionState.SignedOut -> BackgroundIdentityResolution.Skip
+  MobileIdentitySessionState.Unavailable -> BackgroundIdentityResolution.Retry
+  MobileIdentitySessionState.Expired -> try {
+    val refreshed = refresh()
+    if (refreshed.state == MobileIdentitySessionState.SignedIn) {
+      BackgroundIdentityResolution.Authenticated(checkNotNull(refreshed.securityContext))
+    } else if (refreshed.state == MobileIdentitySessionState.Unavailable) {
+      BackgroundIdentityResolution.Retry
+    } else {
+      BackgroundIdentityResolution.Skip
+    }
+  } catch (error: MobileIdentityBridgeException) {
+    if (error.authenticationRequired) {
+      BackgroundIdentityResolution.Skip
+    } else {
+      BackgroundIdentityResolution.Retry
     }
   }
 }

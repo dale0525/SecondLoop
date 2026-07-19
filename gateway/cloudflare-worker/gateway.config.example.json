@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "environment": "production",
+  "deploymentId": "replace-with-deployment-id",
+  "configurationId": "replace-with-configuration-id",
+  "auth": {
+    "mode": "required",
+    "providers": [
+      {
+        "id": "primary-oidc",
+        "kind": "oidc",
+        "issuer": "https://identity.example.com/",
+        "audience": "replace-with-app-audience",
+        "jwksUrl": "https://identity.example.com/.well-known/jwks.json",
+        "algorithm": "RS256",
+        "requireNbf": true,
+        "clockSkewSeconds": 30,
+        "projection": {
+          "subjectClaim": "sub",
+          "tenantClaim": "org_id",
+          "deviceClaim": "device_id",
+          "deviceMode": "required_verified",
+          "rolesClaim": "roles"
+        }
+      }
+    ]
+  },
+  "entitlements": {
+    "mode": "static"
+  },
+  "upstream": {
+    "baseUrl": "https://api.openai.com",
+    "allowedBaseUrls": [
+      "https://api.openai.com"
+    ],
+    "secretBinding": "UPSTREAM_API_KEY",
+    "secretHeader": "authorization",
+    "secretPrefix": "Bearer ",
+    "requestHeaders": [
+      "accept"
+    ],
+    "staticHeaders": {},
+    "responseHeaders": [
+      "content-type",
+      "retry-after"
+    ]
+  },
+  "routes": [
+    {
+      "id": "responses",
+      "path": "/v1/responses",
+      "upstreamPath": "/v1/responses",
+      "methods": [
+        "POST"
+      ],
+      "models": [
+        "replace-with-allowed-model"
+      ],
+      "tokenField": "max_output_tokens",
+      "allowedToolTypes": [
+        "function"
+      ],
+      "wireProtocol": "agentweave_responses_v1",
+      "modelUnitWeights": {
+        "replace-with-allowed-model": 1
+      }
+    }
+  ],
+  "limits": {
+    "maxBodyBytes": 1048576,
+    "maxOutputTokens": 8192,
+    "maxTools": 64,
+    "reservationTtlSeconds": 900,
+    "requestBaseUnits": 0,
+    "reservationRetentionSeconds": 2592000,
+    "idempotencyRetentionSeconds": 31536000,
+    "maintenanceBatchSize": 250
+  },
+  "bindings": {
+    "entitlements": "ENTITLEMENTS",
+    "concurrency": "CONCURRENCY"
+  },
+  "rateLimit": {
+    "required": true,
+    "deploymentBinding": "GATEWAY_DEPLOYMENT_RATE_LIMITER",
+    "tenantBinding": "GATEWAY_TENANT_RATE_LIMITER",
+    "subjectBinding": "GATEWAY_RATE_LIMITER",
+    "deviceBinding": "GATEWAY_DEVICE_RATE_LIMITER"
+  },
+  "concurrency": {
+    "deploymentLimit": 1000,
+    "tenantLimit": 100,
+    "deviceLimit": 2
+  },
+  "controls": {
+    "modelRequestsEnabled": true
+  }
+}

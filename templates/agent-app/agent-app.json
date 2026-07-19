@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "appId": "{{APP_ID}}",
   "package": {
     "id": "{{PACKAGE_ID}}",
@@ -32,6 +32,15 @@
     "backgroundExecution": "disabled",
     "memoryPersistence": "disabled",
     "skillManagement": "disabled"
+  },
+  "modelAccess": {
+    "configurationPolicy": "user_configurable"
+  },
+  "identity": {
+    "mode": "local_single_user"
+  },
+  "entitlements": {
+    "mode": "disabled"
   },
   "branding": {
     "displayName": "{{APP_NAME}}"

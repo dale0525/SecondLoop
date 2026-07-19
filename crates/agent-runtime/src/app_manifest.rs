@@ -1,3 +1,9 @@
+use crate::app_access_manifest::reject_secret_like_fields;
+pub use crate::app_access_manifest::{
+    AgentAppEntitlementConfiguration, AgentAppEntitlementMode, AgentAppIdentityConfiguration,
+    AgentAppIdentityMode, AgentAppModelAccess, AgentAppModelAuthentication,
+    AgentAppModelConfigurationPolicy, AgentAppModelProfile, AgentAppProviderBinding,
+};
 use crate::platform::PlatformId;
 use anyhow::Context;
 use semver::{Version, VersionReq};
@@ -8,7 +14,8 @@ use std::fmt;
 use std::io::ErrorKind;
 use std::path::{Component, Path, PathBuf};
 
-pub const AGENT_APP_MANIFEST_SCHEMA_VERSION: u32 = 1;
+pub const AGENT_APP_MANIFEST_SCHEMA_VERSION: u32 = 2;
+pub const AGENT_APP_MANIFEST_MIN_SCHEMA_VERSION: u32 = 1;
 pub const AGENT_APP_MANIFEST_FILE: &str = "agent-app.json";
 const MAX_REVERSE_DNS_ID_LENGTH: usize = 128;
 const MAX_IDENTIFIER_LENGTH: usize = 128;
@@ -405,6 +412,12 @@ pub struct AgentAppManifest {
     #[serde(default)]
     pub features: BTreeSet<AgentAppIdentifier>,
     pub policy: AgentAppPolicy,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model_access: Option<AgentAppModelAccess>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub identity: Option<AgentAppIdentityConfiguration>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entitlements: Option<AgentAppEntitlementConfiguration>,
     pub branding: AgentAppBranding,
     pub appearance: Option<AgentAppAppearance>,
     pub localization: Option<AgentAppLocalization>,
@@ -424,6 +437,12 @@ struct AgentAppManifestWire {
     #[serde(default)]
     features: BTreeSet<AgentAppIdentifier>,
     policy: AgentAppPolicy,
+    #[serde(default)]
+    model_access: Option<AgentAppModelAccess>,
+    #[serde(default)]
+    identity: Option<AgentAppIdentityConfiguration>,
+    #[serde(default)]
+    entitlements: Option<AgentAppEntitlementConfiguration>,
     branding: AgentAppBranding,
     appearance: Option<AgentAppAppearance>,
     localization: Option<AgentAppLocalization>,
@@ -442,6 +461,9 @@ impl TryFrom<AgentAppManifestWire> for AgentAppManifest {
             requires: wire.requires,
             features: wire.features,
             policy: wire.policy,
+            model_access: wire.model_access,
+            identity: wire.identity,
+            entitlements: wire.entitlements,
             branding: wire.branding,
             appearance: wire.appearance,
             localization: wire.localization,
@@ -566,11 +588,14 @@ impl AgentAppManifest {
 
     fn validate_and_normalize(&mut self) -> anyhow::Result<()> {
         anyhow::ensure!(
-            self.schema_version == AGENT_APP_MANIFEST_SCHEMA_VERSION,
-            "unsupported agent app manifest schema version {}; expected {}",
+            (AGENT_APP_MANIFEST_MIN_SCHEMA_VERSION..=AGENT_APP_MANIFEST_SCHEMA_VERSION)
+                .contains(&self.schema_version),
+            "unsupported agent app manifest schema version {}; expected {} through {}",
             self.schema_version,
+            AGENT_APP_MANIFEST_MIN_SCHEMA_VERSION,
             AGENT_APP_MANIFEST_SCHEMA_VERSION
         );
+        self.validate_access_configuration()?;
         validate_text(
             &self.branding.display_name,
             "branding.displayName",
@@ -948,44 +973,6 @@ fn is_valid_hex_color(value: &str) -> bool {
     matches!(value.len(), 7 | 9)
         && value.starts_with('#')
         && value[1..].bytes().all(|byte| byte.is_ascii_hexdigit())
-}
-
-fn reject_secret_like_fields(value: &serde_json::Value, location: &str) -> anyhow::Result<()> {
-    match value {
-        serde_json::Value::Object(object) => {
-            for (key, child) in object {
-                anyhow::ensure!(
-                    !is_secret_like_field_name(key),
-                    "agent app manifest must not contain credential field {location}.{key}"
-                );
-                reject_secret_like_fields(child, &format!("{location}.{key}"))?;
-            }
-        }
-        serde_json::Value::Array(items) => {
-            for (index, child) in items.iter().enumerate() {
-                reject_secret_like_fields(child, &format!("{location}[{index}]"))?;
-            }
-        }
-        _ => {}
-    }
-    Ok(())
-}
-
-fn is_secret_like_field_name(name: &str) -> bool {
-    let normalized = name
-        .chars()
-        .filter(|character| character.is_ascii_alphanumeric())
-        .flat_map(char::to_lowercase)
-        .collect::<String>();
-    normalized.contains("password")
-        || normalized.contains("secret")
-        || normalized.contains("oauth")
-        || normalized.contains("token")
-        || normalized.contains("credential")
-        || matches!(
-            normalized.as_str(),
-            "apikey" | "accesskey" | "privatekey" | "clientkey"
-        )
 }
 
 impl fmt::Display for AgentAppPlatform {

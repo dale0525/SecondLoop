@@ -94,6 +94,7 @@ test("checked-in template and minimal example validate", () => {
   assert.deepEqual(template.files, [
     "README.md",
     "agent-app.json",
+    "agentweave-project.json",
     "fonts/README.md",
     "locales/README.md",
     "locales/en.json",
@@ -117,6 +118,8 @@ test("scaffold output is deterministic and excludes developer-only defaults", ()
     assert.deepEqual(fileMap(first), fileMap(second));
 
     const manifest = readJson(join(first, "agent-app.json"));
+    const project = readJson(join(first, "agentweave-project.json"));
+    assert.equal(manifest.schemaVersion, 2);
     assert.equal(manifest.appId, "com.example.research-agent");
     assert.equal(manifest.package.id, "com.example.research-agent.app");
     assert.equal(manifest.branding.displayName, "Research Agent");
@@ -133,6 +136,15 @@ test("scaffold output is deterministic and excludes developer-only defaults", ()
     assert.deepEqual(manifest.requires.packages.map((skill) => skill.id), [
       "agentweave.core.filesystem",
     ]);
+    assert.deepEqual(manifest.modelAccess, { configurationPolicy: "user_configurable" });
+    assert.deepEqual(manifest.identity, { mode: "local_single_user" });
+    assert.deepEqual(manifest.entitlements, { mode: "disabled" });
+    assert.deepEqual(project, {
+      schemaVersion: 1,
+      providers: { identity: null, entitlement: null, gateway: null },
+      modelAccess: { configurationPolicy: "user_configurable" },
+      deployment: null,
+    });
     assert.doesNotMatch(JSON.stringify(manifest), /skill-creator|api.?key|password/i);
   } finally {
     rmSync(temp, { recursive: true, force: true });
@@ -238,7 +250,7 @@ test("validation rejects path escape and future schemas", () => {
     scaffoldAgentApp({ name: "Future Agent", appId: "com.example.future-agent", output });
     const manifestPath = join(output, "agent-app.json");
     const manifest = readJson(manifestPath);
-    manifest.schemaVersion = 2;
+    manifest.schemaVersion = 3;
     writeJson(manifestPath, manifest);
     assert.throws(() => validateAgentApp(output), /newer than supported/);
   } finally {

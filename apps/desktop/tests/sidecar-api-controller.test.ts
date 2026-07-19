@@ -6,6 +6,28 @@ import { registerSidecarApiController } from "../src/main/sidecarApiController";
 import { SIDECAR_API_REQUEST_CHANNEL } from "../src/shared/sidecarApi";
 
 describe("trusted sidecar API controller", () => {
+  it("maps the developer provider catalog to its read-only endpoint", async () => {
+    const harness = ipcHarness();
+    const sidecarRequest = vi.fn(async () => new Response("[]"));
+    registerSidecarApiController({
+      ipcMain: harness.ipcMain,
+      openExternal: vi.fn(),
+      requesterWebContents: { id: 42 },
+      sidecarRequest,
+    });
+
+    const result = await harness.invoke(
+      { sender: { id: 42 } },
+      { operation: "devProviders.list" },
+    );
+
+    expect(result).toEqual([]);
+    expect(sidecarRequest).toHaveBeenCalledWith(
+      "/dev/providers",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
   it("maps typed operations to fixed sidecar requests", async () => {
     const harness = ipcHarness();
     const sidecarRequest = vi.fn(async () => new Response(JSON.stringify([{ id: "memory-1" }])));

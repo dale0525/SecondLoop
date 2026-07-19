@@ -1,3 +1,4 @@
+use agent_runtime::identity::SecurityContext;
 use agent_runtime::skill_management::{SkillActionFacts, SkillPackageStatus};
 use agent_runtime::skill_policy::{ActorContext, SkillManagementPolicy};
 use serde::{Deserialize, Serialize};
@@ -20,6 +21,8 @@ pub struct MobileInitConfig {
     pub actor_context: ActorContext,
     pub platform: String,
     pub capabilities: Vec<String>,
+    #[serde(default)]
+    pub security_context: Option<SecurityContext>,
     #[serde(default, skip_serializing)]
     pub storage_protection_key_hex: Option<String>,
 }
@@ -40,6 +43,10 @@ impl fmt::Debug for MobileInitConfig {
             .field("actor_context", &self.actor_context)
             .field("platform", &self.platform)
             .field("capabilities", &self.capabilities)
+            .field(
+                "security_context_configured",
+                &self.security_context.is_some(),
+            )
             .field(
                 "storage_protection_key_configured",
                 &self.storage_protection_key_hex.is_some(),
@@ -67,6 +74,9 @@ pub struct MobileDiagnostics {
     pub storage_protection_state: String,
     pub skills_ready: bool,
     pub model_configured: bool,
+    pub model_configuration_policy: String,
+    pub identity_mode: String,
+    pub account_id: Option<String>,
     pub skill_management_mode: String,
     pub active_snapshot_generation: u64,
     pub quarantined_count: usize,

@@ -17,11 +17,34 @@ import {
   resolveConfinedPath,
   validateAgentApp,
 } from "./scaffold-agent-app.mjs";
+import {
+  AGENTWEAVE_PROJECT_FILE,
+  hashPublicValue,
+  runtimeProviderProjection,
+  validateAgentWeaveProjectWorkspace,
+} from "./agentweave-project.mjs";
 
 export const AGENT_APP_LOCK_SCHEMA_VERSION = 1;
 const DEFAULT_RUNTIME_VERSION = "0.1.0";
 const LOCK_FILE = "agent-app.lock.json";
 const FORBIDDEN_RELEASE_FILE = /(^|\/)(\.env(?:\..*)?|.*\.(?:key|p12|pem|pfx)|credentials?\.json|secrets?\.json)$/i;
+const DEVELOPER_ONLY_DIRECTORIES = new Set([".agentweave", ".git", ".github", ".idea", ".vscode"]);
+const DEVELOPER_ONLY_FILES = new Set([
+  AGENTWEAVE_PROJECT_FILE,
+  "AGENTS.md",
+  ".editorconfig",
+  ".gitattributes",
+  ".gitignore",
+]);
+const ARTIFACT_SECRET_PATTERNS = [
+  ["private key", /-----BEGIN (?:EC |OPENSSH |RSA )?PRIVATE KEY-----/],
+  ["bearer authorization", /\bAuthorization\s*[:=]\s*Bearer\s+[A-Za-z0-9._~+/-]{12,}={0,2}\b/i],
+  ["OpenAI-style key", /\bsk[-_][A-Za-z0-9_-]{16,}\b/],
+  ["GitHub token", /\bgh[pousr]_[A-Za-z0-9]{20,}\b/],
+  ["Slack token", /\bxox[baprs]-[A-Za-z0-9-]{16,}\b/],
+  ["AWS access key", /\bAKIA[0-9A-Z]{16}\b/],
+];
+const CREDENTIAL_ASSIGNMENT_PATTERN = /(?:^|[\r\n,{]\s*)["']?([A-Za-z0-9_.-]*(?:api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|password|credential|secret)[A-Za-z0-9_.-]*)["']?\s*[:=]\s*(?:"([^"\r\n]+)"|'([^'\r\n]+)'|([^\s,}\]#]+))/gim;
 
 function fail(message) {
   throw new Error(message);
@@ -29,6 +52,52 @@ function fail(message) {
 
 function normalized(path) {
   return path.split(sep).join("/");
+}
+
+function isDeveloperOnlyReleasePath(path) {
+  const segments = normalized(path).split("/");
+  return segments.some((segment) => DEVELOPER_ONLY_DIRECTORIES.has(segment))
+    || DEVELOPER_ONLY_FILES.has(segments.at(-1));
+}
+
+function isCredentialPlaceholder(value) {
+  const normalizedValue = value.trim().replaceAll(/^["']|["';]$/g, "").toLowerCase();
+  return normalizedValue === ""
+    || ["null", "none", "undefined", "string", "redacted", "masked", "placeholder"].includes(normalizedValue)
+    || normalizedValue.startsWith("${")
+    || normalizedValue.startsWith("{{")
+    || normalizedValue.startsWith("<")
+    || normalizedValue.startsWith("your-")
+    || normalizedValue.startsWith("your_")
+    || normalizedValue.startsWith("replace-")
+    || normalizedValue.startsWith("replace_");
+}
+
+function isCredentialValueField(value) {
+  const normalizedValue = value.toLowerCase().replaceAll(/[^a-z0-9]/g, "");
+  if (["id", "name", "reference", "scope", "slot", "type"].some((suffix) => normalizedValue.endsWith(suffix))) {
+    return false;
+  }
+  return normalizedValue.includes("apikey")
+    || normalizedValue.includes("accesstoken")
+    || normalizedValue.includes("refreshtoken")
+    || normalizedValue.includes("clientsecret")
+    || normalizedValue.includes("password")
+    || ["credential", "credentials", "credentialdata", "credentialvalue", "secret", "secrets", "secretvalue"].includes(normalizedValue);
+}
+
+function scanCredentialMarkers(bytes, path) {
+  const content = Buffer.isBuffer(bytes) ? bytes.toString("utf8") : String(bytes);
+  for (const [label, pattern] of ARTIFACT_SECRET_PATTERNS) {
+    if (pattern.test(content)) fail(`release artifact contains ${label} credential marker in '${path}'`);
+  }
+  CREDENTIAL_ASSIGNMENT_PATTERN.lastIndex = 0;
+  for (const match of content.matchAll(CREDENTIAL_ASSIGNMENT_PATTERN)) {
+    const value = match[2] ?? match[3] ?? match[4] ?? "";
+    if (isCredentialValueField(match[1]) && !isCredentialPlaceholder(value)) {
+      fail(`release artifact contains credential assignment marker '${match[1]}' in '${path}'`);
+    }
+  }
 }
 
 function requireSemver(value, label) {
@@ -53,8 +122,14 @@ function listRegularFiles(root, prefix = "") {
   return files.sort((left, right) => normalized(left).localeCompare(normalized(right)));
 }
 
-function inspectTree(root, { excluded = new Set(), overrides = new Map() } = {}) {
-  const files = listRegularFiles(root).filter((path) => !excluded.has(normalized(path)));
+function inspectTree(
+  root,
+  { excluded = new Set(), excludeDeveloperFiles = false, overrides = new Map() } = {},
+) {
+  const files = listRegularFiles(root).filter((path) => {
+    const portable = normalized(path);
+    return !excluded.has(portable) && !(excludeDeveloperFiles && isDeveloperOnlyReleasePath(portable));
+  });
   if (files.length === 0) fail(`release input '${root}' is empty`);
   const digest = createHash("sha256");
   for (const path of files) {
@@ -63,6 +138,7 @@ function inspectTree(root, { excluded = new Set(), overrides = new Map() } = {})
       fail(`release input contains forbidden credential file '${portable}'`);
     }
     const bytes = overrides.get(portable) ?? readFileSync(join(root, path));
+    scanCredentialMarkers(bytes, portable);
     digest.update(portable, "utf8");
     digest.update("\0", "utf8");
     digest.update(String(bytes.length), "ascii");
@@ -147,7 +223,7 @@ function requestedLocales(value) {
 function localizedAppInspection(appRoot, app, locales, defaultLocale) {
   const selectedIds = requestedLocales(locales);
   if (!selectedIds && !defaultLocale) {
-    return { app, inspection: inspectTree(appRoot) };
+    return { app, inspection: inspectTree(appRoot, { excludeDeveloperFiles: true }) };
   }
   if (!app.localization) fail("Agent App does not declare localization resources");
   const byId = new Map(app.localization.locales.map((entry) => [entry.id, entry]));
@@ -175,7 +251,7 @@ function localizedAppInspection(appRoot, app, locales, defaultLocale) {
   const overrides = new Map([["agent-app.json", manifestBytes]]);
   return {
     app: packagedApp,
-    inspection: inspectTree(appRoot, { excluded, overrides }),
+    inspection: inspectTree(appRoot, { excluded, excludeDeveloperFiles: true, overrides }),
   };
 }
 
@@ -189,12 +265,16 @@ export function packageAgentApp({
   requireSemver(runtimeVersion, "runtime version");
   const appRoot = resolveConfinedPath(PROJECT_ROOT, input, "Agent App input");
   const { app: sourceApp, catalog } = validateAgentApp(appRoot);
+  validateAgentWeaveProjectWorkspace(appRoot, {
+    app: sourceApp,
+    requireDeploymentLock: sourceApp.modelAccess?.configurationPolicy === "app_managed",
+  });
   const localized = localizedAppInspection(appRoot, sourceApp, locales, defaultLocale);
   const app = localized.app;
   const appInspection = localized.inspection;
   const packages = selectedPackageSources(appRoot, app, catalog)
     .map((source) => {
-      const inspection = inspectTree(source.root);
+      const inspection = inspectTree(source.root, { excludeDeveloperFiles: true });
       const manifest = readJson(join(source.root, "agentweave.json"), `${source.id} package manifest`);
       if (manifest.id !== source.id) fail(`${source.id} package source has mismatched identity`);
       return {
@@ -239,9 +319,15 @@ export function packageAgentApp({
       defaultLocale: app.localization.defaultLocale,
       locales: app.localization.locales.map((entry) => entry.id),
     } : null,
+    publicProviderProjection: {
+      manifestSchemaVersion: app.schemaVersion,
+      value: runtimeProviderProjection(app),
+      contentHash: hashPublicValue(runtimeProviderProjection(app)),
+    },
   };
   mkdirSync(outputRoot, { recursive: true });
   copyInspectedTree(appRoot, appInspection, join(outputRoot, "app"));
+  mkdirSync(join(outputRoot, "packages"), { recursive: true });
   for (const entry of packages) {
     copyInspectedTree(entry.root, entry.inspection, join(outputRoot, "packages", entry.id));
   }
@@ -257,6 +343,41 @@ function requireReleasePath(root, value, label) {
   return resolveConfinedPath(root, value, label);
 }
 
+function validateArtifactInventory(root) {
+  for (const path of listRegularFiles(root)) {
+    const portable = normalized(path);
+    if (isDeveloperOnlyReleasePath(portable)) {
+      fail(`release artifact contains developer-only file '${portable}'`);
+    }
+    scanCredentialMarkers(readFileSync(join(root, path)), portable);
+  }
+}
+
+function validatePublicProviderProjectionLock(value, app) {
+  if (value === undefined) {
+    if (app.schemaVersion === 1) return;
+    fail("Agent App lock is missing the public provider projection");
+  }
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    fail("locked public provider projection must be an object");
+  }
+  for (const key of Object.keys(value)) {
+    if (!["manifestSchemaVersion", "value", "contentHash"].includes(key)) {
+      fail(`locked public provider projection contains unknown field '${key}'`);
+    }
+  }
+  if (value.manifestSchemaVersion !== app.schemaVersion) {
+    fail("locked public provider projection schema does not match packaged manifest");
+  }
+  const expected = runtimeProviderProjection(app);
+  if (
+    value.contentHash !== hashPublicValue(value.value)
+    || value.contentHash !== hashPublicValue(expected)
+  ) {
+    fail("locked public provider projection does not match packaged manifest");
+  }
+}
+
 export function validateAgentAppRelease(input) {
   const releaseRoot = resolveConfinedPath(PROJECT_ROOT, input, "release artifact");
   if (!existsSync(releaseRoot) || !statSync(releaseRoot).isDirectory()) {
@@ -266,13 +387,14 @@ export function validateAgentAppRelease(input) {
   if (JSON.stringify(topLevel) !== JSON.stringify([LOCK_FILE, "app", "packages"])) {
     fail("release artifact contains an unexpected top-level entry");
   }
+  validateArtifactInventory(releaseRoot);
   const lock = readJson(join(releaseRoot, LOCK_FILE), "Agent App lock");
   if (lock.schemaVersion !== AGENT_APP_LOCK_SCHEMA_VERSION) {
     fail(`unsupported Agent App lock schema version '${lock.schemaVersion}'`);
   }
   requireSemver(lock.runtime?.packagedWithVersion, "locked runtime version");
   const appRoot = requireReleasePath(releaseRoot, lock.app?.path, "locked App path");
-  const { app } = validateAgentApp(appRoot);
+  const { app } = validateAgentApp(appRoot, { validateProject: false });
   if (app.appId !== lock.app.appId || app.package.id !== lock.app.packageId || app.package.version !== lock.app.version) {
     fail("locked App identity does not match packaged manifest");
   }
@@ -283,6 +405,7 @@ export function validateAgentAppRelease(input) {
   if (JSON.stringify(lockedLocalization) !== JSON.stringify(lock.localization ?? null)) {
     fail("locked App localization does not match packaged manifest");
   }
+  validatePublicProviderProjectionLock(lock.publicProviderProjection, app);
   if (inspectTree(appRoot).contentHash !== lock.app.contentHash) fail("packaged App content hash mismatch");
   const expectedIds = app.requires.packages.map((entry) => entry.id).sort();
   const lockedIds = lock.packages.map((entry) => entry.id).sort();

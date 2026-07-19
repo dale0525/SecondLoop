@@ -51,7 +51,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.agentweave.mobile.runtime.RuntimeClient
 import com.agentweave.mobile.runtime.RuntimeDiagnostics
+import com.agentweave.mobile.runtime.RuntimeGatewayCredentialProvider
 import com.agentweave.mobile.runtime.RuntimeMessage
+import com.agentweave.mobile.runtime.RuntimeModelConfig
 import com.agentweave.mobile.secrets.ModelSecretStore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -77,6 +79,11 @@ private data class ChatSendResult(
   val turnError: Exception?,
   val refreshError: Exception?,
   val userPersisted: Boolean,
+)
+
+data class ResolvedTurnCredential(
+  val bearerToken: String?,
+  val securityContext: com.agentweave.mobile.runtime.RuntimeSecurityContext? = null,
 )
 
 class RuntimeTurnGate {
@@ -149,6 +156,24 @@ fun chatMessagesForDisplay(
       message.content == pendingUserMessage.content
   }
   return if (pendingPersisted) messages else messages + pendingUserMessage
+}
+
+fun resolveTurnCredential(
+  modelConfigurationPolicy: String,
+  modelConfig: RuntimeModelConfig?,
+  secretStore: ModelSecretStore,
+  gatewayCredentialProvider: RuntimeGatewayCredentialProvider?,
+): ResolvedTurnCredential = when (modelConfigurationPolicy) {
+  "user_configurable" -> ResolvedTurnCredential(
+    modelConfig?.secretId?.let(secretStore::loadSecret),
+  )
+  "app_managed" -> gatewayCredentialProvider?.credential()?.let { credential ->
+    ResolvedTurnCredential(
+      bearerToken = credential.bearerToken.trim().takeIf(String::isNotEmpty),
+      securityContext = credential.securityContext,
+    )
+  } ?: ResolvedTurnCredential(null)
+  else -> throw IllegalStateException("Unsupported model configuration policy")
 }
 
 class RuntimeSettingsGate {
@@ -249,16 +274,23 @@ fun ChatScreen(
       turnGate.launch {
         var sendAttempted = false
         try {
-          val apiKey = withContext(Dispatchers.IO) {
+          val credential = withContext(Dispatchers.IO) {
             val config = runtimeClient.loadModelConfig()
-            config?.secretId?.let(secretStore::loadSecret)
+            resolveTurnCredential(
+              modelConfigurationPolicy = diagnostics.modelConfigurationPolicy,
+              modelConfig = config,
+              secretStore = secretStore,
+              gatewayCredentialProvider = runtimeClient.gatewayCredentialProvider,
+            ).also { prepared ->
+              prepared.securityContext?.let(runtimeClient::refreshSecurityContext)
+            }
           }
           turnGate.updateDraft("")
           sendAttempted = true
           val result = withContext(Dispatchers.IO) {
             var turnError: Exception? = null
             try {
-              runtimeClient.sendMessage(sessionId, content, apiKey)
+              runtimeClient.sendMessage(sessionId, content, credential.bearerToken)
             } catch (cancelled: CancellationException) {
               throw cancelled
             } catch (error: Exception) {

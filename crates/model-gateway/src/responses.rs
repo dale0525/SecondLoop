@@ -6,7 +6,15 @@ use crate::{
 use futures::{Stream, stream};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::{Value, json};
-use std::pin::Pin;
+use std::time::Duration;
+use std::{fmt, pin::Pin, sync::Arc};
+use uuid::Uuid;
+
+pub use crate::credentials::{
+    GatewayBearerToken, GatewayCredentialError, GatewayCredentialProvider,
+};
+
+pub const AGENTWEAVE_REQUEST_ID_HEADER: &str = "x-agentweave-request-id";
 
 pub type GatewayEventStream = Pin<Box<dyn Stream<Item = anyhow::Result<GatewayEvent>> + Send>>;
 
@@ -135,18 +143,47 @@ pub enum GatewayEvent {
     },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct GatewayHttpClient {
     profile: ProviderProfile,
     client: reqwest::Client,
+    credential_provider: Option<Arc<dyn GatewayCredentialProvider>>,
+}
+
+impl fmt::Debug for GatewayHttpClient {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("GatewayHttpClient")
+            .field("profile", &self.profile)
+            .field(
+                "credential_provider",
+                &self.credential_provider.as_ref().map(|_| "[HOST-OWNED]"),
+            )
+            .finish_non_exhaustive()
+    }
 }
 
 impl GatewayHttpClient {
     pub fn new(profile: ProviderProfile) -> Self {
         Self {
             profile,
-            client: reqwest::Client::new(),
+            client: reqwest::Client::builder()
+                .redirect(reqwest::redirect::Policy::none())
+                .connect_timeout(Duration::from_secs(10))
+                .timeout(Duration::from_secs(120))
+                .build()
+                .expect("static model gateway HTTP client configuration must be valid"),
+            credential_provider: None,
         }
+    }
+
+    pub fn with_credential_provider(
+        profile: ProviderProfile,
+        credential_provider: Arc<dyn GatewayCredentialProvider>,
+    ) -> Self {
+        let mut client = Self::new(profile);
+        client.credential_provider = Some(credential_provider);
+        client
     }
 
     pub async fn stream(&self, request: GatewayRequest) -> anyhow::Result<GatewayEventStream> {
@@ -155,23 +192,38 @@ impl GatewayHttpClient {
         let body = gateway_request_body_with_tool_map(&self.profile, request, &tool_map)?;
         let mut builder = self.client.post(self.profile.endpoint_url()).json(&body);
 
-        if let Some(api_key) = &self.profile.api_key
+        let dynamic_credential = match &self.credential_provider {
+            Some(provider) => Some(provider.bearer_token().await?),
+            None => None,
+        };
+        if dynamic_credential.is_some() && self.profile.api_key.is_some() {
+            anyhow::bail!("gateway credential sources are ambiguous");
+        }
+        if let Some(token) = dynamic_credential.as_ref() {
+            builder = builder.bearer_auth(token.expose());
+        } else if let Some(api_key) = &self.profile.api_key
             && !api_key.trim().is_empty()
         {
             builder = builder.bearer_auth(api_key);
         }
         for (name, value) in &self.profile.headers {
+            if name.eq_ignore_ascii_case(AGENTWEAVE_REQUEST_ID_HEADER) {
+                continue;
+            }
             builder = builder.header(name, value);
         }
+        // One invocation of `stream` is one logical model step. Reqwest does not automatically
+        // retry mutations, so this key remains stable for the complete HTTP exchange while every
+        // tool-loop step receives a fresh value.
+        builder = builder.header(
+            AGENTWEAVE_REQUEST_ID_HEADER,
+            Uuid::new_v4().hyphenated().to_string(),
+        );
 
         let response = builder.send().await?;
         let status = response.status();
         if !status.is_success() {
-            let url = response.url().to_string();
-            let body = response.text().await.unwrap_or_else(|error| {
-                format!("<failed to read upstream response body: {error}>")
-            });
-            anyhow::bail!("{}", upstream_error_message(status, &url, &body));
+            anyhow::bail!("{}", upstream_error_message(status));
         }
 
         if crate::streaming_transport::is_event_stream(&response) {
@@ -379,10 +431,8 @@ fn response_tool_output(output: Option<&Value>) -> String {
     }
 }
 
-fn upstream_error_message(status: reqwest::StatusCode, url: &str, body: &str) -> String {
-    let body = body.trim();
-    let body = if body.is_empty() { "<empty>" } else { body };
-    format!("upstream model request failed: {status} for url ({url}); body: {body}")
+fn upstream_error_message(status: reqwest::StatusCode) -> String {
+    format!("upstream model request failed: {status}")
 }
 
 pub fn parse_gateway_response(
@@ -886,17 +936,13 @@ mod tests {
     }
 
     #[test]
-    fn upstream_error_message_includes_status_url_and_body() {
-        let message = upstream_error_message(
-            reqwest::StatusCode::BAD_REQUEST,
-            "https://api.portkey.ai/v1/chat/completions",
-            "{\"error\":{\"message\":\"invalid model\"}}",
-        );
+    fn upstream_error_message_exposes_only_the_status() {
+        let message = upstream_error_message(reqwest::StatusCode::BAD_REQUEST);
 
         assert!(message.contains("upstream model request failed"));
         assert!(message.contains("400 Bad Request"));
-        assert!(message.contains("https://api.portkey.ai/v1/chat/completions"));
-        assert!(message.contains("invalid model"));
+        assert!(!message.contains("portkey"));
+        assert!(!message.contains("invalid model"));
     }
 
     #[test]

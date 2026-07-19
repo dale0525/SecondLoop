@@ -1,5 +1,36 @@
 package com.agentweave.mobile.runtime
 
+data class RuntimePrincipalIdentity(
+  val issuer: String,
+  val subject: String,
+)
+
+/**
+ * Verified, non-secret identity facts supplied by the Android identity plugin.
+ * Bearer and refresh tokens deliberately have no representation here.
+ */
+data class RuntimeSecurityContext(
+  val schemaVersion: Int = 1,
+  val providerId: String,
+  val appId: String,
+  val tenantId: String,
+  val audience: String,
+  val principal: RuntimePrincipalIdentity,
+  val grantedScopes: List<String>,
+  val authenticatedAt: String,
+  val expiresAt: String,
+)
+
+data class RuntimeGatewayCredential(
+  val bearerToken: String,
+  val securityContext: RuntimeSecurityContext,
+)
+
+fun interface RuntimeGatewayCredentialProvider {
+  /** Returns a current short-lived assertion and its verified non-secret context. */
+  fun credential(): RuntimeGatewayCredential
+}
+
 data class RuntimeInitRequest(
   val appDataDir: String,
   val appPackageDir: String? = null,
@@ -13,6 +44,7 @@ data class RuntimeInitRequest(
   val actorContext: RuntimeActorContext,
   val platform: String = "android",
   val capabilities: List<String> = androidMvpCapabilities(),
+  val securityContext: RuntimeSecurityContext? = null,
 )
 
 data class RuntimeSkillPolicy(
@@ -45,6 +77,9 @@ data class RuntimeDiagnostics(
   val activeSnapshotGeneration: Long,
   val quarantinedCount: Int,
   val lastReloadStatus: String,
+  val modelConfigurationPolicy: String = "user_configurable",
+  val identityMode: String = "local_single_user",
+  val accountId: String? = null,
 )
 
 data class RuntimeSession(

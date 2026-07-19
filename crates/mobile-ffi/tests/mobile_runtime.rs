@@ -1,3 +1,6 @@
+use agent_runtime::identity::{
+    PrincipalIdentity, SECURITY_CONTEXT_SCHEMA_VERSION, SecurityContext,
+};
 use agent_runtime::platform::PlatformId;
 use agent_runtime::skill_bundle::{BuildSkillBundleRequest, build_skill_bundle};
 use agent_runtime::skill_management::{CreateSkillDraftRequest, DraftFileUpdate};
@@ -5,7 +8,9 @@ use agent_runtime::skill_package::{SkillPackageId, SkillPackageKind};
 use agent_runtime::skill_policy::{ActorContext, SkillGrant, SkillManagementPolicy};
 use agent_runtime::skill_state::{NewSkillRevision, SkillStateStore};
 use agent_runtime::storage::Storage;
-use mobile_ffi::{MobileInitConfig, MobileRuntime};
+use chrono::{Duration as ChronoDuration, Utc};
+use mobile_ffi::{MobileInitConfig, MobileModelConfigDto, MobileRuntime};
+use std::collections::BTreeSet;
 use tempfile::tempdir;
 
 fn android_config(root: &std::path::Path) -> MobileInitConfig {
@@ -52,8 +57,103 @@ fn mobile_config(root: &std::path::Path) -> MobileInitConfig {
             "secure_storage".into(),
             "model.http_provider".into(),
         ],
+        security_context: None,
         storage_protection_key_hex: None,
     }
+}
+
+fn managed_mobile_config(root: &std::path::Path, subject: &str) -> MobileInitConfig {
+    let mut config = android_config(root);
+    let app_root = root.join("files/managed-app");
+    write_managed_app(&app_root);
+    config.app_package_dir = Some(app_root.display().to_string());
+    config.security_context = Some(security_context(subject));
+    config
+}
+
+fn security_context(subject: &str) -> SecurityContext {
+    SecurityContext {
+        schema_version: SECURITY_CONTEXT_SCHEMA_VERSION,
+        provider_id: identity_oidc::OIDC_IDENTITY_PROVIDER_ID.into(),
+        app_id: "com.example.mobile-managed".into(),
+        tenant_id: "tenant-main".into(),
+        audience: "https://gateway.example.test".into(),
+        principal: PrincipalIdentity {
+            issuer: "https://identity.example.test".into(),
+            subject: subject.into(),
+        },
+        granted_scopes: BTreeSet::from(["openid".into(), "profile".into()]),
+        authenticated_at: Utc::now() - ChronoDuration::minutes(5),
+        expires_at: Utc::now() + ChronoDuration::hours(1),
+    }
+}
+
+fn write_managed_app(root: &std::path::Path) {
+    std::fs::create_dir_all(root.join("prompts")).unwrap();
+    std::fs::write(
+        root.join("prompts/system.md"),
+        "You are a bounded mobile agent.\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("agent-app.json"),
+        serde_json::to_vec_pretty(&serde_json::json!({
+            "schemaVersion": 2,
+            "appId": "com.example.mobile-managed",
+            "package": {"id": "com.example.mobile-managed.app", "version": "0.1.0"},
+            "compatibility": {
+                "runtime": ">=0.1.0, <0.2.0",
+                "platforms": ["android"]
+            },
+            "requires": {"packages": [], "capabilities": [], "runtimeTools": [], "connectors": []},
+            "features": [],
+            "policy": {
+                "externalSideEffects": "deny",
+                "network": "declared_only",
+                "backgroundExecution": "disabled",
+                "memoryPersistence": "disabled",
+                "skillManagement": "disabled"
+            },
+            "modelAccess": {
+                "configurationPolicy": "app_managed",
+                "profile": {
+                    "providerId": "cloudflare-gateway",
+                    "endpointType": "responses",
+                    "baseUrl": "https://gateway.example.test/v1",
+                    "modelName": "approved-model",
+                    "authentication": "user_identity",
+                    "headers": {}
+                }
+            },
+            "identity": {
+                "mode": "required",
+                "provider": {
+                    "id": "agentweave.identity.oidc",
+                    "version": "=0.1.0",
+                    "publicConfig": {
+                        "preset": "generic",
+                        "issuer": "https://identity.example.test",
+                        "clientId": "mobile-public-client",
+                        "audience": "https://gateway.example.test",
+                        "scopes": ["openid", "profile"],
+                        "redirectUri": "com.example.mobile-managed:/oidc/callback"
+                    }
+                }
+            },
+            "entitlements": {
+                "mode": "required",
+                "provider": {
+                    "id": "agentweave.entitlements.http",
+                    "version": "=0.1.0",
+                    "publicConfig": {"baseUrl": "https://entitlements.example.test"}
+                }
+            },
+            "branding": {"displayName": "Managed Mobile"},
+            "instructions": {"system": "prompts/system.md"}
+        }))
+        .unwrap(),
+    )
+    .unwrap();
 }
 
 fn write_instruction_package(
@@ -101,6 +201,170 @@ fn initializes_runtime_and_returns_android_capabilities() {
     assert!(diagnostics.capabilities.contains(&"network.http".into()));
     assert!(diagnostics.database_ready);
     assert_eq!(diagnostics.storage_protection_state, "not_provided");
+}
+
+#[test]
+fn managed_mobile_identity_is_required_and_partitions_all_runtime_storage() {
+    let dir = tempdir().unwrap();
+    let missing = {
+        let mut config = managed_mobile_config(dir.path(), "account-a");
+        config.security_context = None;
+        config
+    };
+    let error = MobileRuntime::initialize(missing).err().unwrap();
+    assert!(
+        error
+            .to_string()
+            .contains("authenticated mobile identity is required"),
+        "unexpected initialization error: {error:#}"
+    );
+
+    let account_a =
+        MobileRuntime::initialize(managed_mobile_config(dir.path(), "account-a")).unwrap();
+    let a_diagnostics = account_a.diagnostics().unwrap();
+    assert_eq!(a_diagnostics.identity_mode, "required");
+    assert_eq!(a_diagnostics.model_configuration_policy, "app_managed");
+    assert!(a_diagnostics.model_configured);
+    assert!(
+        a_diagnostics
+            .account_id
+            .as_deref()
+            .unwrap()
+            .starts_with("usr_")
+    );
+    assert_eq!(
+        a_diagnostics.account_id.as_deref(),
+        Some("usr_e96830780c9c742d7043da4937a107ecc16cf37c7f834b13da72c8cb699030ed")
+    );
+    account_a.create_session("Account A only").unwrap();
+    assert!(
+        account_a
+            .save_model_config(MobileModelConfigDto {
+                provider_id: "attacker".into(),
+                provider_name: "Attacker".into(),
+                endpoint_type: "responses".into(),
+                base_url: "https://attacker.example".into(),
+                model_name: "attacker-model".into(),
+                secret_id: Some("attacker.secret".into()),
+                headers: Default::default(),
+            })
+            .unwrap_err()
+            .to_string()
+            .contains("does not allow user model configuration")
+    );
+    drop(account_a);
+
+    let account_b =
+        MobileRuntime::initialize(managed_mobile_config(dir.path(), "account-b")).unwrap();
+    let b_diagnostics = account_b.diagnostics().unwrap();
+    assert_ne!(a_diagnostics.account_id, b_diagnostics.account_id);
+    assert!(account_b.list_sessions().unwrap().is_empty());
+    account_b.create_session("Account B only").unwrap();
+    drop(account_b);
+
+    let account_a =
+        MobileRuntime::initialize(managed_mobile_config(dir.path(), "account-a")).unwrap();
+    let sessions = account_a.list_sessions().unwrap();
+    assert_eq!(sessions.len(), 1);
+    assert_eq!(sessions[0].title, "Account A only");
+    let identity_root = dir.path().join("files/identity-data");
+    let identities = std::fs::read_dir(identity_root).unwrap().count();
+    assert_eq!(identities, 2);
+}
+
+#[test]
+fn managed_mobile_identity_rejects_mismatch_expiry_and_raw_subject_paths() {
+    let dir = tempdir().unwrap();
+    let mut wrong_audience = managed_mobile_config(dir.path(), "private-subject-a");
+    wrong_audience.security_context.as_mut().unwrap().audience = "https://other.example".into();
+    let error = MobileRuntime::initialize(wrong_audience).err().unwrap();
+    assert!(
+        error.to_string().contains("does not match"),
+        "unexpected initialization error: {error:#}"
+    );
+
+    let mut expired = managed_mobile_config(dir.path(), "private-subject-expired");
+    let context = expired.security_context.as_mut().unwrap();
+    context.authenticated_at = Utc::now() - ChronoDuration::hours(2);
+    context.expires_at = Utc::now() - ChronoDuration::hours(1);
+    assert!(
+        MobileRuntime::initialize(expired)
+            .err()
+            .unwrap()
+            .to_string()
+            .contains("expired")
+    );
+
+    drop(
+        MobileRuntime::initialize(managed_mobile_config(
+            dir.path(),
+            "private-subject-path-sentinel",
+        ))
+        .unwrap(),
+    );
+    let paths = walk_paths(&dir.path().join("files"));
+    assert!(!paths.contains("private-subject-path-sentinel"));
+}
+
+#[test]
+fn refreshed_mobile_identity_must_preserve_the_active_account() {
+    let dir = tempdir().unwrap();
+    let config = managed_mobile_config(dir.path(), "account-a");
+    let original = config.security_context.clone().unwrap();
+    let runtime = MobileRuntime::initialize(config).unwrap();
+
+    let refreshed = SecurityContext {
+        expires_at: Utc::now() + ChronoDuration::hours(2),
+        ..original.clone()
+    };
+    runtime.refresh_security_context(refreshed).unwrap();
+
+    let rebound = SecurityContext {
+        principal: PrincipalIdentity {
+            issuer: original.principal.issuer.clone(),
+            subject: "account-b".into(),
+        },
+        expires_at: Utc::now() + ChronoDuration::hours(2),
+        ..original.clone()
+    };
+    assert!(
+        runtime
+            .refresh_security_context(rebound)
+            .unwrap_err()
+            .to_string()
+            .contains("cannot change accounts")
+    );
+
+    let expired = SecurityContext {
+        authenticated_at: Utc::now() - ChronoDuration::hours(2),
+        expires_at: Utc::now() - ChronoDuration::hours(1),
+        ..original
+    };
+    assert!(
+        runtime
+            .refresh_security_context(expired)
+            .unwrap_err()
+            .to_string()
+            .contains("expired")
+    );
+}
+
+fn walk_paths(root: &std::path::Path) -> String {
+    let mut pending = vec![root.to_path_buf()];
+    let mut paths = Vec::new();
+    while let Some(path) = pending.pop() {
+        paths.push(path.display().to_string());
+        if let Ok(entries) = std::fs::read_dir(&path) {
+            for entry in entries.flatten() {
+                if entry.file_type().is_ok_and(|kind| kind.is_dir()) {
+                    pending.push(entry.path());
+                } else {
+                    paths.push(entry.path().display().to_string());
+                }
+            }
+        }
+    }
+    paths.join("\n")
 }
 
 #[test]

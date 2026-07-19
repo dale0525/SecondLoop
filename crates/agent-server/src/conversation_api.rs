@@ -4,7 +4,7 @@ use agent_runtime::session::{
 };
 use axum::{
     Json, Router,
-    extract::{Path, Query, State},
+    extract::{Extension, Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::get,
@@ -105,12 +105,13 @@ struct SessionCursorWire {
 
 async fn create_session(
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
     Json(request): Json<CreateSessionRequest>,
 ) -> Result<Json<Session>, ApiError> {
     let title = validate_title(request.title.as_deref().unwrap_or("New Session"))?;
     state
         .storage()
-        .create_scoped_session(state.conversation_scope(), &title)
+        .create_scoped_session(security.conversation_scope(), &title)
         .await
         .map(Json)
         .map_err(ApiError::Internal)
@@ -118,6 +119,7 @@ async fn create_session(
 
 async fn list_sessions(
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
     Query(query): Query<ListSessionsQuery>,
 ) -> Result<Json<SessionPageResponse>, ApiError> {
     let limit = query.limit.unwrap_or(DEFAULT_PAGE_LIMIT);
@@ -127,7 +129,7 @@ async fn list_sessions(
     let cursor = query.cursor.as_deref().map(decode_cursor).transpose()?;
     let page = state
         .storage()
-        .list_scoped_sessions_page(state.conversation_scope(), cursor.as_ref(), limit)
+        .list_scoped_sessions_page(security.conversation_scope(), cursor.as_ref(), limit)
         .await
         .map_err(ApiError::Internal)?;
     Ok(Json(SessionPageResponse {
@@ -139,29 +141,30 @@ async fn list_sessions(
 async fn load_session(
     Path(session_id): Path<String>,
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
 ) -> Result<Json<SessionDetailResponse>, ApiError> {
     let lock = state.conversation_lock(&session_id).await;
     let _guard = lock.lock().await;
     let session = state
         .storage()
-        .get_scoped_session(state.conversation_scope(), &session_id)
+        .get_scoped_session(security.conversation_scope(), &session_id)
         .await
         .map_err(ApiError::Internal)?
         .ok_or(ApiError::NotFound("session not found"))?;
     let messages = state
         .storage()
-        .list_scoped_messages(state.conversation_scope(), &session_id)
+        .list_scoped_messages(security.conversation_scope(), &session_id)
         .await
         .map_err(ApiError::Internal)?;
     let events = state
         .storage()
-        .list_conversation_events(state.conversation_scope(), &session_id)
+        .list_conversation_events(security.conversation_scope(), &session_id)
         .await
         .map(crate::event_visibility::user_visible_events)
         .map_err(ApiError::Internal)?;
     let turns = state
         .storage()
-        .list_scoped_turns(state.conversation_scope(), &session_id)
+        .list_scoped_turns(security.conversation_scope(), &session_id)
         .await
         .map_err(ApiError::Internal)?;
     Ok(Json(SessionDetailResponse {
@@ -175,6 +178,7 @@ async fn load_session(
 async fn list_session_events(
     Path(session_id): Path<String>,
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
     Query(query): Query<SessionEventsQuery>,
 ) -> Result<Json<SessionEventsResponse>, ApiError> {
     if query.after < -1
@@ -189,7 +193,7 @@ async fn list_session_events(
         let page = state
             .storage()
             .list_scoped_session_events_page(
-                state.conversation_scope(),
+                security.conversation_scope(),
                 &session_id,
                 after,
                 query.limit,
@@ -217,10 +221,11 @@ async fn list_session_events(
 async fn get_messages(
     Path(session_id): Path<String>,
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
 ) -> Result<Json<Vec<Message>>, ApiError> {
     let session = state
         .storage()
-        .get_scoped_session(state.conversation_scope(), &session_id)
+        .get_scoped_session(security.conversation_scope(), &session_id)
         .await
         .map_err(ApiError::Internal)?;
     if session.is_none() {
@@ -228,7 +233,7 @@ async fn get_messages(
     }
     state
         .storage()
-        .list_scoped_messages(state.conversation_scope(), &session_id)
+        .list_scoped_messages(security.conversation_scope(), &session_id)
         .await
         .map(Json)
         .map_err(ApiError::Internal)
@@ -237,6 +242,7 @@ async fn get_messages(
 async fn update_session_title(
     Path(session_id): Path<String>,
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
     Json(request): Json<UpdateSessionRequest>,
 ) -> Result<Response, ApiError> {
     let title = validate_title(&request.title)?;
@@ -245,7 +251,7 @@ async fn update_session_title(
     let outcome = state
         .storage()
         .update_scoped_session_title(
-            state.conversation_scope(),
+            security.conversation_scope(),
             &session_id,
             &title,
             request.expected_updated_at,
@@ -258,20 +264,24 @@ async fn update_session_title(
 async fn delete_session(
     Path(session_id): Path<String>,
     State(state): State<Arc<AppState>>,
+    Extension(security): Extension<crate::identity_api::RequestSecurityContext>,
     Query(query): Query<DeleteSessionQuery>,
 ) -> Result<Response, ApiError> {
     let lock = state.conversation_lock(&session_id).await;
     let _guard = lock.lock().await;
     let current = state
         .storage()
-        .get_scoped_session(state.conversation_scope(), &session_id)
+        .get_scoped_session(security.conversation_scope(), &session_id)
         .await
         .map_err(ApiError::Internal)?
         .ok_or(ApiError::NotFound("session not found"))?;
     if current.updated_at != query.expected_updated_at {
         return Ok(conflict_response(current));
     }
-    if let Some(memory) = state.memory_tools() {
+    if let Some(memory) = state
+        .memory_tools_for(&security)
+        .map_err(ApiError::Internal)?
+    {
         memory
             .on_session_end(&session_id, Vec::new())
             .await
@@ -280,7 +290,7 @@ async fn delete_session(
     let outcome = state
         .storage()
         .delete_scoped_session_if_unchanged(
-            state.conversation_scope(),
+            security.conversation_scope(),
             &session_id,
             query.expected_updated_at,
         )
