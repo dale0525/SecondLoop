@@ -437,7 +437,7 @@ fn unique_query(url: &Url) -> DevkitResult<BTreeMap<String, String>> {
     for (name, value) in url.query_pairs() {
         if !matches!(
             name.as_ref(),
-            "code" | "state" | "error" | "error_description"
+            "code" | "state" | "scope" | "error" | "error_description"
         ) || values
             .insert(name.into_owned(), value.into_owned())
             .is_some()

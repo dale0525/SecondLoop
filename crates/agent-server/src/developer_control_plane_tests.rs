@@ -342,7 +342,7 @@ async fn oauth_account_binding_and_deployment_are_host_scoped_and_public_only() 
         .into_owned();
     let callback = control
         .complete_authorization_callback(&format!(
-            "http://127.0.0.1:43891/cloudflare/callback?code=one-time-code&state={state}"
+            "http://127.0.0.1:43891/cloudflare/callback?code=one-time-code&scope=account-settings.read+d1.read+d1.write+user-details.read+workers-scripts.read+workers-scripts.write&state={state}"
         ))
         .await
         .unwrap();
