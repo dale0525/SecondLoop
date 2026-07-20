@@ -1,6 +1,7 @@
 .tool/
 .superpowers/
 .codex/
+/app/agentweave-project.json
 __pycache__/
 docs/
 .pixi/
