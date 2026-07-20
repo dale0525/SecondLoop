@@ -2,27 +2,18 @@ import {
   Badge,
   Button,
   Callout,
-  RadioCards,
-  Select,
   Spinner,
-  Text,
-  TextArea,
-  TextField,
 } from "@radix-ui/themes";
 import {
   ArrowLeft,
   ArrowRight,
   Check,
-  Cloud,
-  ExternalLink,
   KeyRound,
-  LockKeyhole,
   PackageCheck,
-  RotateCcw,
   ShieldCheck,
   TriangleAlert,
 } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import type { DeveloperProjectSnapshot } from "../../../shared/developerProject";
 import {
@@ -51,15 +42,15 @@ import {
   validateManagedDraft,
   type DeveloperProjectDocument,
   type ManagedProjectDraft,
-  type ProviderSelection,
 } from "../../developerProjectModel";
 import { useHostBootstrap } from "../../hostBootstrap";
 import { useI18n } from "../../i18n/I18nProvider";
 import { useIdentitySession } from "../../identitySession";
+import { DeveloperConfigurationStep } from "./DeveloperConfigurationStep";
+import { DeveloperConnectionStep } from "./DeveloperConnectionStep";
 import { DeveloperDeploymentOperations } from "./DeveloperDeploymentOperations";
-import { ProviderSchemaForm, SensitiveSchemaFields } from "./ProviderSchemaForm";
 
-const STEP_COUNT = 6;
+const STEP_COUNT = 3;
 
 export function DeveloperAccessSetup({
   snapshot,
@@ -86,7 +77,7 @@ export function DeveloperAccessSetup({
     () => managedProjectDraft(project, providers, appId),
     [appId, project, providers],
   );
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(() => initialStep(snapshot, initialControlStatus));
   const [draft, setDraft] = useState<ManagedProjectDraft>(initialDraft);
   const [workingSnapshot, setWorkingSnapshot] = useState(snapshot);
   const [controlStatus, setControlStatus] = useState(initialControlStatus);
@@ -103,6 +94,8 @@ export function DeveloperAccessSetup({
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [completed, setCompleted] = useState(false);
+  const automaticAccountRef = useRef<string | null>(null);
+  const previousAuthorizationPhaseRef = useRef(initialControlStatus?.authorization.phase);
 
   const identityProviders = providers.filter((item) => item.kind === "identity");
   const entitlementProviders = providers.filter((item) => item.kind === "entitlement"
@@ -120,6 +113,8 @@ export function DeveloperAccessSetup({
     issue === "Model name is required" ? t("developer.release.modelNameRequired") : issue
   ));
   const authorizationReady = controlStatus?.authorization.phase === "ready";
+  const effectiveCustomOauth = customOauth
+    || controlStatus?.authorization.publicOauthClientAvailable === false;
   const lifecycleDeployment = controlStatus?.pendingDeployment?.deployment
     ? {
         target: controlStatus.pendingDeployment.deployment.target,
@@ -142,12 +137,6 @@ export function DeveloperAccessSetup({
   useEffect(() => {
     setWorkingSnapshot(snapshot);
   }, [snapshot]);
-
-  useEffect(() => {
-    if (controlStatus && !controlStatus.authorization.publicOauthClientAvailable) {
-      setCustomOauth(true);
-    }
-  }, [controlStatus]);
 
   useEffect(() => {
     if (controlStatus?.pendingDeployment) setDeploymentApplied(true);
@@ -178,9 +167,26 @@ export function DeveloperAccessSetup({
   useEffect(() => {
     if (controlStatus?.authorization.phase !== "select_account") return;
     void listCloudflareAccounts()
-      .then(setAccounts)
+      .then((availableAccounts) => {
+        setAccounts(availableAccounts);
+        const onlyAccount = availableAccounts.length === 1 ? availableAccounts[0] : null;
+        if (!onlyAccount || automaticAccountRef.current === onlyAccount.accountId) return;
+        automaticAccountRef.current = onlyAccount.accountId;
+        void selectAccount(onlyAccount.accountId).then((succeeded) => {
+          if (!succeeded && automaticAccountRef.current === onlyAccount.accountId) {
+            automaticAccountRef.current = null;
+          }
+        });
+      })
       .catch(() => setError(t("developer.release.errorAccounts")));
   }, [controlStatus?.authorization.phase, t]);
+
+  useEffect(() => {
+    const phase = controlStatus?.authorization.phase;
+    const previousPhase = previousAuthorizationPhaseRef.current;
+    previousAuthorizationPhaseRef.current = phase;
+    if (step === 1 && phase === "ready" && previousPhase !== "ready") setStep(2);
+  }, [controlStatus?.authorization.phase, step]);
 
   const mutateDraft = (next: ManagedProjectDraft) => {
     setDraft(next);
@@ -222,7 +228,7 @@ export function DeveloperAccessSetup({
   };
 
   const connect = () => run("oauth", async () => {
-    if (customOauth) {
+    if (effectiveCustomOauth) {
       const catalog = parseScopeCatalog(customScopeCatalog, t("developer.release.errorCustomOauth"));
       if (!customClientId.trim() || Object.keys(catalog).length === 0) {
         throw new Error(t("developer.release.errorCustomOauth"));
@@ -240,13 +246,18 @@ export function DeveloperAccessSetup({
     });
   });
 
-  const selectAccount = (accountId: string) => run("account", async () => {
-    await selectCloudflareAccount(accountId);
-    const status = await refreshControl();
-    if (status.authorization.phase !== "ready") {
-      throw new Error(t("developer.release.errorAccountSelection"));
-    }
-  });
+  const selectAccount = async (accountId: string): Promise<boolean> => {
+    let succeeded = false;
+    await run("account", async () => {
+      await selectCloudflareAccount(accountId);
+      const status = await refreshControl();
+      if (status.authorization.phase !== "ready") {
+        throw new Error(t("developer.release.errorAccountSelection"));
+      }
+      succeeded = true;
+    });
+    return succeeded;
+  };
 
   const save = () => run("save", async () => {
     if (visibleIssues.length > 0) throw new Error(visibleIssues[0]);
@@ -352,83 +363,38 @@ export function DeveloperAccessSetup({
           </Callout.Root>
         ) : null}
         {step === 1 ? (
-          <ProviderStep
-            description={t("developer.release.identityStepDescription")}
-            icon={<LockKeyhole aria-hidden="true" size={22} />}
-            onChoose={(descriptor) => chooseProvider("identity", descriptor)}
-            providers={identityProviders}
-            selected={draft.providers.identity}
-            title={t("developer.release.identityStepTitle")}
-          />
-        ) : null}
-        {step === 2 && identityDescriptor ? (
-          <section className="release-step-content">
-            <StepHeading
-              description={t("developer.release.identityConfigDescription")}
-              icon={<ShieldCheck aria-hidden="true" size={22} />}
-              title={t("developer.release.identityConfigTitle")}
-            />
-            <ProviderSchemaForm
-              descriptor={identityDescriptor}
-              onChange={(identity) => mutateDraft({
-                ...draft,
-                providers: { ...draft.providers, identity },
-              })}
-              selection={draft.providers.identity}
-            />
-            <AdvancedFields
-              descriptor={identityDescriptor}
-              selection={draft.providers.identity}
-              onChange={(identity) => mutateDraft({
-                ...draft,
-                providers: { ...draft.providers, identity },
-              })}
-            />
-            <div className="release-step-divider" />
-            <h3>{t("developer.release.entitlementPlugin")}</h3>
-            <p className="release-muted">{t("developer.release.entitlementDescription")}</p>
-            <ProviderCards
-              onChoose={(descriptor) => chooseProvider("entitlement", descriptor)}
-              providers={entitlementProviders}
-              selected={draft.providers.entitlement}
-            />
-          </section>
-        ) : null}
-        {step === 3 ? (
-          <ProviderStep
-            description={t("developer.release.gatewayStepDescription")}
-            icon={<Cloud aria-hidden="true" size={22} />}
-            onChoose={(descriptor) => chooseProvider("gateway", descriptor)}
-            providers={gatewayProviders}
-            selected={draft.providers.gateway}
-            title={t("developer.release.gatewayStepTitle")}
-          />
-        ) : null}
-        {step === 4 ? (
-          <CloudflareAuthorizationStep
+          <DeveloperConnectionStep
             accounts={accounts}
             busy={busy}
             controlStatus={controlStatus}
             customClientId={customClientId}
-            customOauth={customOauth}
+            customOauth={effectiveCustomOauth}
             customScopeCatalog={customScopeCatalog}
+            entitlementProviders={entitlementProviders}
+            gatewayProviders={gatewayProviders}
+            identityProviders={identityProviders}
             onCancel={() => run("cancel-oauth", async () => {
               await cancelCloudflareConnection();
               await refreshControl();
             })}
+            onChooseEntitlement={(descriptor) => chooseProvider("entitlement", descriptor)}
+            onChooseGateway={(descriptor) => chooseProvider("gateway", descriptor)}
+            onChooseIdentity={(descriptor) => chooseProvider("identity", descriptor)}
             onConnect={connect}
             onCustomClientId={setCustomClientId}
             onCustomOauth={setCustomOauth}
             onCustomScopeCatalog={setCustomScopeCatalog}
             onSelectAccount={selectAccount}
+            selections={draft.providers}
           />
         ) : null}
-        {step === 5 && entitlementDescriptor && gatewayDescriptor ? (
-          <ModelAndLimitsStep
+        {step === 2 && identityDescriptor && entitlementDescriptor && gatewayDescriptor ? (
+          <DeveloperConfigurationStep
             configuredSlots={configuredSlots}
             draft={draft}
             entitlementDescriptor={entitlementDescriptor}
             gatewayDescriptor={gatewayDescriptor}
+            identityDescriptor={identityDescriptor}
             onDraft={mutateDraft}
             onSecret={(slot, value) => {
               setSecretValues((current) => ({ ...current, [slot]: value }));
@@ -438,7 +404,7 @@ export function DeveloperAccessSetup({
             secretValues={secretValues}
           />
         ) : null}
-        {step === 6 ? (
+        {step === 3 ? (
           <>
             <DeployStep
               authorizationReady={authorizationReady}
@@ -469,16 +435,20 @@ export function DeveloperAccessSetup({
           </>
         ) : null}
 
-        <footer className="release-step-actions">
-          <Button color="gray" disabled={step === 1 || busy !== null} onClick={() => setStep(step - 1)} variant="soft">
-            <ArrowLeft aria-hidden="true" size={16} /> {t("common.back")}
-          </Button>
-          {step < STEP_COUNT ? (
-            <Button disabled={!canContinue || busy !== null} onClick={() => setStep(step + 1)}>
-              {t("common.continue")} <ArrowRight aria-hidden="true" size={16} />
-            </Button>
-          ) : null}
-        </footer>
+        {step > 1 || canContinue ? (
+          <footer className="release-step-actions">
+            {step > 1 ? (
+              <Button color="gray" disabled={busy !== null} onClick={() => setStep(step - 1)} variant="soft">
+                <ArrowLeft aria-hidden="true" size={16} /> {t("common.back")}
+              </Button>
+            ) : null}
+            {step < STEP_COUNT ? (
+              <Button disabled={!canContinue || busy !== null} onClick={() => setStep(step + 1)}>
+                {t("common.continue")} <ArrowRight aria-hidden="true" size={16} />
+              </Button>
+            ) : null}
+          </footer>
+        ) : null}
       </div>
 
       <ReleaseSummary
@@ -491,238 +461,19 @@ export function DeveloperAccessSetup({
   );
 }
 
-function ProviderStep({
+function StepHeading({
+  description,
   icon,
   title,
-  description,
-  providers,
-  selected,
-  onChoose,
 }: {
+  description: string;
   icon: ReactNode;
   title: string;
-  description: string;
-  providers: readonly DeveloperProviderDescriptor[];
-  selected: ProviderSelection;
-  onChoose: (descriptor: DeveloperProviderDescriptor) => void;
-}) {
-  return (
-    <section className="release-step-content">
-      <StepHeading description={description} icon={icon} title={title} />
-      <ProviderCards onChoose={onChoose} providers={providers} selected={selected} />
-    </section>
-  );
-}
-
-function ProviderCards({ providers, selected, onChoose }: {
-  providers: readonly DeveloperProviderDescriptor[];
-  selected: ProviderSelection;
-  onChoose: (descriptor: DeveloperProviderDescriptor) => void;
-}) {
-  const { t } = useI18n();
-  return (
-    <RadioCards.Root
-      className="release-provider-cards"
-      onValueChange={(id) => {
-        const descriptor = providers.find((item) => item.provider_id === id);
-        if (descriptor) onChoose(descriptor);
-      }}
-      value={selected.id}
-    >
-      {providers.map((provider) => (
-        <RadioCards.Item key={provider.provider_id} value={provider.provider_id}>
-          <div className="release-provider-choice">
-            <div>
-              <strong>{provider.display_name}</strong>
-              <Badge color="gray" size="1">v{provider.provider_version}</Badge>
-            </div>
-            <Text as="p" color="gray" size="2">{provider.description}</Text>
-            <span>{provider.capabilities.slice(0, 3).map((capability) => (
-              <Badge color="blue" key={capability} size="1" variant="soft">
-                {capability.replaceAll("_", " ")}
-              </Badge>
-            ))}</span>
-            {provider.risk_notice ? <small>{t("developer.release.risk", { risk: provider.risk_notice })}</small> : null}
-          </div>
-        </RadioCards.Item>
-      ))}
-    </RadioCards.Root>
-  );
-}
-
-function StepHeading({ icon, title, description }: { icon: ReactNode; title: string; description: string }) {
+}): JSX.Element {
   return (
     <header className="release-step-heading">
       <span>{icon}</span><div><h2>{title}</h2><p>{description}</p></div>
     </header>
-  );
-}
-
-function AdvancedFields({ descriptor, selection, onChange }: {
-  descriptor: DeveloperProviderDescriptor;
-  selection: ProviderSelection;
-  onChange: (selection: ProviderSelection) => void;
-}) {
-  const { t } = useI18n();
-  if (!descriptor.configuration_schema.public_fields.some((field) => field.advanced)) return null;
-  return (
-    <details className="release-advanced">
-      <summary>{t("developer.release.advanced")}</summary>
-      <ProviderSchemaForm advanced descriptor={descriptor} onChange={onChange} selection={selection} />
-    </details>
-  );
-}
-
-function CloudflareAuthorizationStep({
-  accounts,
-  busy,
-  controlStatus,
-  customClientId,
-  customOauth,
-  customScopeCatalog,
-  onCancel,
-  onConnect,
-  onCustomClientId,
-  onCustomOauth,
-  onCustomScopeCatalog,
-  onSelectAccount,
-}: {
-  accounts: readonly CloudflareAccount[];
-  busy: string | null;
-  controlStatus: DeveloperControlStatus | null;
-  customClientId: string;
-  customOauth: boolean;
-  customScopeCatalog: string;
-  onCancel: () => void;
-  onConnect: () => void;
-  onCustomClientId: (value: string) => void;
-  onCustomOauth: (value: boolean) => void;
-  onCustomScopeCatalog: (value: string) => void;
-  onSelectAccount: (accountId: string) => void;
-}) {
-  const { t } = useI18n();
-  const phase = controlStatus?.authorization.phase ?? "disconnected";
-  return (
-    <section className="release-step-content">
-      <StepHeading
-        description={t("developer.release.cloudflareDescription")}
-        icon={<Cloud aria-hidden="true" size={22} />}
-        title={t("developer.release.cloudflareTitle")}
-      />
-      <div className="release-oauth-card">
-        <div className="release-oauth-status">
-          <span className={`release-provider-status-icon ${phase === "ready" ? "is-ready" : ""}`}>
-            {phase === "ready" ? <Check aria-hidden="true" size={18} /> : <ExternalLink aria-hidden="true" size={18} />}
-          </span>
-          <div><strong>{oauthTitle(phase, t)}</strong><Text as="p" color="gray" size="2">{oauthHint(phase, t)}</Text></div>
-          <Badge color={phase === "ready" ? "green" : phase === "expired" ? "red" : "blue"}>{t(`developer.release.oauth.${phase}.label`)}</Badge>
-        </div>
-        {phase === "disconnected" || phase === "expired" ? (
-          <>
-            <label className="release-inline-toggle">
-              <input checked={customOauth} onChange={(event) => onCustomOauth(event.target.checked)} type="checkbox" />
-              <span><strong>{t("developer.release.customOauth")}</strong><small>{t("developer.release.customOauthHint")}</small></span>
-            </label>
-            {customOauth ? (
-              <div className="release-schema-fields">
-                <label className="release-field"><Text size="2" weight="medium">{t("developer.release.oauthClientId")}</Text><TextField.Root onChange={(event) => onCustomClientId(event.target.value)} value={customClientId} /></label>
-                <label className="release-field"><Text size="2" weight="medium">{t("developer.release.scopeCatalog")}</Text><TextArea onChange={(event) => onCustomScopeCatalog(event.target.value)} placeholder="Workers Scripts Read=scope-id" value={customScopeCatalog} /><Text color="gray" size="1">{t("developer.release.scopeCatalogHint")}</Text></label>
-              </div>
-            ) : null}
-            <Button disabled={busy !== null} onClick={onConnect} size="3">
-              {busy === "oauth" ? <Spinner /> : <ExternalLink aria-hidden="true" size={16} />}
-              {t("developer.release.connectCloudflare")}
-            </Button>
-          </>
-        ) : null}
-        {phase === "awaiting_callback" ? (
-          <Button color="gray" disabled={busy !== null} onClick={onCancel} variant="soft">
-            {busy === "cancel-oauth" ? <Spinner /> : <RotateCcw aria-hidden="true" size={16} />}
-            {t("developer.release.cancelAuthorization")}
-          </Button>
-        ) : null}
-        {phase === "select_account" ? (
-          <label className="release-field">
-            <Text size="2" weight="medium">{t("developer.release.cloudflareAccount")}</Text>
-            <Select.Root disabled={busy !== null} onValueChange={onSelectAccount}>
-              <Select.Trigger placeholder={t("developer.release.selectAccount")} />
-              <Select.Content>{accounts.map((account) => (
-                <Select.Item key={account.accountId} value={account.accountId}>
-                  {account.displayName ?? account.accountId}
-                </Select.Item>
-              ))}</Select.Content>
-            </Select.Root>
-          </label>
-        ) : null}
-        {phase === "ready" ? (
-          <dl className="release-facts"><Fact label={t("developer.release.accountId")} value={controlStatus?.authorization.accountId ?? "—"} /></dl>
-        ) : null}
-      </div>
-    </section>
-  );
-}
-
-function ModelAndLimitsStep({
-  configuredSlots,
-  draft,
-  entitlementDescriptor,
-  gatewayDescriptor,
-  onDraft,
-  onSecret,
-  secretValues,
-}: {
-  configuredSlots: ReadonlySet<string>;
-  draft: ManagedProjectDraft;
-  entitlementDescriptor: DeveloperProviderDescriptor;
-  gatewayDescriptor: DeveloperProviderDescriptor;
-  onDraft: (draft: ManagedProjectDraft) => void;
-  onSecret: (slot: string, value: string) => void;
-  secretValues: Readonly<Record<string, string>>;
-}) {
-  const { t } = useI18n();
-  const setProfile = (field: "endpointType" | "modelName", value: string) => onDraft({
-    ...draft,
-    modelAccess: { ...draft.modelAccess, profile: { ...draft.modelAccess.profile, [field]: value } },
-  });
-  return (
-    <section className="release-step-content">
-      <StepHeading
-        description={t("developer.release.modelConfigDescription")}
-        icon={<KeyRound aria-hidden="true" size={22} />}
-        title={t("developer.release.modelConfigTitle")}
-      />
-      <div className="release-section-label"><strong>{t("developer.release.modelProfile")}</strong><span>{t("developer.release.publicConfiguration")}</span></div>
-      <div className="release-schema-fields release-two-columns">
-        <label className="release-field"><Text size="2" weight="medium">{t("developer.release.endpointType")}</Text><Select.Root onValueChange={(value) => setProfile("endpointType", value)} value={draft.modelAccess.profile.endpointType}><Select.Trigger /><Select.Content><Select.Item value="responses">Responses API</Select.Item><Select.Item value="chat_completions">Chat Completions</Select.Item><Select.Item value="completion">Completions</Select.Item></Select.Content></Select.Root></label>
-        <label className="release-field">
-          <span className="release-field-label">
-            <Text size="2" weight="medium">{t("developer.release.modelName")}</Text>
-            <Badge color="gray" size="1">{t("developer.release.required")}</Badge>
-          </span>
-          <TextField.Root
-            aria-invalid={!draft.modelAccess.profile.modelName.trim()}
-            onChange={(event) => setProfile("modelName", event.target.value)}
-            required
-            value={draft.modelAccess.profile.modelName}
-          />
-          {!draft.modelAccess.profile.modelName.trim() ? (
-            <Text color="red" role="alert" size="1">
-              {t("developer.release.modelNameRequired")}
-            </Text>
-          ) : null}
-        </label>
-      </div>
-      <ProviderSchemaForm descriptor={gatewayDescriptor} onChange={(gateway) => onDraft({ ...draft, providers: { ...draft.providers, gateway } })} selection={draft.providers.gateway} />
-      <AdvancedFields descriptor={gatewayDescriptor} onChange={(gateway) => onDraft({ ...draft, providers: { ...draft.providers, gateway } })} selection={draft.providers.gateway} />
-      <div className="release-step-divider" />
-      <div className="release-section-label"><strong>{t("developer.release.entitlementService")}</strong><span>{entitlementDescriptor.display_name}</span></div>
-      <ProviderSchemaForm descriptor={entitlementDescriptor} onChange={(entitlement) => onDraft({ ...draft, providers: { ...draft.providers, entitlement } })} selection={draft.providers.entitlement} />
-      <AdvancedFields descriptor={entitlementDescriptor} onChange={(entitlement) => onDraft({ ...draft, providers: { ...draft.providers, entitlement } })} selection={draft.providers.entitlement} />
-      <div className="release-step-divider" />
-      <div className="release-section-label"><strong>{t("developer.release.secrets")}</strong><span>{t("developer.release.secretsHint")}</span></div>
-      <SensitiveSchemaFields fields={gatewayDescriptor.configuration_schema.sensitive_fields.map((field) => ({ ...field, id: `gateway.${field.id}` }))} configured={configuredSlots} onChange={onSecret} values={secretValues} />
-      <SensitiveSchemaFields fields={entitlementDescriptor.configuration_schema.sensitive_fields.map((field) => ({ ...field, id: `entitlement.${field.id}` }))} configured={configuredSlots} onChange={onSecret} values={secretValues} />
-    </section>
   );
 }
 
@@ -813,6 +564,15 @@ function Fact({ label, value }: { label: string; value: string }) {
   return <div className="release-fact"><dt>{label}</dt><dd>{value}</dd></div>;
 }
 
+function initialStep(
+  snapshot: DeveloperProjectSnapshot,
+  status: DeveloperControlStatus | null,
+): number {
+  if (snapshot.deploymentStatus === "ready" || status?.pendingDeployment) return 3;
+  if (status?.authorization.phase === "ready") return 2;
+  return 1;
+}
+
 function stepReady(
   step: number,
   draft: ManagedProjectDraft,
@@ -821,35 +581,15 @@ function stepReady(
   configured: ReadonlySet<string>,
   values: Readonly<Record<string, string>>,
 ): boolean {
-  if (step === 1) return providerBySelection(providers, draft.providers.identity) !== null;
-  if (step === 2) return selectionComplete(draft.providers.identity, providers)
-    && selectionComplete(draft.providers.entitlement, providers);
-  if (step === 3) return selectionComplete(draft.providers.gateway, providers);
-  if (step === 4) return status?.authorization.phase === "ready"
-    && Boolean(draft.deployment.cloudflare.accountId);
-  if (step === 5) return validateManagedDraft(draft, providers).length === 0
+  if (step === 1) return status?.authorization.phase === "ready"
+    && Boolean(draft.deployment.cloudflare.accountId)
+    && providerBySelection(providers, draft.providers.identity) !== null
+    && providerBySelection(providers, draft.providers.entitlement) !== null
+    && providerBySelection(providers, draft.providers.gateway) !== null;
+  if (step === 2) return validateManagedDraft(draft, providers).length === 0
     && ["gateway.upstreamApiKey", "entitlement.serviceCredential"]
       .every((slot) => configured.has(slot) || Boolean(values[slot]?.trim()));
   return true;
-}
-
-function selectionComplete(
-  selection: ProviderSelection,
-  providers: readonly DeveloperProviderDescriptor[],
-): boolean {
-  const descriptor = providerBySelection(providers, selection);
-  if (!descriptor) return false;
-  return descriptor.configuration_schema.public_fields
-    .filter((field) => field.required && (!field.visible_when
-      || selection.publicConfig[field.visible_when.field_id] === field.visible_when.equals))
-    .every((field) => present(selection.publicConfig[field.id]));
-}
-
-function present(value: unknown): boolean {
-  if (typeof value === "string") return value.trim().length > 0;
-  if (Array.isArray(value)) return value.length > 0;
-  if (value && typeof value === "object") return Object.keys(value).length > 0;
-  return value !== undefined && value !== null;
 }
 
 function logicalConfiguredSlots(bindings: Readonly<Record<string, string>>): ReadonlySet<string> {
@@ -914,12 +654,4 @@ function stepTitle(step: number, t: (key: string) => string): string {
 
 function stepHint(step: number, t: (key: string) => string): string {
   return t(`developer.release.step${step}Hint`);
-}
-
-function oauthTitle(phase: string, t: (key: string) => string): string {
-  return t(`developer.release.oauth.${phase}.title`);
-}
-
-function oauthHint(phase: string, t: (key: string) => string): string {
-  return t(`developer.release.oauth.${phase}.hint`);
 }

@@ -1,22 +1,33 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { DeveloperProjectSnapshot } from "../src/shared/developerProject";
 import App from "../src/renderer/App";
 import type { DeveloperProviderDescriptor } from "../src/renderer/devProvidersApi";
 import { installHostBootstrap } from "./hostBootstrapFixture";
 
+class TestResizeObserver implements ResizeObserver {
+  disconnect(): void {}
+  observe(): void {}
+  unobserve(): void {}
+}
+
+beforeEach(() => {
+  vi.stubGlobal("ResizeObserver", TestResizeObserver);
+});
+
 afterEach(() => {
   cleanup();
   window.history.replaceState(null, "", "/");
   window.localStorage.clear();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   delete window.agentWeave;
 });
 
 describe("developer release workspace", () => {
-  it("deep-links model delivery into the guided access setup without saving", async () => {
+  it("opens the automation-first connection step without saving a partial project", async () => {
     const save = vi.fn();
     installReleaseBridge(userConfigurableSnapshot(), { save });
     window.history.replaceState(null, "", "/#developer/model");
@@ -31,9 +42,208 @@ describe("developer release workspace", () => {
 
     expect(window.location.hash).toBe("#developer/access/setup");
     expect(await screen.findByRole("heading", {
-      name: "Choose the user identity plugin",
+      name: "Connect the deployment account",
     })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sign in and authorize Cloudflare" })).toBeInTheDocument();
+    expect(screen.getByText("Recommended access stack")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Choose the user identity plugin" })).not.toBeInTheDocument();
     expect(save).not.toHaveBeenCalled();
+  });
+
+  it("starts Cloudflare public OAuth from the primary action", async () => {
+    const accessRequest = vi.fn(async (operation: string) => {
+      if (operation === "status") return disconnectedControlStatus();
+      if (operation === "cloudflare.connect") return undefined;
+      throw new Error(`Unexpected operation: ${operation}`);
+    });
+    installReleaseBridge(userConfigurableSnapshot(), { accessRequest });
+    window.history.replaceState(null, "", "/#developer/access/setup");
+    const user = userEvent.setup();
+
+    render(<App />);
+    await user.click(await screen.findByRole("button", { name: "Sign in and authorize Cloudflare" }));
+
+    expect(accessRequest).toHaveBeenCalledWith("cloudflare.connect", {
+      client: { mode: "agent_weave_public" },
+    });
+    expect(await screen.findByText("Waiting for browser approval")).toBeInTheDocument();
+  });
+
+  it("keeps custom OAuth fields behind an explicit advanced override", async () => {
+    installReleaseBridge(userConfigurableSnapshot());
+    window.history.replaceState(null, "", "/#developer/access/setup");
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    expect(await screen.findByRole("button", {
+      name: "Sign in and authorize Cloudflare",
+    })).toBeInTheDocument();
+    expect(screen.queryByText("Cloudflare OAuth client ID")).not.toBeInTheDocument();
+
+    await user.click(screen.getByText("Use my own OAuth client"));
+    await user.click(screen.getByRole("checkbox", { name: /Override the public OAuth client/ }));
+
+    expect(screen.getByText("Cloudflare OAuth client ID")).toBeVisible();
+    expect(screen.getByText("Authoritative scope catalog")).toBeVisible();
+    expect(screen.getByRole("button", {
+      name: "Connect custom Cloudflare client",
+    })).toBeVisible();
+  });
+
+  it("uses the custom OAuth form directly when no public client is available", async () => {
+    const accessRequest = vi.fn(async (operation: string) => {
+      if (operation === "status") return controlStatus("disconnected", null, false);
+      if (operation === "cloudflare.connect") return undefined;
+      throw new Error(`Unexpected operation: ${operation}`);
+    });
+    installReleaseBridge(userConfigurableSnapshot(), { accessRequest });
+    window.history.replaceState(null, "", "/#developer/access/setup");
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    expect(await screen.findByText("Cloudflare OAuth client ID")).toBeVisible();
+    expect(screen.queryByRole("button", {
+      name: "Sign in and authorize Cloudflare",
+    })).not.toBeInTheDocument();
+    await user.type(screen.getByRole("textbox", {
+      name: "Cloudflare OAuth client ID",
+    }), "custom-client");
+    await user.type(screen.getByRole("textbox", {
+      name: /Authoritative scope catalog/,
+    }), "Workers Scripts Read=scope.read");
+    await user.click(screen.getByRole("button", {
+      name: "Connect custom Cloudflare client",
+    }));
+
+    expect(accessRequest).toHaveBeenCalledWith("cloudflare.connect", {
+      client: {
+        mode: "custom",
+        clientId: "custom-client",
+        scopeCatalog: { "Workers Scripts Read": "scope.read" },
+      },
+    });
+  });
+
+  it("binds the only Cloudflare account automatically and advances to required details", async () => {
+    let phase: "select_account" | "ready" = "select_account";
+    const accountId = "0123456789abcdef0123456789abcdef";
+    const accessRequest = vi.fn(async (operation: string) => {
+      if (operation === "status") return controlStatus(phase, phase === "ready" ? accountId : null);
+      if (operation === "cloudflare.accounts") return [{
+        accountId,
+        displayName: "Only account",
+        providerId: "cloudflare-workers",
+      }];
+      if (operation === "cloudflare.selectAccount") {
+        phase = "ready";
+        return undefined;
+      }
+      throw new Error(`Unexpected operation: ${operation}`);
+    });
+    installReleaseBridge(userConfigurableSnapshot(), { accessRequest });
+    window.history.replaceState(null, "", "/#developer/access/setup");
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", {
+      name: "Enter the details only your services know",
+    })).toBeInTheDocument();
+    expect(accessRequest).toHaveBeenCalledWith("cloudflare.selectAccount", { accountId });
+    expect(screen.getByText("User sign-in")).toBeInTheDocument();
+    expect(screen.getByText("Model service")).toBeInTheDocument();
+  });
+
+  it("offers an in-place retry when automatic account binding fails", async () => {
+    let phase: "select_account" | "ready" = "select_account";
+    let selectionAttempts = 0;
+    const accountId = "0123456789abcdef0123456789abcdef";
+    const accessRequest = vi.fn(async (operation: string) => {
+      if (operation === "status") return controlStatus(phase, phase === "ready" ? accountId : null);
+      if (operation === "cloudflare.accounts") return [{
+        accountId,
+        displayName: "Only account",
+        providerId: "cloudflare-workers",
+      }];
+      if (operation === "cloudflare.selectAccount") {
+        selectionAttempts += 1;
+        if (selectionAttempts === 1) throw new Error("Temporary Cloudflare failure");
+        phase = "ready";
+        return undefined;
+      }
+      throw new Error(`Unexpected operation: ${operation}`);
+    });
+    installReleaseBridge(userConfigurableSnapshot(), { accessRequest });
+    window.history.replaceState(null, "", "/#developer/access/setup");
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Temporary Cloudflare failure");
+    const retry = screen.getByRole("button", { name: "Retry account binding" });
+    expect(retry).toBeEnabled();
+    await user.click(retry);
+
+    expect(await screen.findByRole("heading", {
+      name: "Enter the details only your services know",
+    })).toBeInTheDocument();
+    expect(selectionAttempts).toBe(2);
+  });
+
+  it("fills the OpenAI endpoint and authentication with one preset click", async () => {
+    installReleaseBridge(userConfigurableSnapshot(), {
+      controlStatus: controlStatus("ready", "0123456789abcdef0123456789abcdef"),
+    });
+    window.history.replaceState(null, "", "/#developer/access/setup");
+    const user = userEvent.setup();
+
+    render(<App />);
+    await user.click(await screen.findByText("OpenAI"));
+
+    expect(screen.getByText("Endpoint and authentication filled automatically")).toBeInTheDocument();
+    expect(screen.getByText("https://api.openai.com")).toBeInTheDocument();
+    expect(screen.queryByText("Upstream model URL")).not.toBeInTheDocument();
+  });
+
+  it("can continue after reviewing the connected account from the previous step", async () => {
+    installReleaseBridge(userConfigurableSnapshot(), {
+      controlStatus: controlStatus("ready", "0123456789abcdef0123456789abcdef"),
+    });
+    window.history.replaceState(null, "", "/#developer/access/setup");
+    const user = userEvent.setup();
+
+    render(<App />);
+    expect(await screen.findByRole("heading", {
+      name: "Enter the details only your services know",
+    })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Back" }));
+
+    expect(screen.getByRole("heading", {
+      name: "Connect the deployment account",
+    })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(screen.getByRole("heading", {
+      name: "Enter the details only your services know",
+    })).toBeInTheDocument();
+  });
+
+  it("clears the OpenAI authentication choice when switching to a custom model service", async () => {
+    installReleaseBridge(userConfigurableSnapshot(), {
+      controlStatus: controlStatus("ready", "0123456789abcdef0123456789abcdef"),
+    });
+    window.history.replaceState(null, "", "/#developer/access/setup");
+    const user = userEvent.setup();
+
+    render(<App />);
+    await user.click(await screen.findByText("OpenAI"));
+    await user.click(screen.getByText("OpenAI-compatible service"));
+
+    expect(screen.getByText("Upstream model URL")).toBeVisible();
+    expect(screen.getByRole("combobox", {
+      name: /Upstream authentication/,
+    })).toHaveTextContent("Choose an option");
   });
 
   it("packages a user-configurable App only after every release check passes", async () => {
@@ -130,6 +340,7 @@ describe("developer release workspace", () => {
 function installReleaseBridge(
   snapshot: DeveloperProjectSnapshot,
   overrides: {
+    accessRequest?: (operation: string, input?: unknown) => Promise<unknown>;
     controlStatus?: unknown;
     packageApp?: () => Promise<{ outputPath: string; summary: string }>;
     save?: (request: unknown) => Promise<DeveloperProjectSnapshot>;
@@ -154,21 +365,34 @@ function installReleaseBridge(
     showOutput: async () => undefined,
   };
   window.agentWeave.developerAccess = {
-    request: async (operation) => {
+    request: async (operation, input) => {
+      if (overrides.accessRequest) return overrides.accessRequest(operation, input);
       if (operation !== "status") throw new Error(`Unexpected operation: ${operation}`);
-      return overrides.controlStatus ?? {
-        authorization: {
-          providerId: "cloudflare-workers",
-          phase: "disconnected",
-          accountId: null,
-          expiresAtUnixMs: null,
-          publicOauthClientAvailable: true,
-        },
-        gatewayTemplate: { version: "gateway-v1", sha256: "a".repeat(64) },
-        sensitiveBindings: {},
-        pendingDeployment: null,
-      };
+      return overrides.controlStatus ?? disconnectedControlStatus();
     },
+  };
+}
+
+function disconnectedControlStatus(): unknown {
+  return controlStatus("disconnected", null);
+}
+
+function controlStatus(
+  phase: "disconnected" | "select_account" | "ready",
+  accountId: string | null,
+  publicOauthClientAvailable = true,
+): unknown {
+  return {
+    authorization: {
+      providerId: "cloudflare-workers",
+      phase,
+      accountId,
+      expiresAtUnixMs: null,
+      publicOauthClientAvailable,
+    },
+    gatewayTemplate: { version: "gateway-v1", sha256: "a".repeat(64) },
+    sensitiveBindings: {},
+    pendingDeployment: null,
   };
 }
 
@@ -242,6 +466,13 @@ function managedSnapshot(
 }
 
 function providerDescriptors(): DeveloperProviderDescriptor[] {
+  const gatewayFields = [
+    { ...field("upstreamBaseUrl", "Upstream model URL"), field_type: "https_url" as const },
+    {
+      ...field("upstreamAuthentication", "Upstream authentication", true, "bearer"),
+      allowed_values: ["bearer", "x_api_key", "api_key"],
+    },
+  ];
   return [
     descriptor("identity", "agentweave.identity.oidc", "OpenID Connect", [
       field("preset", "Provider preset", true, "generic"),
@@ -271,13 +502,11 @@ function providerDescriptors(): DeveloperProviderDescriptor[] {
       },
     },
     {
-      ...descriptor("gateway_deployment", "cloudflare-workers", "Cloudflare Workers", [
-        { ...field("upstreamBaseUrl", "Upstream model URL"), field_type: "https_url" },
-      ]),
+      ...descriptor("gateway_deployment", "cloudflare-workers", "Cloudflare Workers", gatewayFields),
       configuration_schema: {
         schema_version: 1,
         migration_version: 1,
-        public_fields: [{ ...field("upstreamBaseUrl", "Upstream model URL"), field_type: "https_url" }],
+        public_fields: gatewayFields,
         sensitive_fields: [{
           id: "upstreamApiKey",
           label: "Upstream API key",

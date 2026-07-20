@@ -22,6 +22,15 @@ use uuid::Uuid;
 const LEASE_LIFETIME_MS: u64 = 15 * 60 * 1_000;
 const PLAN_LIFETIME_MS: u64 = 10 * 60 * 1_000;
 const MAX_CACHED_PLANS: usize = 8;
+const OFFICIAL_CLOUDFLARE_OAUTH_CLIENT_ID: &str = "0581dc6644b0abb428e43937a2d465ec";
+const OFFICIAL_CLOUDFLARE_OAUTH_SCOPES: [(&str, &str); 6] = [
+    ("Account Settings Read", "account-settings.read"),
+    ("User Details Read", "user-details.read"),
+    ("Workers Scripts Read", "workers-scripts.read"),
+    ("Workers Scripts Write", "workers-scripts.write"),
+    ("D1 Read", "d1.read"),
+    ("D1 Write", "d1.write"),
+];
 
 #[derive(Clone, Debug, Default)]
 pub struct CloudflareOAuthDefaults {
@@ -94,41 +103,79 @@ impl GatewayTemplateArtifact {
 }
 
 impl CloudflareOAuthDefaults {
+    pub fn official() -> Self {
+        Self {
+            client_id: Some(OFFICIAL_CLOUDFLARE_OAUTH_CLIENT_ID.into()),
+            scope_catalog: Some(
+                OFFICIAL_CLOUDFLARE_OAUTH_SCOPES
+                    .into_iter()
+                    .map(|(name, id)| (name.into(), id.into()))
+                    .collect(),
+            ),
+        }
+    }
+
     pub fn from_environment() -> anyhow::Result<Self> {
-        let client_id = std::env::var("AGENTWEAVE_CLOUDFLARE_OAUTH_CLIENT_ID")
-            .ok()
-            .filter(|value| !value.trim().is_empty());
-        let scope_catalog = match std::env::var("AGENTWEAVE_CLOUDFLARE_OAUTH_SCOPE_CATALOG_JSON") {
-            Ok(value) => {
-                let catalog: BTreeMap<String, String> = serde_json::from_str(&value)?;
-                anyhow::ensure!(
-                    !catalog.is_empty()
-                        && catalog.iter().all(|(name, id)| {
-                            !name.trim().is_empty()
-                                && !id.trim().is_empty()
-                                && name.len() <= 256
-                                && id.len() <= 256
-                                && !name.chars().any(char::is_control)
-                                && !id.chars().any(char::is_control)
-                        }),
-                    "Cloudflare OAuth scope catalog is invalid"
-                );
-                Some(catalog)
-            }
-            Err(_) => None,
-        };
-        anyhow::ensure!(
-            client_id.is_some() == scope_catalog.is_some(),
-            "Cloudflare public OAuth client ID and scope catalog must be configured together"
-        );
-        Ok(Self {
-            client_id,
-            scope_catalog,
-        })
+        Self::with_overrides(
+            environment_override("AGENTWEAVE_CLOUDFLARE_OAUTH_CLIENT_ID")?,
+            environment_override("AGENTWEAVE_CLOUDFLARE_OAUTH_SCOPE_CATALOG_JSON")?,
+        )
     }
 
     pub fn public_client_available(&self) -> bool {
         self.client_id.is_some() && self.scope_catalog.is_some()
+    }
+
+    fn with_overrides(
+        client_id: Option<String>,
+        scope_catalog_json: Option<String>,
+    ) -> anyhow::Result<Self> {
+        let client_id = client_id.filter(|value| !value.trim().is_empty());
+        let scope_catalog_json = scope_catalog_json.filter(|value| !value.trim().is_empty());
+        let (client_id, scope_catalog_json) = match (client_id, scope_catalog_json) {
+            (None, None) => return Ok(Self::official()),
+            (Some(client_id), Some(scope_catalog_json)) => (client_id, scope_catalog_json),
+            _ => anyhow::bail!(
+                "Cloudflare OAuth client ID and scope catalog overrides must be configured together"
+            ),
+        };
+        anyhow::ensure!(
+            !client_id.trim().is_empty()
+                && client_id.len() <= 2_048
+                && !client_id.chars().any(char::is_control),
+            "Cloudflare OAuth client ID override is invalid"
+        );
+        let scope_catalog: BTreeMap<String, String> = serde_json::from_str(&scope_catalog_json)?;
+        anyhow::ensure!(
+            !scope_catalog.is_empty()
+                && scope_catalog.len() <= 64
+                && OFFICIAL_CLOUDFLARE_OAUTH_SCOPES
+                    .iter()
+                    .all(|(name, _)| scope_catalog.contains_key(*name))
+                && scope_catalog.iter().all(|(name, id)| {
+                    !name.trim().is_empty()
+                        && !id.trim().is_empty()
+                        && name.len() <= 256
+                        && id.len() <= 256
+                        && !name.chars().any(char::is_control)
+                        && !id.chars().any(char::is_control)
+                }),
+            "Cloudflare OAuth scope catalog override is invalid"
+        );
+        Ok(Self {
+            client_id: Some(client_id),
+            scope_catalog: Some(scope_catalog),
+        })
+    }
+}
+
+fn environment_override(name: &str) -> anyhow::Result<Option<String>> {
+    match std::env::var(name) {
+        Ok(value) => Ok(Some(value)),
+        Err(std::env::VarError::NotPresent) => Ok(None),
+        Err(std::env::VarError::NotUnicode(_)) => {
+            anyhow::bail!("{name} must contain valid Unicode")
+        }
     }
 }
 
@@ -617,4 +664,71 @@ async fn migrate(pool: &SqlitePool) -> anyhow::Result<()> {
     .execute(pool)
     .await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod cloudflare_oauth_defaults_tests {
+    use super::*;
+
+    #[test]
+    fn official_client_matches_the_registered_cloudflare_contract() {
+        let defaults = CloudflareOAuthDefaults::official();
+        assert_eq!(
+            defaults.client_id.as_deref(),
+            Some("0581dc6644b0abb428e43937a2d465ec")
+        );
+        assert_eq!(
+            defaults.scope_catalog,
+            Some(BTreeMap::from([
+                (
+                    "Account Settings Read".into(),
+                    "account-settings.read".into()
+                ),
+                ("User Details Read".into(), "user-details.read".into()),
+                ("Workers Scripts Read".into(), "workers-scripts.read".into()),
+                (
+                    "Workers Scripts Write".into(),
+                    "workers-scripts.write".into()
+                ),
+                ("D1 Read".into(), "d1.read".into()),
+                ("D1 Write".into(), "d1.write".into()),
+            ]))
+        );
+    }
+
+    #[test]
+    fn downstream_can_override_the_official_client_as_one_atomic_contract() {
+        let catalog = OFFICIAL_CLOUDFLARE_OAUTH_SCOPES
+            .into_iter()
+            .map(|(name, id)| (name, format!("downstream.{id}")))
+            .collect::<BTreeMap<_, _>>();
+        let defaults = CloudflareOAuthDefaults::with_overrides(
+            Some("downstream-client".into()),
+            Some(serde_json::to_string(&catalog).unwrap()),
+        )
+        .unwrap();
+        assert_eq!(defaults.client_id.as_deref(), Some("downstream-client"));
+        assert_eq!(
+            defaults.scope_catalog.unwrap()["Workers Scripts Read"],
+            "downstream.workers-scripts.read"
+        );
+        assert!(CloudflareOAuthDefaults::with_overrides(Some("partial".into()), None).is_err());
+        let defaults = CloudflareOAuthDefaults::with_overrides(Some(" \t".into()), None).unwrap();
+        assert_eq!(
+            defaults.client_id.as_deref(),
+            Some(OFFICIAL_CLOUDFLARE_OAUTH_CLIENT_ID)
+        );
+        let defaults = CloudflareOAuthDefaults::with_overrides(None, Some(" \n".into())).unwrap();
+        assert_eq!(
+            defaults.client_id.as_deref(),
+            Some(OFFICIAL_CLOUDFLARE_OAUTH_CLIENT_ID)
+        );
+        assert!(
+            CloudflareOAuthDefaults::with_overrides(
+                Some("incomplete".into()),
+                Some(r#"{"Workers Scripts Read":"scope.read"}"#.into()),
+            )
+            .is_err()
+        );
+    }
 }

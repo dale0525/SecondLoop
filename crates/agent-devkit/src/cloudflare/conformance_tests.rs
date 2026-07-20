@@ -287,11 +287,7 @@ fn authorization(store: &FakeSecretStore) -> DeveloperAuthorization {
             "scope-read-dynamic".into(),
             "scope-write-dynamic".into(),
         ]),
-        BTreeSet::from([
-            CAPABILITY_D1_WRITE.into(),
-            CAPABILITY_WORKERS_SCRIPTS_READ.into(),
-            CAPABILITY_WORKERS_SCRIPTS_WRITE.into(),
-        ]),
+        standard_authorization_capabilities(),
         "catalog-revision",
         1,
         None,
@@ -310,11 +306,7 @@ fn unbound_authorization(store: &FakeSecretStore) -> DeveloperAuthorization {
             "scope-read-dynamic".into(),
             "scope-write-dynamic".into(),
         ]),
-        BTreeSet::from([
-            CAPABILITY_D1_WRITE.into(),
-            CAPABILITY_WORKERS_SCRIPTS_READ.into(),
-            CAPABILITY_WORKERS_SCRIPTS_WRITE.into(),
-        ]),
+        standard_authorization_capabilities(),
         "catalog-revision",
         1,
         None,
@@ -335,14 +327,28 @@ fn configuration() -> ProviderConfiguration {
             (
                 "scope-catalog".into(),
                 json!({
+                    "Account Settings Read": "scope-account-settings-dynamic",
+                    "User Details Read": "scope-user-details-dynamic",
                     "Workers Scripts Read": "scope-read-dynamic",
                     "Workers Scripts Write": "scope-write-dynamic",
+                    "D1 Read": "scope-d1-read-dynamic",
                     "D1 Write": "scope-d1-dynamic"
                 }),
             ),
         ]),
         sensitive: BTreeMap::new(),
     }
+}
+
+fn standard_authorization_capabilities() -> BTreeSet<String> {
+    BTreeSet::from([
+        CAPABILITY_ACCOUNT_SETTINGS_READ.into(),
+        CAPABILITY_USER_DETAILS_READ.into(),
+        CAPABILITY_WORKERS_SCRIPTS_READ.into(),
+        CAPABILITY_WORKERS_SCRIPTS_WRITE.into(),
+        CAPABILITY_D1_READ.into(),
+        CAPABILITY_D1_WRITE.into(),
+    ])
 }
 
 fn provider(
@@ -431,13 +437,7 @@ async fn oauth_capabilities_map_to_authoritative_dynamic_scope_ids() {
         {"id": "scope-unrelated", "name": "Account Analytics Read"}
     ]))]);
     let requirements = provider
-        .authorization_requirements(
-            &configuration(),
-            &BTreeSet::from([
-                CAPABILITY_WORKERS_SCRIPTS_READ.into(),
-                CAPABILITY_WORKERS_SCRIPTS_WRITE.into(),
-            ]),
-        )
+        .authorization_requirements(&configuration(), &standard_authorization_capabilities())
         .await
         .unwrap();
     assert_eq!(
@@ -448,6 +448,7 @@ async fn oauth_capabilities_map_to_authoritative_dynamic_scope_ids() {
         requirements.scope_ids_by_capability[CAPABILITY_WORKERS_SCRIPTS_WRITE],
         BTreeSet::from(["scope-write-dynamic".into()])
     );
+    assert_eq!(requirements.all_scope_ids().len(), 6);
     assert!(
         !requirements
             .all_scope_ids()

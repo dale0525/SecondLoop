@@ -1,6 +1,7 @@
 use super::d1::{D1_BINDING_NAME, PreparedD1Resources};
 use super::provider::{
-    CAPABILITY_D1_WRITE, CAPABILITY_WORKERS_SCRIPTS_READ, CAPABILITY_WORKERS_SCRIPTS_WRITE,
+    CAPABILITY_D1_READ, CAPABILITY_D1_WRITE, CAPABILITY_WORKERS_SCRIPTS_READ,
+    CAPABILITY_WORKERS_SCRIPTS_WRITE,
 };
 use super::{
     CLOUDFLARE_PROVIDER_ID, CloudflareHttpMethod, CloudflareRestClient, CloudflareTransport,
@@ -47,7 +48,10 @@ pub(super) fn ensure_provider_authorization(
     now_unix_ms: u64,
 ) -> DevkitResult<()> {
     validate_deployment_target(target)?;
-    let mut capabilities = BTreeSet::from([CAPABILITY_WORKERS_SCRIPTS_READ.into()]);
+    let mut capabilities = BTreeSet::from([
+        CAPABILITY_D1_READ.into(),
+        CAPABILITY_WORKERS_SCRIPTS_READ.into(),
+    ]);
     capabilities.insert(CAPABILITY_D1_WRITE.into());
     if write {
         capabilities.insert(CAPABILITY_WORKERS_SCRIPTS_WRITE.into());
