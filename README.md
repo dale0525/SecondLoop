@@ -78,6 +78,24 @@ In the generated directory, `agent-app.json` defines the application identity, c
 
 For a self-contained macOS application with the bundled Rust sidecar and locked App resources, see [macOS Desktop Packaging](./DESKTOP_PACKAGING.md).
 
+## Recommended App release workflow
+
+Keep interactive developer authorization separate from automated packaging. A GitHub Actions job that only builds, signs, and publishes an App should not receive Cloudflare OAuth access or refresh tokens, a local Credential Vault key, or any other developer credential.
+
+| Stage | Where it runs | Purpose | Information used | Never do this |
+| --- | --- | --- | --- | --- |
+| 1. Configure the Agent App | Developer's machine | Define the App identity, model access mode, provider selection, and desired gateway settings. | Public client IDs, scope catalogs, Worker name, environment, and other non-secret configuration. | Do not put access tokens, refresh tokens, passwords, or private keys in project JSON or Git. |
+| 2. Sign in to Cloudflare | External browser and the local Developer Host | Confirm the developer's Cloudflare identity and grant only the permissions needed to deploy the gateway. | Browser OAuth, PKCE, and either the AgentWeave public OAuth client or the developer's own public client. | Do not automate the interactive browser login in a build job or copy callback URLs into CI logs. |
+| 3. Deploy the gateway | Local Developer Host | Create or update the Cloudflare Worker, D1 resources, and related gateway configuration. | The OAuth access token held by the local encrypted Credential Vault. | Do not export the Credential Vault, its master key, or a personal refresh token to GitHub Actions. |
+| 4. Verify the deployment | Local Developer Host | Confirm that the deployed endpoint is reachable and matches the expected account, Worker, protocol, and version. | Cloudflare account ID, Worker name, deployment/version IDs, and the public endpoint. | Do not put authorization headers or token values in verification receipts or logs. |
+| 5. Save project state | Agent App project directory | Give packaging a reviewable, reproducible link between the desired configuration and the verified deployment. | `agentweave-project.json` and `.agentweave/deployment.lock`, which contain configuration and deployment metadata but no credentials. | Do not add `.env` files, tokens, Credential Vault files, or signing keys. Treat account and deployment IDs as infrastructure metadata when publishing a repository. |
+| 6. Build in GitHub Actions | GitHub-hosted or trusted self-hosted runner | Validate the project and produce a reproducible Desktop package from source and the verified deployment state. | Source code, locked dependencies, public App configuration, and the verified deployment lock. | Do not inject Cloudflare OAuth tokens into a build-only job, cache them, or upload them as artifacts. |
+| 7. Sign and notarize | Protected release environment | Prove the publisher identity and satisfy the platform trust requirements for distribution. | Apple signing certificate, certificate password, Team ID, and notarization credentials stored as protected environment secrets. | Do not expose release secrets to pull requests, forks, unreviewed workflow code, or unrelated build steps. |
+| 8. Publish the release | GitHub Releases or another trusted distribution channel | Distribute immutable, verified artifacts and their checksums or release metadata. | Signed `.dmg` and `.zip` files plus non-secret release metadata. | Do not publish developer control-plane files, temporary keychains, credentials, or diagnostic logs containing secrets. |
+| 9. Run on the user's device | End user's machine | Use the packaged public gateway endpoint with the end user's own identity or model configuration. | Packaged public configuration and credentials created or authorized by that user. | The released App must not contain the developer's Cloudflare credentials or reuse the developer's Cloudflare identity for end-user access. |
+
+If deployment must also run in CI, use a separate, least-privilege machine credential supplied only to a protected deployment job. Do not reuse a developer's browser OAuth grant. A provider must explicitly support a non-interactive deployment credential before this path is considered safe.
+
 ## How the framework fits together
 
 ```text

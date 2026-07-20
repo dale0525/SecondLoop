@@ -78,6 +78,24 @@ AGENTWEAVE_APP_ROOT=output/research-agent pixi run dev
 
 如需生成包含 Rust sidecar 和带锁 App 资源的自包含 macOS 应用，请参阅 [macOS Desktop 打包](./DESKTOP_PACKAGING.zh-CN.md)。
 
+## 推荐的完整发布流程
+
+交互式开发者授权应与自动化打包分离。只负责构建、签名和发布 App 的 GitHub Actions 不应持有 Cloudflare OAuth access token、refresh token、本地 Credential Vault 主密钥或其他开发者凭据。
+
+| 阶段 | 在哪里执行 | 作用 | 使用什么信息 | 明确禁止什么 |
+| --- | --- | --- | --- | --- |
+| 1. 配置 Agent App | 开发者本机 | 定义 App 身份、模型访问模式、Provider 选择和预期的网关配置。 | 公开的 Client ID、scope catalog、Worker 名称、环境和其他非敏感配置。 | 不要把 access token、refresh token、密码或私钥写进项目 JSON 或 Git。 |
+| 2. 登录 Cloudflare | 外部浏览器与本地 Developer Host | 确认当前开发者的 Cloudflare 身份，并只授予部署网关所需的权限。 | 浏览器 OAuth、PKCE，以及 AgentWeave 官方公共 OAuth Client 或开发者自己的公共 Client。 | 不要在构建任务中模拟交互式浏览器登录，也不要把 callback URL 复制到 CI 日志。 |
+| 3. 部署网关 | 本地 Developer Host | 创建或更新 Cloudflare Worker、D1 资源和相关网关配置。 | 由本地加密 Credential Vault 持有的 OAuth access token。 | 不要把 Credential Vault、Vault 主密钥或个人 refresh token 导出到 GitHub Actions。 |
+| 4. 验证部署 | 本地 Developer Host | 确认已部署端点可以访问，并且账号、Worker、协议和版本符合预期。 | Cloudflare account ID、Worker 名称、deployment/version ID 和公开 endpoint。 | 不要在验证回执或日志中写入 Authorization 请求头或 token 值。 |
+| 5. 保存项目状态 | Agent App 项目目录 | 让打包流程能够审查并复现“预期配置与已验证部署相匹配”的关系。 | `agentweave-project.json` 和 `.agentweave/deployment.lock`；它们包含配置及部署元数据，但不包含凭据。 | 不要加入 `.env`、token、Credential Vault 文件或签名私钥；公开仓库还应把账号和部署 ID 视为基础设施元数据。 |
+| 6. GitHub Actions 构建 | GitHub 托管 Runner 或受信任的自托管 Runner | 校验项目，并根据源码和已验证部署状态生成可复现的 Desktop 安装包。 | 源码、锁定的依赖、公开 App 配置和已验证的 deployment lock。 | 不要向只负责构建的 Job 注入 Cloudflare OAuth token，也不要缓存它或上传为 Artifact。 |
+| 7. 签名和公证 | 受保护的发布环境 | 证明发布者身份，并满足操作系统分发所需的信任要求。 | 作为受保护 Environment Secrets 保存的 Apple 签名证书、证书密码、Team ID 和公证凭据。 | 不要让 Pull Request、Fork、未经审查的 Workflow 代码或无关构建步骤接触发布凭据。 |
+| 8. 发布 Release | GitHub Releases 或其他受信任分发渠道 | 分发不可变、已验证的安装包及其校验值或发布元数据。 | 已签名的 `.dmg`、`.zip` 和非敏感发布元数据。 | 不要发布开发者控制面文件、临时钥匙串、凭据或含 Secret 的诊断日志。 |
+| 9. 最终用户运行 App | 最终用户设备 | 使用 App 中的公开网关 endpoint，并结合该用户自己的身份或模型配置提供服务。 | App 打包的公开配置，以及由该用户创建或授权的凭据。 | 发布的 App 不得包含开发者的 Cloudflare 凭据，也不得让最终用户复用开发者的 Cloudflare 身份。 |
+
+如果还需要由 CI 执行部署，应使用只提供给受保护部署 Job 的独立、最小权限机器凭据，不得复用开发者的浏览器 OAuth 授权。只有 Provider 明确支持非交互式部署凭据后，这条路径才可视为安全。
+
 ## 框架如何组合
 
 ```text
