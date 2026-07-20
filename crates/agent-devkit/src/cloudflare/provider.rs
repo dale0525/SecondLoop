@@ -31,6 +31,9 @@ use std::sync::Arc;
 
 pub const CAPABILITY_WORKERS_SCRIPTS_READ: &str = "workers-scripts-read";
 pub const CAPABILITY_WORKERS_SCRIPTS_WRITE: &str = "workers-scripts-write";
+pub const CAPABILITY_ACCOUNT_SETTINGS_READ: &str = "account-settings-read";
+pub const CAPABILITY_USER_DETAILS_READ: &str = "user-details-read";
+pub const CAPABILITY_D1_READ: &str = "d1-read";
 pub const CAPABILITY_D1_WRITE: &str = "d1-write";
 
 pub struct CloudflareGatewayProvider<T, S> {
@@ -482,7 +485,7 @@ where
     ) -> DevkitResult<Vec<DeveloperAccount>> {
         authorization.ensure_provider_usable(
             CLOUDFLARE_PROVIDER_ID,
-            &BTreeSet::new(),
+            &BTreeSet::from([CAPABILITY_ACCOUNT_SETTINGS_READ.into()]),
             now_unix_ms,
         )?;
         let result = self.rest.get_json(Some(authorization), "accounts").await?;

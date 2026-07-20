@@ -6,10 +6,7 @@ use crate::developer_control_plane_oauth::{
     CloudflareOAuthClientSelection, DeveloperAuthorizationPhase,
 };
 use crate::developer_sensitive_store::DeveloperSensitiveStore;
-use agent_devkit::cloudflare::{
-    CAPABILITY_D1_WRITE, CAPABILITY_WORKERS_SCRIPTS_READ, CAPABILITY_WORKERS_SCRIPTS_WRITE,
-    CLOUDFLARE_PROVIDER_ID, cloudflare_gateway_provider_descriptor,
-};
+use agent_devkit::cloudflare::{CLOUDFLARE_PROVIDER_ID, cloudflare_gateway_provider_descriptor};
 use agent_devkit::{
     ApplyOutcome, ApplyReceipt, AuthorizationRequirements, BeginProviderAuthorizationRequest,
     CompleteProviderAuthorizationRequest, DeploymentPlan, DeploymentTarget, DestroyPlan,
@@ -103,13 +100,14 @@ impl GatewayDeploymentProvider for FakeGatewayProvider {
                 SensitiveValue::new(b"cloudflare-token-secret".to_vec())?,
             )
             .await?;
+        let logical_capabilities = request.expected_scope_ids.clone();
         DeveloperAuthorization::new_unbound(
             CLOUDFLARE_PROVIDER_ID,
             request.actor_id,
             token,
             None,
             request.expected_scope_ids,
-            deployment_capabilities(),
+            logical_capabilities,
             request.expected_catalog_revision,
             request.now_unix_ms,
             None,
@@ -474,12 +472,4 @@ async fn oauth_state_is_one_time_even_when_the_callback_is_rejected() {
             .is_err(),
         "a rejected callback must still consume the pending transaction"
     );
-}
-
-fn deployment_capabilities() -> BTreeSet<String> {
-    BTreeSet::from([
-        CAPABILITY_WORKERS_SCRIPTS_READ.into(),
-        CAPABILITY_WORKERS_SCRIPTS_WRITE.into(),
-        CAPABILITY_D1_WRITE.into(),
-    ])
 }

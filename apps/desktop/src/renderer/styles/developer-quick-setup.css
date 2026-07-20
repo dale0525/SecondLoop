@@ -1,0 +1,311 @@
+.release-quick-heading > div {
+  display: grid;
+  gap: 5px;
+}
+
+.release-quick-heading [class*="rt-Badge"] {
+  width: fit-content;
+  letter-spacing: .06em;
+}
+
+.release-recommended-stack {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--blue-8) 46%, var(--color-border));
+  border-radius: var(--radius-content);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--blue-9) 7%, transparent), transparent 52%),
+    var(--color-surface);
+}
+
+.release-recommended-stack > span:first-child {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--blue-8) 50%, var(--color-border));
+  border-radius: 12px;
+  background: var(--color-primary-soft);
+  color: var(--color-primary-text);
+}
+
+.release-recommended-stack > div:nth-child(2) {
+  display: grid;
+  gap: 3px;
+}
+
+.release-recommended-stack > div:nth-child(2) small,
+.release-connected-account small {
+  color: var(--color-text-muted);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.release-stack-pills {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.release-stack-pills > span {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  padding: 9px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--color-surface-muted) 72%, transparent);
+}
+
+.release-stack-pills small {
+  color: var(--color-text-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.release-stack-pills strong {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.release-oauth-card-primary {
+  position: relative;
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--blue-8) 56%, var(--color-border));
+  box-shadow: 0 12px 30px color-mix(in srgb, var(--blue-9) 8%, transparent);
+}
+
+.release-oauth-card-primary::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 160px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--blue-8));
+  content: "";
+}
+
+.release-oauth-card-primary.is-ready {
+  border-color: color-mix(in srgb, var(--green-8) 62%, var(--color-border));
+  box-shadow: 0 12px 30px color-mix(in srgb, var(--green-9) 7%, transparent);
+}
+
+.release-oauth-primary-action {
+  width: fit-content;
+  min-width: 220px;
+}
+
+.release-oauth-advanced {
+  background: var(--color-surface-subtle);
+}
+
+.release-oauth-advanced > p,
+.release-stack-advanced > p,
+.release-auto-fields > p {
+  margin: 4px 0 14px;
+  line-height: 18px;
+}
+
+.release-oauth-waiting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.release-connected-account {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--green-8) 46%, var(--color-border));
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--green-3) 44%, var(--color-surface));
+  color: var(--green-11);
+}
+
+.release-connected-account > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.release-connected-account strong {
+  overflow: hidden;
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.release-stack-advanced {
+  border-style: dashed;
+}
+
+.release-provider-group {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.release-provider-group > strong {
+  font-size: 12px;
+}
+
+.release-provider-group .release-provider-cards [data-radix-collection-item] {
+  min-height: 108px;
+}
+
+.release-config-section {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-content);
+  background: var(--color-surface);
+}
+
+.release-config-section-heading {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: start;
+  gap: 11px;
+}
+
+.release-config-section-heading > span {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: 11px;
+  background: var(--color-surface-muted);
+  color: var(--color-primary-text);
+}
+
+.release-config-section-heading > div {
+  display: grid;
+  gap: 2px;
+}
+
+.release-config-section-heading h3,
+.release-config-section-heading p {
+  margin: 0;
+}
+
+.release-config-section-heading h3 {
+  font-size: 15px;
+  line-height: 21px;
+}
+
+.release-config-section-heading p {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.release-model-presets {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.release-model-presets [data-radix-collection-item] {
+  min-height: 106px;
+  padding: 14px;
+}
+
+.release-preset-choice {
+  display: grid;
+  gap: 8px;
+}
+
+.release-preset-choice > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+
+.release-autofill-note {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  border: 1px solid color-mix(in srgb, var(--green-8) 46%, var(--color-border));
+  border-radius: var(--radius-control);
+  color: var(--green-11);
+}
+
+.release-autofill-note > div {
+  display: grid;
+  gap: 2px;
+}
+
+.release-autofill-note code {
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.release-secret-section {
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--amber-8) 5%, transparent), transparent 46%),
+    var(--color-surface);
+}
+
+.release-secret-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+@media (max-width: 760px) {
+  .release-recommended-stack {
+    grid-template-columns: 40px minmax(0, 1fr);
+  }
+
+  .release-recommended-stack > [class*="rt-Badge"] {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .release-stack-pills,
+  .release-model-presets,
+  .release-secret-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .release-oauth-primary-action,
+  .release-oauth-advanced button,
+  .release-oauth-waiting button {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .release-oauth-waiting {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .release-connected-account {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .release-connected-account > [class*="rt-Badge"] {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .release-config-section {
+    padding: 15px;
+  }
+}

@@ -1,7 +1,8 @@
 use crate::developer_control_plane::{DeveloperControlPlane, PendingAuthorization, now_unix_ms};
 use agent_devkit::cloudflare::{
-    CAPABILITY_D1_WRITE, CAPABILITY_WORKERS_SCRIPTS_READ, CAPABILITY_WORKERS_SCRIPTS_WRITE,
-    CLOUDFLARE_PROVIDER_ID,
+    CAPABILITY_ACCOUNT_SETTINGS_READ, CAPABILITY_D1_READ, CAPABILITY_D1_WRITE,
+    CAPABILITY_USER_DETAILS_READ, CAPABILITY_WORKERS_SCRIPTS_READ,
+    CAPABILITY_WORKERS_SCRIPTS_WRITE, CLOUDFLARE_PROVIDER_ID,
 };
 use agent_devkit::{
     BeginProviderAuthorizationRequest, CompleteProviderAuthorizationRequest, DeveloperAccount,
@@ -145,7 +146,7 @@ impl DeveloperControlPlane {
             redirect_uri: redirect_uri.clone(),
             pkce_s256_challenge: challenge,
             state_handle: state_handle.clone(),
-            requested_capabilities: all_deployment_capabilities(),
+            requested_capabilities: all_authorization_capabilities(),
             expires_at_unix_ms,
         };
         let plan = match self.provider.begin_provider_authorization(request).await {
@@ -357,7 +358,7 @@ impl DeveloperControlPlane {
         })?;
         authorization.ensure_provider_usable(
             CLOUDFLARE_PROVIDER_ID,
-            &all_deployment_capabilities(),
+            &all_authorization_capabilities(),
             now_unix_ms(),
         )?;
         if account_required && authorization.account_id().is_none() {
@@ -416,10 +417,13 @@ impl DeveloperControlPlane {
     }
 }
 
-fn all_deployment_capabilities() -> BTreeSet<String> {
+fn all_authorization_capabilities() -> BTreeSet<String> {
     BTreeSet::from([
+        CAPABILITY_ACCOUNT_SETTINGS_READ.into(),
+        CAPABILITY_USER_DETAILS_READ.into(),
         CAPABILITY_WORKERS_SCRIPTS_READ.into(),
         CAPABILITY_WORKERS_SCRIPTS_WRITE.into(),
+        CAPABILITY_D1_READ.into(),
         CAPABILITY_D1_WRITE.into(),
     ])
 }

@@ -21,14 +21,21 @@ export function ProviderSchemaForm({
   selection,
   onChange,
   advanced = false,
+  excludeFieldIds = [],
+  fieldIds,
 }: {
   descriptor: DeveloperProviderDescriptor;
   selection: ProviderSelection;
   onChange: (selection: ProviderSelection) => void;
   advanced?: boolean;
+  excludeFieldIds?: readonly string[];
+  fieldIds?: readonly string[];
 }): JSX.Element {
   const fields = descriptor.configuration_schema.public_fields.filter((field) => (
-    field.advanced === advanced && isVisible(field, selection.publicConfig)
+    field.advanced === advanced
+      && (!fieldIds || fieldIds.includes(field.id))
+      && !excludeFieldIds.includes(field.id)
+      && isVisible(field, selection.publicConfig)
   ));
   if (fields.length === 0) return <></>;
   return (
@@ -116,9 +123,9 @@ function SchemaField({
         {label}
         <Select.Root
           onValueChange={(next) => onChange(next)}
-          value={typeof value === "string" ? value : String(field.default_value ?? "")}
+          value={typeof value === "string" ? value : ""}
         >
-          <Select.Trigger />
+          <Select.Trigger placeholder={t("developer.release.selectOption")} />
           <Select.Content>
             {field.allowed_values.map((option) => (
               <Select.Item key={String(option)} value={String(option)}>{labelFor(option)}</Select.Item>

@@ -1,6 +1,7 @@
 use super::{
-    CAPABILITY_D1_WRITE, CAPABILITY_WORKERS_SCRIPTS_READ, CAPABILITY_WORKERS_SCRIPTS_WRITE,
-    CLOUDFLARE_PROVIDER_ID,
+    CAPABILITY_ACCOUNT_SETTINGS_READ, CAPABILITY_D1_READ, CAPABILITY_D1_WRITE,
+    CAPABILITY_USER_DETAILS_READ, CAPABILITY_WORKERS_SCRIPTS_READ,
+    CAPABILITY_WORKERS_SCRIPTS_WRITE, CLOUDFLARE_PROVIDER_ID,
 };
 use crate::{
     AuthorizationCapabilityRequirement, ConfigFieldDescriptor, ConfigFieldType, DevkitError,
@@ -38,8 +39,11 @@ pub fn cloudflare_gateway_provider_descriptor() -> DevkitResult<ProviderDescript
             HostPlatform::Linux,
         ]),
         capabilities: BTreeSet::from([
+            CAPABILITY_ACCOUNT_SETTINGS_READ.into(),
+            CAPABILITY_USER_DETAILS_READ.into(),
             CAPABILITY_WORKERS_SCRIPTS_READ.into(),
             CAPABILITY_WORKERS_SCRIPTS_WRITE.into(),
+            CAPABILITY_D1_READ.into(),
             CAPABILITY_D1_WRITE.into(),
         ]),
         configuration_schema: gateway_project_schema(),
@@ -218,6 +222,16 @@ fn public_optional_string_field(
 pub(super) fn cloudflare_capability_requirements() -> Vec<AuthorizationCapabilityRequirement> {
     vec![
         AuthorizationCapabilityRequirement {
+            capability: CAPABILITY_ACCOUNT_SETTINGS_READ.into(),
+            accepted_catalog_names: BTreeSet::from(["Account Settings Read".into()]),
+            reason: "Discover the Cloudflare accounts visible to the developer grant.".into(),
+        },
+        AuthorizationCapabilityRequirement {
+            capability: CAPABILITY_USER_DETAILS_READ.into(),
+            accepted_catalog_names: BTreeSet::from(["User Details Read".into()]),
+            reason: "Attribute the developer grant to the authorizing Cloudflare user.".into(),
+        },
+        AuthorizationCapabilityRequirement {
             capability: CAPABILITY_WORKERS_SCRIPTS_READ.into(),
             accepted_catalog_names: BTreeSet::from(["Workers Scripts Read".into()]),
             reason: "Inspect deployments and detect drift before every mutation.".into(),
@@ -226,6 +240,11 @@ pub(super) fn cloudflare_capability_requirements() -> Vec<AuthorizationCapabilit
             capability: CAPABILITY_WORKERS_SCRIPTS_WRITE.into(),
             accepted_catalog_names: BTreeSet::from(["Workers Scripts Write".into()]),
             reason: "Create versions, deployments, and Worker secret bindings.".into(),
+        },
+        AuthorizationCapabilityRequirement {
+            capability: CAPABILITY_D1_READ.into(),
+            accepted_catalog_names: BTreeSet::from(["D1 Read".into()]),
+            reason: "Inspect the gateway entitlement ledger before planning a mutation.".into(),
         },
         AuthorizationCapabilityRequirement {
             capability: CAPABILITY_D1_WRITE.into(),
