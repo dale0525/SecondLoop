@@ -155,6 +155,39 @@ describe("developer release workspace", () => {
     expect(screen.getByText("Model service")).toBeInTheDocument();
   });
 
+  it("recovers a completed Cloudflare authorization from the authoritative status", async () => {
+    let phase: "select_account" | "ready" = "select_account";
+    let statusRequests = 0;
+    const accountId = "0123456789abcdef0123456789abcdef";
+    const accessRequest = vi.fn(async (operation: string) => {
+      if (operation === "status") {
+        statusRequests += 1;
+        if (statusRequests === 1) return disconnectedControlStatus();
+        return controlStatus(phase, phase === "ready" ? accountId : null);
+      }
+      if (operation === "cloudflare.accounts") return [{
+        accountId,
+        displayName: "Only account",
+        providerId: "cloudflare-workers",
+      }];
+      if (operation === "cloudflare.selectAccount") {
+        phase = "ready";
+        return undefined;
+      }
+      throw new Error(`Unexpected operation: ${operation}`);
+    });
+    installReleaseBridge(userConfigurableSnapshot(), { accessRequest });
+    window.history.replaceState(null, "", "/#developer/access/setup");
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", {
+      name: "Enter the details only your services know",
+    })).toBeInTheDocument();
+    expect(statusRequests).toBeGreaterThanOrEqual(3);
+    expect(accessRequest).toHaveBeenCalledWith("cloudflare.selectAccount", { accountId });
+  });
+
   it("offers an in-place retry when automatic account binding fails", async () => {
     let phase: "select_account" | "ready" = "select_account";
     let selectionAttempts = 0;
