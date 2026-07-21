@@ -1,0 +1,80 @@
+---
+import LegalLayout from "../components/LegalLayout.astro";
+import { contactEmail } from "../lib/i18n";
+---
+
+<LegalLayout
+  locale="en"
+  currentPath="/privacy/"
+  title="Privacy policy"
+  eyebrow="TRUST / DATA / CONTROL"
+  updated="July 22, 2026"
+  description="How the AgentWeave website and Developer Tools handle Google authorization data, local credentials, and website requests."
+>
+  <div class="policy-callout">
+    <p><strong>Short version.</strong> The AgentWeave website has no analytics, advertising cookies, or account database. AgentWeave Developer Tools stores Google authorization credentials locally and sends them directly to Google APIs only when you ask it to configure Firebase.</p>
+  </div>
+
+  <h2>1. Scope and publisher</h2>
+  <p>This policy applies to the website at <code>agentweave.secondloop.app</code> and to the Google OAuth flow identified as <strong>AgentWeave Developer Tools by SecondLoop</strong>.</p>
+  <p>AgentWeave is an open-source Agent App Framework maintained by the SecondLoop project team. This website provides project information, legal disclosures, and authorization help. Questions may be sent to <a href={`mailto:${contactEmail}`}>{contactEmail}</a>.</p>
+
+  <h2>2. What the Google authorization flow does</h2>
+  <p>The authorization flow helps a developer select or create a Google Cloud project, enable the APIs needed for Firebase, add Firebase to that project, and configure Firebase Authentication with email and password. It is a developer setup flow, not the login flow used by an Agent App's end users.</p>
+  <p>Google displays the requested permissions before access is granted. AgentWeave cannot authorize itself and does not receive your Google password.</p>
+
+  <h2>3. Information processed</h2>
+  <h3>Google authorization and project data</h3>
+  <ul>
+    <li>OAuth authorization responses, access tokens, refresh tokens, expiry information, and the selected OAuth client metadata.</li>
+    <li>Google Cloud project identifiers, project display names, lifecycle state, and Firebase project configuration returned by Google APIs.</li>
+    <li>API enablement and Firebase configuration results required to complete the setup you requested.</li>
+  </ul>
+  <h3>Local application data</h3>
+  <p>Authorization state, PKCE verifiers, tokens, and related credential material are stored through the Host's local sensitive-value store. They are not returned through the normal product API or UI and are not uploaded to a SecondLoop-operated credential service.</p>
+  <h3>Website request data</h3>
+  <p>This static website is delivered by Cloudflare Pages. Cloudflare may process standard request information such as IP address, browser and device information, requested URL, timestamps, and security events to deliver and protect the site. The website does not add analytics scripts, advertising pixels, or non-essential cookies.</p>
+
+  <h2>4. How information is used</h2>
+  <p>Google authorization and project data is used only to:</p>
+  <ul>
+    <li>complete the Firebase setup action initiated by the developer;</li>
+    <li>show setup progress, project choices, and actionable errors;</li>
+    <li>refresh authorization when the developer continues an authorized setup; and</li>
+    <li>disconnect, retry, or revoke the local authorization state.</li>
+  </ul>
+  <p>We do not use Google user data for advertising, profiling, credit decisions, or training general-purpose AI models.</p>
+
+  <h2>5. Google API Services User Data Policy</h2>
+  <div class="policy-callout">
+    <p>AgentWeave's use and transfer to any other app of information received from Google APIs will adhere to the <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noreferrer">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
+  </div>
+  <p>Access is limited to the developer-directed Firebase configuration workflow. Google user data is not sold, used for personalized advertising, or transferred to data brokers.</p>
+
+  <h2>6. Storage and retention</h2>
+  <p>OAuth credentials remain in the local AgentWeave Host's sensitive storage until you disconnect, revoke access, clear the relevant local application data, or the credential expires and cannot be refreshed. Short-lived authorization state is limited to the active setup window and is deleted after completion, cancellation, or expiry.</p>
+  <p>The website itself does not maintain a user database. Cloudflare may retain operational and security logs according to its service configuration and policies.</p>
+
+  <h2>7. Sharing and service providers</h2>
+  <p>AgentWeave sends OAuth and project requests directly to Google endpoints needed for authorization, Cloud Resource Manager, Service Usage, Firebase Management, and Identity Toolkit configuration. Cloudflare provides website delivery and security. We do not sell Google user data or share it with unrelated third parties.</p>
+  <p>Links to GitHub, Google, and other third-party sites are governed by those services' own policies after you follow the link.</p>
+
+  <h2>8. Your choices and deletion</h2>
+  <ul>
+    <li>Do not begin the Google connection if you do not want to grant the displayed permissions.</li>
+    <li>Disconnect or reconfigure Firebase authorization from AgentWeave Developer Tools.</li>
+    <li>Remove AgentWeave access from your <a href="https://myaccount.google.com/connections" target="_blank" rel="noreferrer">Google Account connections</a>.</li>
+    <li>Clear the local AgentWeave application data or uninstall the application to remove locally held credentials, subject to your platform's backup behavior.</li>
+  </ul>
+  <p>Detailed instructions are available on the <a href="/oauth-help/">OAuth help page</a>.</p>
+
+  <h2>9. Security</h2>
+  <p>The Desktop authorization flow uses an external browser, a loopback callback restricted to <code>127.0.0.1</code>, per-request state, and S256 PKCE. Sensitive values use redacted types and Host-controlled storage. No security control is infallible; developers should use dedicated test projects before granting production access.</p>
+
+  <h2>10. Children and regulated use</h2>
+  <p>AgentWeave Developer Tools is intended for developers and is not directed to children. AgentWeave 0.1.x is not presented as a reviewed solution for regulated or high-risk data. App teams remain responsible for their own privacy, security, retention, and compliance review.</p>
+
+  <h2>11. Changes and contact</h2>
+  <p>We may update this policy as the framework, authorization scopes, or deployment model changes. The effective date above will be updated when material changes are published.</p>
+  <p>For privacy questions or deletion assistance, contact <a href={`mailto:${contactEmail}`}>{contactEmail}</a>.</p>
+</LegalLayout>

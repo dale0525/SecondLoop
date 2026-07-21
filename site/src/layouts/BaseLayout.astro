@@ -1,0 +1,59 @@
+---
+import "@fontsource-variable/newsreader";
+import "@fontsource-variable/manrope";
+import "@fontsource-variable/azeret-mono";
+import "../styles/global.css";
+import "../styles/sections.css";
+import "../styles/legal.css";
+import "../styles/responsive.css";
+import SiteHeader from "../components/SiteHeader.astro";
+import SiteFooter from "../components/SiteFooter.astro";
+import { alternatePath, siteOrigin, type Locale } from "../lib/i18n";
+
+interface Props {
+  locale: Locale;
+  title: string;
+  description: string;
+  currentPath: string;
+}
+
+const { locale, title, description, currentPath } = Astro.props;
+const canonical = new URL(currentPath, siteOrigin).toString();
+const alternate = new URL(alternatePath(locale, currentPath), siteOrigin).toString();
+const lang = locale === "zh" ? "zh-CN" : "en";
+const alternateLang = locale === "zh" ? "en" : "zh-CN";
+---
+
+<!doctype html>
+<html lang={lang}>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0e1514" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="AgentWeave" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="canonical" href={canonical} />
+    <link rel="alternate" hreflang={alternateLang} href={alternate} />
+    <link rel="alternate" hreflang="x-default" href={new URL(currentPath.replace(/^\/zh(?=\/|$)/, "") || "/", siteOrigin).toString()} />
+    <title>{title}</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">{locale === "zh" ? "跳到主要内容" : "Skip to content"}</a>
+    <div class="page-shell">
+      <SiteHeader locale={locale} currentPath={currentPath} />
+      <main id="main-content">
+        <slot />
+      </main>
+      <SiteFooter locale={locale} />
+    </div>
+  </body>
+</html>

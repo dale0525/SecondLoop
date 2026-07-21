@@ -1,0 +1,73 @@
+---
+import LegalLayout from "../../components/LegalLayout.astro";
+import { contactEmail, repositoryUrl } from "../../lib/i18n";
+---
+
+<LegalLayout
+  locale="zh"
+  currentPath="/zh/terms/"
+  title="服务条款"
+  eyebrow="使用 / 责任 / 边界"
+  updated="2026 年 7 月 22 日"
+  description="适用于 AgentWeave 网站以及 AgentWeave Developer Tools 可选 Google 授权流程的条款。"
+>
+  <div class="policy-callout">
+    <p><strong>重要状态。</strong>AgentWeave 是仍处于 0.1.x 的开源框架软件，适用于评估、框架开发与受控试点。它不是托管生产服务，也不能替代应用级安全评审。</p>
+  </div>
+
+  <h2>1. 接受条款</h2>
+  <p>当你使用 AgentWeave 网站，或选择使用显示为 <strong>AgentWeave Developer Tools by SecondLoop</strong> 的 Google 授权流程时，本条款适用。继续使用即表示你同意本条款；如果不同意，请不要开始或完成授权。</p>
+
+  <h2>2. AgentWeave 提供什么</h2>
+  <p>AgentWeave 是开源 Agent App Framework，提供可复用的 Runtime、Host、Skill、Connector、审批、凭据、持久化和开发者工具基础设施。它不是托管 SaaS、生产 SLA、法律或合规服务，也不是现成的最终用户助手。</p>
+  <p>Google 授权流程是一项可选的开发者便利功能，用于帮助配置你选择或创建的 Firebase 项目。它不会转移项目所有权，不保证配置成功，也不会替你运营最终的 Agent App。</p>
+
+  <h2>3. 开源许可证</h2>
+  <p>AgentWeave 源码的使用、修改与分发受 <a href={repositoryUrl} target="_blank" rel="noreferrer">AgentWeave 仓库</a>内许可证约束，包括 Apache-2.0 与 MIT 许可材料。本网站条款不会替代这些许可证。</p>
+  <p>AgentWeave 名称、视觉身份、网站内容与第三方商标可能拥有独立于源码许可证的权利。不得让无关产品暗示获得官方认可或背书。</p>
+
+  <h2>4. 你的责任</h2>
+  <p>你需要负责：</p>
+  <ul>
+    <li>仅使用你有权管理的 Google 账号和 Cloud 项目；</li>
+    <li>授权前审阅 Google 展示的 OAuth 权限；</li>
+    <li>所选项目的配置、计费、数据、用户、凭据和策略；</li>
+    <li>接触生产数据前使用专用开发资源完成测试；</li>
+    <li>你所构建 Agent App 的 Prompt、Skills、Connectors、Providers、安全措施、披露和用户体验；</li>
+    <li>遵守适用法律以及 Google、Cloudflare、模型 Provider 和其他连接服务的条款。</li>
+  </ul>
+
+  <h2>5. 凭据与授权</h2>
+  <p>请保护操作系统账号和本地 AgentWeave 数据。Desktop OAuth 客户端元数据按设计可以公开，但授权码、PKCE verifier、access token、refresh token、API key、密码和 service account 材料必须按敏感信息处理。</p>
+  <p>你可以随时撤销 Google 访问。撤销可能中断配置、刷新与后续项目操作；必要时你需要重新连接或修复配置。</p>
+
+  <h2>6. 可接受使用</h2>
+  <p>不得使用网站或授权流程：</p>
+  <ul>
+    <li>未经许可访问项目、账号或数据；</li>
+    <li>误导他人理解 OAuth 流程的身份、权限或目的；</li>
+    <li>绕过速率限制、Provider 控制、审批或安全边界；</li>
+    <li>传播恶意软件、干扰服务或在未授权情况下探测基础设施；</li>
+    <li>把未经 SecondLoop 项目团队评审、托管或支持的 AgentWeave 产品宣传为官方产品。</li>
+  </ul>
+
+  <h2>7. 第三方服务</h2>
+  <p>Google Cloud、Firebase、GitHub、Cloudflare、模型 Provider 和其他连接服务均为独立第三方。其可用性、计费、权限、数据处理和条款不受 AgentWeave 控制。链接或集成不构成保证或背书。</p>
+
+  <h2>8. 预览软件与变更</h2>
+  <p>AgentWeave 0.1.x 可能发生不向后兼容的变化。Manifest 字段、Host API、packages、Provider 覆盖和工作流可能不完整或被替换。为满足安全、Provider、运营或政策要求，我们可能更新、暂停或移除网站与授权功能。</p>
+
+  <h2>9. 不提供保证</h2>
+  <p>在适用法律允许的最大范围内，网站、授权流程和开源软件均按“现状”和“可用状态”提供，不提供适销性、特定用途适用性、不侵权、持续可用、无错误运行或 Provider 配置成功等保证。</p>
+
+  <h2>10. 责任限制</h2>
+  <p>在适用法律允许的最大范围内，AgentWeave 贡献者和 SecondLoop 项目团队不对间接、附带、特殊、后果性、示范性或惩罚性损失负责，也不对因使用或无法使用网站、授权流程或软件造成的数据、凭据、项目、收入、利润、商誉或商业机会损失负责。</p>
+  <p>本条款不会排除法律禁止排除的责任；适用的强制性消费者保护不受影响。</p>
+
+  <h2>11. 暂停与终止</h2>
+  <p>你可以随时停止使用网站并撤销授权。当有合理必要处理滥用、安全事件、Provider 要求、法律义务或重大条款违反时，我们可能限制网站或 OAuth 客户端访问。</p>
+
+  <h2>12. 变更与联系</h2>
+  <p>随着 AgentWeave 或 Provider 集成变化，我们可能更新本条款。上方生效日期表示当前版本；更新后继续使用即表示更新后的条款适用于后续使用。</p>
+  <p>如对条款有疑问，请联系 <a href={`mailto:${contactEmail}`}>{contactEmail}</a>。</p>
+</LegalLayout>

@@ -1,0 +1,200 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import WeaveDiagram from "./WeaveDiagram.astro";
+import { localizedPath, repositoryUrl, type Locale } from "../lib/i18n";
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const zh = locale === "zh";
+const path = localizedPath(locale, "/");
+const content = zh
+  ? {
+      title: "AgentWeave · 开源 Agent App Framework",
+      description: "用可复用 Runtime、Skills、Connectors、权限、凭据和跨平台 Hosts 构建有自己品牌的 Agent App。",
+      eyebrow: "OPEN-SOURCE AGENT APP FRAMEWORK / 0.1.x",
+      headlineA: "构建你的 Agent App。",
+      headlineB: "把 Runtime 编织得足够牢。",
+      intro: "AgentWeave 把对话、模型接入、Skills、Connectors、审批、凭据、持久化和 Hosts 织成可复用基础设施。你的团队定义产品，而不是重新发明 Agent 循环。",
+      primary: "开始评估",
+      secondary: "查看 GitHub",
+      pilot: "适用于原型、框架开发与受控试点",
+      open: "Apache-2.0 / MIT 双许可证",
+      local: "本地优先的凭据边界",
+      sectionEyebrow: "THE DIVISION OF WORK",
+      sectionTitle: "共用复杂度，保留产品主权。",
+      sectionIntro: "框架提供稳定边界，Agent App 保留自己的用户、人格、能力组合和最终界面。两者不需要互相伪装。",
+      sharedTitle: "AgentWeave 负责",
+      sharedItems: ["Agent turn 与事件协议", "权限、审批与凭据存储", "Skills 与 Connectors 生命周期", "Desktop、Android 与 Server Hosts"],
+      yoursTitle: "你的 App 负责",
+      yoursItems: ["目标用户与关键旅程", "Prompt、人格与品牌", "启用的能力和 Provider", "发布、监控与产品安全评审"],
+      systemEyebrow: "A SYSTEM, NOT A PERSONA",
+      systemTitle: "同一套 Runtime，不止一种产品身份。",
+      systemIntro: "用版本化 App Manifest 组合 prompts、packages、themes、languages 和 policies。无需 fork 核心 turn loop。",
+      steps: [
+        ["01", "定义", "用 Manifest 声明身份、兼容性、能力与策略。"],
+        ["02", "编排", "把 Foundation Skills、私有 packages 和 Providers 组合成产品。"],
+        ["03", "验证", "先以 fake/local Provider 覆盖审批、重试、冲突和恢复。"],
+        ["04", "交付", "在 Desktop、Android 或自定义 Server Host 中发布。"],
+      ],
+      safetyEyebrow: "DETERMINISTIC BOUNDARIES",
+      safetyTitle: "模型可以提议。Host 才能决定。",
+      safetyIntro: "Prompt 永远不是权限边界。外部副作用、凭据访问和持久写入由确定性的 Runtime 与 Host 机制控制。",
+      safetyItems: [
+        ["Approval", "高影响操作在执行前进入明确的审批面。"],
+        ["Credentials", "敏感值由 Host 存储，通过不可回显的 handle 使用。"],
+        ["Idempotency", "持久 action 绑定 scope、版本和重复执行保护。"],
+      ],
+      oauthEyebrow: "GOOGLE AUTHORIZATION",
+      oauthTitle: "为 Firebase 配置提供一键授权，不替最终用户做决定。",
+      oauthIntro: "AgentWeave Developer Tools by SecondLoop 使用 Google Desktop OAuth，帮助开发者选择或创建项目并启用 Firebase 邮箱登录。授权令牌保留在本地敏感存储中，不上传到 SecondLoop 服务器。",
+      oauthLink: "了解 OAuth 数据处理与撤销方式",
+      statusEyebrow: "HONEST STATUS",
+      statusTitle: "现在适合验证，不适合跳过评审。",
+      statusIntro: "AgentWeave 仍处于 0.1.x。它适合原型、框架开发与受控试点；Manifest、Host API 和 Foundation Skill 契约仍可能变化。",
+      statusCta: "阅读完整项目说明",
+    }
+  : {
+      title: "AgentWeave · Open-source Agent App Framework",
+      description: "Build a branded Agent App on reusable runtime, skill, connector, permission, credential, and cross-platform host infrastructure.",
+      eyebrow: "OPEN-SOURCE AGENT APP FRAMEWORK / 0.1.x",
+      headlineA: "Build the agent app.",
+      headlineB: "Keep the runtime woven tight.",
+      intro: "AgentWeave weaves conversations, model access, Skills, Connectors, approvals, credentials, persistence, and Hosts into reusable infrastructure. Your team defines the product instead of rebuilding the Agent loop.",
+      primary: "Start evaluating",
+      secondary: "View on GitHub",
+      pilot: "For prototypes, framework work, and controlled pilots",
+      open: "Apache-2.0 / MIT dual licensed",
+      local: "Local-first credential boundaries",
+      sectionEyebrow: "THE DIVISION OF WORK",
+      sectionTitle: "Share the complexity. Keep product sovereignty.",
+      sectionIntro: "The framework supplies durable boundaries. An Agent App keeps its audience, persona, capability mix, and final interface. Neither has to pretend to be the other.",
+      sharedTitle: "AgentWeave owns",
+      sharedItems: ["Agent turns and event protocols", "Permissions, approvals, and credential storage", "Skill and Connector lifecycles", "Desktop, Android, and Server Hosts"],
+      yoursTitle: "Your App owns",
+      yoursItems: ["Audience and critical journeys", "Prompts, personality, and brand", "Enabled capabilities and providers", "Release, monitoring, and product security review"],
+      systemEyebrow: "A SYSTEM, NOT A PERSONA",
+      systemTitle: "One runtime. More than one product identity.",
+      systemIntro: "Compose prompts, packages, themes, languages, and policies through a versioned App Manifest. No core turn-loop fork required.",
+      steps: [
+        ["01", "Define", "Declare identity, compatibility, capabilities, and policy in the Manifest."],
+        ["02", "Compose", "Combine Foundation Skills, private packages, and providers into a product."],
+        ["03", "Prove", "Cover approvals, retries, conflicts, and recovery with fake or local providers first."],
+        ["04", "Deliver", "Ship through Desktop, Android, or a custom Server Host."],
+      ],
+      safetyEyebrow: "DETERMINISTIC BOUNDARIES",
+      safetyTitle: "The model can propose. The Host decides.",
+      safetyIntro: "A prompt is never a permission boundary. External side effects, credential access, and durable writes remain under deterministic Runtime and Host control.",
+      safetyItems: [
+        ["Approval", "High-impact work enters an explicit approval surface before execution."],
+        ["Credentials", "The Host stores sensitive values and exposes only non-echoing handles."],
+        ["Idempotency", "Durable actions carry scope, version, and duplicate-execution protection."],
+      ],
+      oauthEyebrow: "GOOGLE AUTHORIZATION",
+      oauthTitle: "One-click Firebase setup without making choices for the end user.",
+      oauthIntro: "AgentWeave Developer Tools by SecondLoop uses Google Desktop OAuth to help developers select or create a project and enable Firebase email login. Authorization tokens remain in local sensitive storage and are not uploaded to SecondLoop servers.",
+      oauthLink: "How OAuth data is handled and revoked",
+      statusEyebrow: "HONEST STATUS",
+      statusTitle: "Ready to evaluate. Not ready to skip review.",
+      statusIntro: "AgentWeave is still at 0.1.x. It fits prototypes, framework development, and controlled pilots; Manifest, Host API, and Foundation Skill contracts may still change.",
+      statusCta: "Read the full project guide",
+    };
+---
+
+<BaseLayout locale={locale} title={content.title} description={content.description} currentPath={path}>
+  <section class="hero">
+    <div class="hero__copy">
+      <p class="eyebrow">{content.eyebrow}</p>
+      <h1><span>{content.headlineA}</span><em>{content.headlineB}</em></h1>
+      <p class="hero__intro">{content.intro}</p>
+      <div class="hero__actions">
+        <a class="button button--primary" href={`${repositoryUrl}#technical-quick-start`} target="_blank" rel="noreferrer">{content.primary}<span aria-hidden="true">↗</span></a>
+        <a class="button button--ghost" href={repositoryUrl} target="_blank" rel="noreferrer">{content.secondary}<span aria-hidden="true">↗</span></a>
+      </div>
+      <ul class="hero__proof">
+        <li><span aria-hidden="true"></span>{content.pilot}</li>
+        <li><span aria-hidden="true"></span>{content.open}</li>
+        <li><span aria-hidden="true"></span>{content.local}</li>
+      </ul>
+    </div>
+    <div class="hero__visual">
+      <div class="hero__visual-label"><span>FRAMEWORK MAP</span><span>LIVE / LOCAL</span></div>
+      <WeaveDiagram locale={locale} />
+    </div>
+  </section>
+
+  <section class="division section-block">
+    <div class="section-heading">
+      <p class="eyebrow">{content.sectionEyebrow}</p>
+      <h2>{content.sectionTitle}</h2>
+      <p>{content.sectionIntro}</p>
+    </div>
+    <div class="division__grid">
+      <article class="ownership-card ownership-card--shared">
+        <span class="ownership-card__index">A / SHARED</span>
+        <h3>{content.sharedTitle}</h3>
+        <ul>{content.sharedItems.map((item) => <li>{item}</li>)}</ul>
+      </article>
+      <div class="division__hinge" aria-hidden="true"><span></span><span></span><span></span></div>
+      <article class="ownership-card ownership-card--yours">
+        <span class="ownership-card__index">B / DISTINCT</span>
+        <h3>{content.yoursTitle}</h3>
+        <ul>{content.yoursItems.map((item) => <li>{item}</li>)}</ul>
+      </article>
+    </div>
+  </section>
+
+  <section class="system section-block">
+    <div class="system__intro">
+      <p class="eyebrow">{content.systemEyebrow}</p>
+      <h2>{content.systemTitle}</h2>
+      <p>{content.systemIntro}</p>
+    </div>
+    <ol class="system__steps">
+      {content.steps.map(([number, title, body]) => (
+        <li>
+          <span class="system__number">{number}</span>
+          <div><h3>{title}</h3><p>{body}</p></div>
+        </li>
+      ))}
+    </ol>
+  </section>
+
+  <section class="safety section-block">
+    <div class="safety__heading">
+      <p class="eyebrow">{content.safetyEyebrow}</p>
+      <h2>{content.safetyTitle}</h2>
+      <p>{content.safetyIntro}</p>
+    </div>
+    <div class="safety__grid">
+      {content.safetyItems.map(([title, body], index) => (
+        <article>
+          <span>0{index + 1}</span>
+          <h3>{title}</h3>
+          <p>{body}</p>
+        </article>
+      ))}
+    </div>
+  </section>
+
+  <section class="oauth-band section-block">
+    <div class="oauth-band__signal" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+    <div>
+      <p class="eyebrow">{content.oauthEyebrow}</p>
+      <h2>{content.oauthTitle}</h2>
+      <p>{content.oauthIntro}</p>
+      <a class="text-link" href={localizedPath(locale, "/oauth-help/")}>{content.oauthLink}<span aria-hidden="true">→</span></a>
+    </div>
+  </section>
+
+  <section class="status-callout section-block">
+    <p class="eyebrow">{content.statusEyebrow}</p>
+    <div>
+      <h2>{content.statusTitle}</h2>
+      <p>{content.statusIntro}</p>
+      <a class="button button--light" href={locale === "zh" ? `${repositoryUrl}/blob/main/README.zh-CN.md` : repositoryUrl} target="_blank" rel="noreferrer">{content.statusCta}<span aria-hidden="true">↗</span></a>
+    </div>
+  </section>
+</BaseLayout>

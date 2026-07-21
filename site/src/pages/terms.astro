@@ -1,0 +1,73 @@
+---
+import LegalLayout from "../components/LegalLayout.astro";
+import { contactEmail, repositoryUrl } from "../lib/i18n";
+---
+
+<LegalLayout
+  locale="en"
+  currentPath="/terms/"
+  title="Terms of service"
+  eyebrow="USE / RESPONSIBILITY / LIMITS"
+  updated="July 22, 2026"
+  description="Terms for the AgentWeave website and the optional Google authorization flow in AgentWeave Developer Tools."
+>
+  <div class="policy-callout">
+    <p><strong>Important status.</strong> AgentWeave is open-source framework software at version 0.1.x. It is intended for evaluation, framework development, and controlled pilots—not as a managed production service or a substitute for an application-specific security review.</p>
+  </div>
+
+  <h2>1. Acceptance</h2>
+  <p>These terms apply when you use the AgentWeave website or choose to use the Google authorization flow identified as <strong>AgentWeave Developer Tools by SecondLoop</strong>. By continuing, you agree to these terms. If you do not agree, do not begin or complete the authorization flow.</p>
+
+  <h2>2. What AgentWeave provides</h2>
+  <p>AgentWeave is an open-source Agent App Framework. It provides reusable runtime, Host, Skill, Connector, approval, credential, persistence, and development-tool infrastructure. It is not a hosted SaaS, a production SLA, a legal or compliance service, or a finished end-user assistant.</p>
+  <p>The Google authorization flow is an optional developer convenience that helps configure Firebase in a project you select or create. It does not transfer ownership of the project, guarantee successful configuration, or operate the resulting Agent App for you.</p>
+
+  <h2>3. Open-source licenses</h2>
+  <p>Use, modification, and distribution of the AgentWeave source code are governed by the licenses included in the <a href={repositoryUrl} target="_blank" rel="noreferrer">AgentWeave repository</a>, including its Apache-2.0 and MIT licensing materials. These website terms do not replace those licenses.</p>
+  <p>The AgentWeave name, visual identity, website content, and third-party marks may have rights separate from the source-code licenses. Do not imply endorsement or official status for an unrelated product.</p>
+
+  <h2>4. Your responsibilities</h2>
+  <p>You are responsible for:</p>
+  <ul>
+    <li>using a Google account and Cloud project you are authorized to manage;</li>
+    <li>reviewing the OAuth permissions shown by Google before granting access;</li>
+    <li>the configuration, billing, data, users, credentials, and policies of projects you select;</li>
+    <li>testing with dedicated development resources before using production data;</li>
+    <li>the prompts, Skills, Connectors, providers, safety controls, disclosures, and user experience of any Agent App you build; and</li>
+    <li>complying with applicable laws and the terms of Google, Cloudflare, model providers, and other services you connect.</li>
+  </ul>
+
+  <h2>5. Credentials and authorization</h2>
+  <p>Keep your operating system account and local AgentWeave data secure. Although the Desktop OAuth client metadata is public by design, authorization codes, PKCE verifiers, access tokens, refresh tokens, API keys, passwords, and service-account material must be treated as sensitive.</p>
+  <p>You may revoke Google access at any time. Revocation can interrupt setup, refresh, and future project operations. You are responsible for reconnecting or repairing the configuration when necessary.</p>
+
+  <h2>6. Acceptable use</h2>
+  <p>Do not use the website or authorization flow to:</p>
+  <ul>
+    <li>access a project, account, or data without permission;</li>
+    <li>mislead a person about the identity, permissions, or purpose of an OAuth flow;</li>
+    <li>bypass rate limits, provider controls, approvals, or security boundaries;</li>
+    <li>distribute malware, interfere with the service, or probe infrastructure without authorization; or</li>
+    <li>claim that an AgentWeave-based product is reviewed, hosted, or supported by the SecondLoop project team when it is not.</li>
+  </ul>
+
+  <h2>7. Third-party services</h2>
+  <p>Google Cloud, Firebase, GitHub, Cloudflare, model providers, and other connected services are independent third parties. Their availability, billing, permissions, data handling, and terms are outside AgentWeave's control. Links and integrations do not constitute a warranty or endorsement.</p>
+
+  <h2>8. Preview software and changes</h2>
+  <p>AgentWeave 0.1.x may change without backward compatibility. Manifest fields, Host APIs, packages, provider coverage, and workflows may be incomplete or replaced. We may update, suspend, or remove website and authorization features to address security, provider, operational, or policy requirements.</p>
+
+  <h2>9. No warranties</h2>
+  <p>To the maximum extent permitted by applicable law, the website, authorization flow, and open-source software are provided “as is” and “as available,” without warranties of merchantability, fitness for a particular purpose, non-infringement, uninterrupted availability, error-free operation, or successful provider configuration.</p>
+
+  <h2>10. Limitation of liability</h2>
+  <p>To the maximum extent permitted by applicable law, the AgentWeave contributors and SecondLoop project team will not be liable for indirect, incidental, special, consequential, exemplary, or punitive damages, or for lost data, credentials, projects, revenue, profits, goodwill, or business opportunity arising from use of or inability to use the website, authorization flow, or software.</p>
+  <p>Nothing in these terms excludes liability that cannot lawfully be excluded. Mandatory consumer protections remain unaffected where they apply.</p>
+
+  <h2>11. Suspension and termination</h2>
+  <p>You may stop using the website and revoke authorization at any time. We may restrict access to the website or OAuth client when reasonably necessary to address abuse, security incidents, provider requirements, legal obligations, or material violations of these terms.</p>
+
+  <h2>12. Changes and contact</h2>
+  <p>We may update these terms as AgentWeave or its provider integrations change. The effective date above identifies the current version. Continued use after an update means the updated terms apply to later use.</p>
+  <p>Questions about these terms may be sent to <a href={`mailto:${contactEmail}`}>{contactEmail}</a>.</p>
+</LegalLayout>

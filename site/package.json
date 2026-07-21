@@ -1,0 +1,24 @@
+{
+  "name": "agentweave-site",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev --host 127.0.0.1 --port 4321",
+    "build": "astro build",
+    "check": "astro check && astro build && node scripts/verify-site.mjs",
+    "preview": "astro preview --host 127.0.0.1 --port 4321",
+    "deploy": "npm run build && wrangler pages deploy dist --project-name agentweave --branch main"
+  },
+  "dependencies": {
+    "@fontsource-variable/azeret-mono": "5.3.0",
+    "@fontsource-variable/manrope": "5.3.0",
+    "@fontsource-variable/newsreader": "5.3.0",
+    "astro": "7.1.3"
+  },
+  "devDependencies": {
+    "@astrojs/check": "0.9.6",
+    "typescript": "5.9.3",
+    "wrangler": "4.112.0"
+  }
+}

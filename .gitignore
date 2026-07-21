@@ -1,12 +1,14 @@
 .tool/
 .superpowers/
 .codex/
+.playwright-cli/
 /app/agentweave-project.json
 __pycache__/
 docs/
 .pixi/
 target/
 node_modules/
+.astro/
 dist/
 dist-electron/
 output/

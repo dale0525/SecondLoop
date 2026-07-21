@@ -1,0 +1,72 @@
+---
+import LegalLayout from "../../components/LegalLayout.astro";
+import { contactEmail } from "../../lib/i18n";
+---
+
+<LegalLayout
+  locale="zh"
+  currentPath="/zh/oauth-help/"
+  title="Google OAuth 帮助"
+  eyebrow="连接 / 配置 / 撤销"
+  updated="2026 年 7 月 22 日"
+  description="AgentWeave Developer Tools 向 Google 请求什么、Firebase 配置如何完成，以及如何撤销授权或删除本地凭据。"
+>
+  <div class="policy-callout">
+    <p><strong>这是开发者配置流程。</strong>Google 授权用于为 Agent App 配置 Firebase；它与最终 App 以后向用户提供的邮箱密码登录是两条独立流程。</p>
+  </div>
+
+  <h2>1. 连接前检查</h2>
+  <ul>
+    <li>使用有权创建或管理目标 Cloud 项目的 Google 账号。</li>
+    <li>先使用不包含生产用户或受监管数据的专用测试项目。</li>
+    <li>在 Google 授权页核对账号、应用名称、发布方域名和权限。</li>
+    <li>如果浏览器当前不是 Google 官方授权域名，请不要继续。</li>
+  </ul>
+
+  <h2>2. 请求的权限</h2>
+  <p>当前配置流程会请求以下 Google OAuth scopes：</p>
+  <ul class="scope-list">
+    <li><code>https://www.googleapis.com/auth/cloud-platform</code><span>读取和管理所选 Google Cloud 项目，并启用本次 Firebase 配置所需的服务。</span></li>
+    <li><code>https://www.googleapis.com/auth/firebase</code><span>查看和管理添加 Firebase、启用邮箱登录所需的 Firebase 项目配置。</span></li>
+  </ul>
+  <p>权限范围较宽，是因为项目创建、API 启用和 Firebase 配置横跨多个 Google 服务。AgentWeave 只在开发者明确发起的配置流程中使用这些权限。不要为无权管理的项目授权。</p>
+
+  <h2>3. 配置过程</h2>
+  <ol>
+    <li>AgentWeave 在本地敏感存储中创建短期授权 state 和 S256 PKCE verifier。</li>
+    <li>默认浏览器打开 Google 授权页面。</li>
+    <li>同意后，Google 重定向到由本地 AgentWeave Host 持有的临时 <code>127.0.0.1</code> 回调。</li>
+    <li>AgentWeave 将一次性授权码直接发送给 Google token endpoint，并提供匹配的 PKCE verifier。</li>
+    <li>你选择现有项目或创建新项目；AgentWeave 随后启用所需 API 并应用 Firebase Authentication 配置。</li>
+    <li>公开的 Firebase Web 配置返回开发者工作区；OAuth token 继续保留在本地敏感存储中。</li>
+  </ol>
+
+  <h2>4. Desktop OAuth 客户端元数据</h2>
+  <p>Client ID 是公开标识，会出现在每次授权请求中。Google Desktop installed app 无法保密共享的 client secret，因此 Desktop client secret 被当作公开客户端元数据，而不是应用身份的证明。这符合 <a href="https://www.rfc-editor.org/rfc/rfc8252.html#section-8.5" target="_blank" rel="noreferrer">RFC 8252 第 8.5 节</a>描述的 native-app OAuth 模型。</p>
+  <p>仅凭公开客户端元数据不能签发 token。签发仍需要用户同意、一次性授权码、匹配的 PKCE verifier 和精确回调。Access token 与 refresh token 仍然是机密信息。</p>
+
+  <h2>5. 断开或撤销访问</h2>
+  <h3>从 AgentWeave 操作</h3>
+  <p>打开 <strong>开发者工具 → 补充必要信息 → 用户登录</strong>，然后断开或重新开始 Firebase 授权。这会移除当前本地绑定及其本地授权材料。</p>
+  <h3>从 Google 账号操作</h3>
+  <ol>
+    <li>打开 <a href="https://myaccount.google.com/connections" target="_blank" rel="noreferrer">Google 账号 → 第三方应用和服务</a>。</li>
+    <li>选择 <strong>AgentWeave Developer Tools by SecondLoop</strong>。</li>
+    <li>选择移除或撤销访问。</li>
+  </ol>
+  <p>撤销后无法继续刷新 token。Google 已签发的 access token 可能在短暂有效期结束前仍然可用。如需移除全部本地状态，还应通过操作系统的应用数据管理清除 AgentWeave 数据，或卸载应用。</p>
+
+  <h2>6. 常见问题</h2>
+  <h3>出现“访问被阻止”或未验证应用警告</h3>
+  <p>确认应用名称为 AgentWeave Developer Tools by SecondLoop，并且发布方页面使用 <code>secondloop.app</code>。OAuth 验证完成前，Google 可能对受控试点应用施加未验证用户数量限制。</p>
+  <h3>回调页面无法连接</h3>
+  <p>浏览器完成授权时请保持 AgentWeave 运行。本地防火墙、代理或终端安全软件需要允许临时 IPv4 loopback 回调。不要把该回调替换成公开 URL。</p>
+  <h3>没有显示任何项目</h3>
+  <p>Google 账号可能缺少项目列表或创建权限，组织策略可能限制项目创建，或者项目不处于可支持的生命周期状态。可以使用专用账号重试，或请组织管理员授予所需角色。</p>
+  <h3>API 启用或 Firebase 配置失败</h3>
+  <p>核对计费与组织策略，确认你有权在项目中启用服务，并在 Google 服务传播延迟后重试。对于可重试错误，AgentWeave 会在有限时间内保留授权状态，而不会静默切换项目。</p>
+
+  <h2>7. 获取帮助</h2>
+  <p>联系支持前，请记录可见的错误类别和失败步骤。不要发送 access token、refresh token、授权码、密码或下载的 OAuth 凭据文件。</p>
+  <p>OAuth 与隐私问题请联系 <a href={`mailto:${contactEmail}`}>{contactEmail}</a>。</p>
+</LegalLayout>
