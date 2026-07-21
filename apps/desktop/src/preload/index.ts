@@ -35,11 +35,13 @@ import {
 } from "../shared/hostBootstrap";
 import {
   IDENTITY_LOGOUT_CHANNEL,
+  IDENTITY_PASSWORD_CHANNEL,
   IDENTITY_START_CHANNEL,
   IDENTITY_STATUS_CHANNEL,
   parseIdentityAuthorizationStart,
   parseIdentitySessionStatus,
   type IdentityAuthorizationStart,
+  type IdentityPasswordRequest,
   type IdentitySessionStatus,
 } from "../shared/identity";
 import {
@@ -83,6 +85,7 @@ export type DesktopPreloadApi = {
   };
   identity: {
     logout: () => Promise<IdentitySessionStatus>;
+    password: (request: IdentityPasswordRequest) => Promise<IdentitySessionStatus>;
     start: () => Promise<IdentityAuthorizationStart>;
     status: () => Promise<IdentitySessionStatus>;
   };
@@ -162,6 +165,9 @@ export const desktopPreloadApi: DesktopPreloadApi = Object.freeze({
   identity: Object.freeze({
     logout: async () => parseIdentitySessionStatus(
       await ipcRenderer.invoke(IDENTITY_LOGOUT_CHANNEL) as unknown,
+    ),
+    password: async (request: IdentityPasswordRequest) => parseIdentitySessionStatus(
+      await ipcRenderer.invoke(IDENTITY_PASSWORD_CHANNEL, request) as unknown,
     ),
     start: async () => parseIdentityAuthorizationStart(
       await ipcRenderer.invoke(IDENTITY_START_CHANNEL) as unknown,

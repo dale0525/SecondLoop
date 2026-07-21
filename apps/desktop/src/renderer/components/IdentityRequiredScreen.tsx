@@ -5,6 +5,7 @@ import type { PropsWithChildren } from "react";
 import { useHostBootstrap } from "../hostBootstrap";
 import { useI18n } from "../i18n/I18nProvider";
 import { useIdentitySession } from "../identitySession";
+import { IdentityPasswordForm } from "./IdentityPasswordForm";
 
 export function IdentityRequiredScreen({
   children,
@@ -46,15 +47,18 @@ export function IdentityRequiredScreen({
               <Callout.Text>{t("identity.unavailable")}</Callout.Text>
             </Callout.Root>
           ) : null}
+          {identity.method === "password" ? <IdentityPasswordForm /> : null}
           <Flex direction={{ initial: "column", sm: "row" }} gap="3">
-            <Button
-              disabled={identity.state === "loading" || identity.state === "waiting"}
-              onClick={() => void identity.start()}
-              size="3"
-            >
-              {identity.state === "loading" ? <Spinner /> : <ArrowRight size={16} />}
-              {identity.state === "unavailable" ? t("identity.tryAgain") : t("identity.signIn")}
-            </Button>
+            {identity.method === "browser" ? (
+              <Button
+                disabled={identity.state === "loading" || identity.state === "waiting"}
+                onClick={() => void identity.start()}
+                size="3"
+              >
+                {identity.state === "loading" ? <Spinner /> : <ArrowRight size={16} />}
+                {identity.state === "unavailable" ? t("identity.tryAgain") : t("identity.signIn")}
+              </Button>
+            ) : null}
             <Button color="gray" onClick={onOpenSettings} size="3" variant="soft">
               <Settings2 size={16} /> {t("identity.openSettings")}
             </Button>

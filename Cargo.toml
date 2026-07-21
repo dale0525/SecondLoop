@@ -5,6 +5,7 @@ members = [
   "crates/agent-runtime",
   "crates/agent-devkit",
   "crates/entitlement-providers",
+  "crates/identity-firebase",
   "crates/identity-oidc",
   "crates/storage-sqlcipher",
   "crates/provider-adapters",

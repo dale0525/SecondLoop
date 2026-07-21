@@ -60,6 +60,60 @@ describe("developer access controller", () => {
     dispose();
   });
 
+  it("keeps Google authorization and Firebase callback credentials in Main", async () => {
+    const port = await freePort();
+    const firebaseRedirectUri = `http://127.0.0.1:${port}/agentweave/firebase/callback`;
+    const harness = ipcHarness();
+    const callbacks: unknown[] = [];
+    const openExternal = vi.fn(async () => undefined);
+    const dispose = registerDeveloperAccessController({
+      ensureCredentialVault: async () => undefined,
+      firebaseRedirectUri,
+      ipcMain: harness.ipcMain,
+      loadProject: vi.fn(),
+      openExternal,
+      recordDeployment: vi.fn(),
+      redirectUri: "http://127.0.0.1:48971/agentweave/cloudflare/callback",
+      requesterWebContents: { id: 7 },
+      sidecarRequest: async (pathname, init) => {
+        if (pathname.endsWith("/callback")) {
+          callbacks.push(JSON.parse(String(init?.body)) as unknown);
+          return jsonResponse({
+            providerId: "google.firebase",
+            phase: "select_project",
+            projectId: null,
+            expiresAtUnixMs: Date.now() + 60_000,
+            publicOauthClientAvailable: true,
+          });
+        }
+        if (pathname.endsWith("/authorization")) {
+          return jsonResponse({
+            authorizationUrl: "https://accounts.google.com/o/oauth2/v2/auth?state=private-state",
+            expiresAtUnixMs: Date.now() + 60_000,
+          });
+        }
+        if (pathname.endsWith("/pending")) return jsonResponse({});
+        throw new Error(`Unexpected request: ${pathname}`);
+      },
+      verifyDeployment: vi.fn(),
+    });
+
+    const started = await harness.invoke({
+      operation: "firebase.connect",
+      input: { client: { mode: "agent_weave_public" } },
+    });
+    expect(started).toMatchObject({ phase: "awaiting_callback" });
+    expect(JSON.stringify(started)).not.toContain("authorizationUrl");
+    expect(openExternal).toHaveBeenCalledWith(
+      "https://accounts.google.com/o/oauth2/v2/auth?state=private-state",
+    );
+    const callbackUrl = `${firebaseRedirectUri}?code=private-google-code&state=private-state`;
+    const response = await fetch(callbackUrl, { redirect: "error" });
+    expect(response.status).toBe(200);
+    expect(callbacks).toEqual([{ callbackUrl }]);
+    dispose();
+  });
+
   it("binds deployment apply to the project revision used for its plan", async () => {
     const harness = ipcHarness();
     const sidecarBodies: unknown[] = [];

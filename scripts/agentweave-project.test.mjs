@@ -139,6 +139,18 @@ test("project desired state rejects unknown fields and recursively rejects crede
   publicTokenMetadata.providers.gateway.publicConfig.maxOutputTokens = 4096;
   assert.equal(validateAgentWeaveProjectData(publicTokenMetadata), publicTokenMetadata);
 
+  const firebaseWebConfiguration = managedProject();
+  firebaseWebConfiguration.providers.identity = provider("agentweave.identity.firebase", {
+    projectId: "sample-project-123",
+    firebaseWebKey: "public-firebase-browser-identifier",
+    webApplicationId: "1:123:web:abc",
+    authDomain: "sample-project-123.firebaseapp.com",
+  });
+  assert.equal(
+    validateAgentWeaveProjectData(firebaseWebConfiguration),
+    firebaseWebConfiguration,
+  );
+
   const accessToken = managedProject();
   accessToken.providers.identity.publicConfig.accessToken = "must-never-be-written";
   assert.throws(() => validateAgentWeaveProjectData(accessToken), /accessToken.*secret material/);

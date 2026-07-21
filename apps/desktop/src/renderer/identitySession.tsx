@@ -27,6 +27,8 @@ type IdentitySessionContextValue = Readonly<{
   account: IdentityAccount | null;
   expiresAt: string | null;
   logout(): Promise<void>;
+  method: "browser" | "password";
+  password(email: string, password: string): Promise<void>;
   refresh(): Promise<void>;
   start(): Promise<void>;
   state: IdentityUiState;
@@ -37,6 +39,9 @@ const IdentitySessionContext = createContext<IdentitySessionContextValue | null>
 export function IdentitySessionProvider({ children }: PropsWithChildren): JSX.Element {
   const bootstrap = useHostBootstrap();
   const required = bootstrap.discovery?.access.identity.mode === "required";
+  const method = bootstrap.discovery?.access.identity.provider?.id === "agentweave.identity.firebase"
+    ? "password"
+    : "browser";
   const [state, setState] = useState<IdentityUiState>(required ? "loading" : "not_required");
   const [account, setAccount] = useState<IdentityAccount | null>(null);
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
@@ -117,6 +122,20 @@ export function IdentitySessionProvider({ children }: PropsWithChildren): JSX.El
     }
   }, [required]);
 
+  const password = useCallback(async (email: string, passwordValue: string) => {
+    const identity = window.agentWeave?.identity;
+    if (!required || method !== "password" || !identity) {
+      setState(required ? "unavailable" : "not_required");
+      return;
+    }
+    setState("loading");
+    try {
+      applyStatus(await identity.password({ email, password: passwordValue }));
+    } catch {
+      setState("unavailable");
+    }
+  }, [applyStatus, method, required]);
+
   const logout = useCallback(async () => {
     const identity = window.agentWeave?.identity;
     if (!required || !identity) return;
@@ -133,10 +152,12 @@ export function IdentitySessionProvider({ children }: PropsWithChildren): JSX.El
     account,
     expiresAt,
     logout,
+    method,
+    password,
     refresh,
     start,
     state,
-  }), [account, expiresAt, logout, refresh, start, state]);
+  }), [account, expiresAt, logout, method, password, refresh, start, state]);
 
   return (
     <IdentitySessionContext.Provider value={value}>

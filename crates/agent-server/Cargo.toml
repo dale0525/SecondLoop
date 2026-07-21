@@ -9,6 +9,7 @@ agent-devkit = { path = "../agent-devkit" }
 agent-runtime = { path = "../agent-runtime" }
 agent-provider-adapters = { path = "../provider-adapters" }
 entitlement-providers = { path = "../entitlement-providers" }
+identity-firebase = { path = "../identity-firebase" }
 identity-oidc = { path = "../identity-oidc" }
 anyhow.workspace = true
 async-trait.workspace = true
@@ -19,6 +20,7 @@ fs2.workspace = true
 futures.workspace = true
 hex.workspace = true
 model-gateway = { path = "../model-gateway" }
+reqwest.workspace = true
 rustix.workspace = true
 same-file.workspace = true
 semver.workspace = true

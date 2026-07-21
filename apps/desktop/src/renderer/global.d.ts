@@ -10,6 +10,7 @@ import type {
 import type { AgentAppHostDiscovery } from "../shared/hostBootstrap";
 import type {
   IdentityAuthorizationStart,
+  IdentityPasswordRequest,
   IdentitySessionStatus,
 } from "../shared/identity";
 import type {
@@ -51,6 +52,7 @@ declare global {
       };
       identity?: {
         logout(): Promise<IdentitySessionStatus>;
+        password(request: IdentityPasswordRequest): Promise<IdentitySessionStatus>;
         start(): Promise<IdentityAuthorizationStart>;
         status(): Promise<IdentitySessionStatus>;
       };

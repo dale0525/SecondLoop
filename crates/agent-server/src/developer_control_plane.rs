@@ -191,6 +191,11 @@ pub struct DeveloperControlPlane {
     pub(super) cached_plans: Mutex<BTreeMap<String, CachedPlan>>,
     pub(super) mutation: Mutex<()>,
     pub(super) owner_id: String,
+    pub(super) firebase_http: Arc<dyn crate::developer_firebase::FirebaseControlHttp>,
+    pub(super) firebase_oauth_defaults: crate::developer_firebase::FirebaseOAuthDefaults,
+    pub(super) firebase_refresh: Mutex<()>,
+    pub(super) pending_firebase_authorization:
+        Mutex<Option<crate::developer_firebase::PendingFirebaseAuthorization>>,
 }
 
 pub(super) struct PendingAuthorization {
@@ -249,7 +254,7 @@ impl DeveloperControlPlane {
             Arc::clone(&sensitive),
         )?);
         let gateway_template = GatewayTemplateArtifact::from_environment().await?;
-        Self::new(
+        let mut control = Self::new(
             pool,
             sensitive,
             provider,
@@ -258,7 +263,10 @@ impl DeveloperControlPlane {
             oauth_defaults,
             gateway_template,
         )
-        .await
+        .await?;
+        control.firebase_oauth_defaults =
+            crate::developer_firebase::FirebaseOAuthDefaults::from_environment()?;
+        Ok(control)
     }
 
     pub(crate) async fn new(
@@ -289,6 +297,10 @@ impl DeveloperControlPlane {
             cached_plans: Mutex::new(BTreeMap::new()),
             mutation: Mutex::new(()),
             owner_id: format!("developer-host-{}", Uuid::new_v4()),
+            firebase_http: Arc::new(crate::developer_firebase::ReqwestFirebaseControlHttp::new()?),
+            firebase_oauth_defaults: crate::developer_firebase::FirebaseOAuthDefaults::default(),
+            firebase_refresh: Mutex::new(()),
+            pending_firebase_authorization: Mutex::new(None),
         })
     }
 

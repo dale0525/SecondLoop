@@ -267,6 +267,8 @@ app.whenReady().then(async () => {
         ) {
           disposers.push(registerDeveloperAccessController({
             ensureCredentialVault: () => security.ensureCredentialVault(),
+            firebaseRedirectUri: process.env.AGENTWEAVE_FIREBASE_OAUTH_REDIRECT_URI
+              ?? "http://127.0.0.1:8979/agentweave/firebase/callback",
             ipcMain,
             invalidateDeployment: () => invalidateDeveloperGatewayDeployment({
               appRoot: developerAppRoot,

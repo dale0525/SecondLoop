@@ -1,11 +1,13 @@
 import type { AgentAppHostDiscovery } from "../shared/hostBootstrap";
 import {
   IDENTITY_LOGOUT_CHANNEL,
+  IDENTITY_PASSWORD_CHANNEL,
   IDENTITY_START_CHANNEL,
   IDENTITY_STATUS_CHANNEL,
   parseIdentityAuthorizationStart,
   parseIdentitySessionStatus,
   type IdentityAuthorizationStart,
+  type IdentityPasswordRequest,
   type IdentitySessionStatus,
 } from "../shared/identity";
 import {
@@ -20,7 +22,7 @@ const MAX_RESPONSE_BYTES = 128 * 1024;
 type IpcEvent = { sender: { id: number } };
 
 type IpcMainLike = {
-  handle(channel: string, handler: (event: IpcEvent) => unknown): void;
+  handle(channel: string, handler: (event: IpcEvent, value?: unknown) => unknown): void;
   removeHandler(channel: string): void;
 };
 
@@ -77,6 +79,27 @@ export function registerIdentityController(options: {
       throw new Error("Identity authorization could not be started");
     }
   });
+  options.ipcMain.handle(IDENTITY_PASSWORD_CHANNEL, async (event, value) => {
+    assertRequester(event);
+    await options.ensureCredentialVault?.();
+    const discovery = await options.loadHostDiscovery();
+    if (
+      discovery.access.identity.mode !== "required"
+      || discovery.access.identity.provider?.id !== "agentweave.identity.firebase"
+    ) {
+      throw new Error("Firebase identity is not configured for this App");
+    }
+    const request = parsePasswordRequest(value);
+    return parseIdentitySessionStatus(await requestJson(
+      options.sidecarRequest,
+      "/identity/password",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(request),
+      },
+    ));
+  });
   options.ipcMain.handle(IDENTITY_LOGOUT_CHANNEL, async (event) => {
     assertRequester(event);
     await closeListener();
@@ -99,9 +122,27 @@ export function registerIdentityController(options: {
   return () => {
     options.ipcMain.removeHandler(IDENTITY_STATUS_CHANNEL);
     options.ipcMain.removeHandler(IDENTITY_START_CHANNEL);
+    options.ipcMain.removeHandler(IDENTITY_PASSWORD_CHANNEL);
     options.ipcMain.removeHandler(IDENTITY_LOGOUT_CHANNEL);
     void closeListener();
   };
+}
+
+function parsePasswordRequest(value: unknown): IdentityPasswordRequest {
+  const request = exactRecord(value, ["email", "password"]);
+  if (
+    typeof request.email !== "string"
+    || request.email.length === 0
+    || request.email.length > 320
+    || typeof request.password !== "string"
+    || request.password.length === 0
+    || request.password.length > 4096
+    || /[\x00-\x1f\x7f]/.test(request.email)
+    || /[\x00-\x1f\x7f]/.test(request.password)
+  ) {
+    throw new Error("Identity credentials are invalid");
+  }
+  return { email: request.email, password: request.password };
 }
 
 function identityRedirectUri(discovery: AgentAppHostDiscovery): string {

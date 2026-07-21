@@ -4,6 +4,7 @@ use crate::developer_control_plane_deployment::{
     DeploymentPlanInput, DeploymentReferenceInput, DeploymentSecretInput,
 };
 use crate::developer_control_plane_oauth::CloudflareOAuthClientSelection;
+use crate::developer_firebase::FirebaseOAuthClientSelection;
 use crate::developer_gateway_projection::{GatewayProjectPlanInput, project_gateway_plan};
 use agent_devkit::{DevkitError, DevkitErrorCode, RemoteMutationRisk};
 use axum::response::{IntoResponse, Response};
@@ -42,6 +43,22 @@ pub(crate) fn routes() -> Router<Arc<AppState>> {
             "/dev/control/cloudflare/accounts",
             get(list_accounts).post(select_account),
         )
+        .route(
+            "/dev/control/firebase/authorization",
+            post(start_firebase_authorization).delete(disconnect_firebase_authorization),
+        )
+        .route(
+            "/dev/control/firebase/authorization/callback",
+            post(complete_firebase_authorization),
+        )
+        .route(
+            "/dev/control/firebase/authorization/pending",
+            delete(cancel_firebase_authorization),
+        )
+        .route(
+            "/dev/control/firebase/projects",
+            get(list_firebase_projects).post(configure_firebase_project),
+        )
         .route("/dev/control/gateway/plan", post(plan_deployment))
         .route("/dev/control/gateway/apply", post(apply_deployment))
         .route("/dev/control/gateway/inspect", post(inspect_deployment))
@@ -56,6 +73,7 @@ pub(crate) fn routes() -> Router<Arc<AppState>> {
 #[serde(rename_all = "camelCase")]
 struct DeveloperControlStatus {
     authorization: crate::developer_control_plane_oauth::DeveloperAuthorizationStatus,
+    firebase_authorization: crate::developer_firebase::FirebaseAuthorizationStatus,
     gateway_template: Option<GatewayTemplateStatus>,
     sensitive_bindings: BTreeMap<String, String>,
 }
@@ -73,6 +91,7 @@ async fn status(
     let control = control_plane(&state)?;
     Ok(Json(DeveloperControlStatus {
         authorization: control.authorization_status().await?,
+        firebase_authorization: control.firebase_authorization_status().await?,
         gateway_template: control
             .gateway_template()
             .map(|template| GatewayTemplateStatus {
@@ -81,6 +100,79 @@ async fn status(
             }),
         sensitive_bindings: control.sensitive_binding_revisions().await?,
     }))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct StartFirebaseAuthorizationRequest {
+    client: FirebaseOAuthClientSelection,
+    redirect_uri: String,
+}
+
+async fn start_firebase_authorization(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<StartFirebaseAuthorizationRequest>,
+) -> Result<Json<crate::developer_firebase::FirebaseAuthorizationStart>, ControlPlaneApiError> {
+    let redirect_uri = parse_url(&request.redirect_uri, "Firebase OAuth callback URI")?;
+    Ok(Json(
+        control_plane(&state)?
+            .start_firebase_authorization(request.client, redirect_uri)
+            .await?,
+    ))
+}
+
+async fn complete_firebase_authorization(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<AuthorizationCallbackRequest>,
+) -> Result<Json<crate::developer_firebase::FirebaseAuthorizationStatus>, ControlPlaneApiError> {
+    Ok(Json(
+        control_plane(&state)?
+            .complete_firebase_authorization(&request.callback_url)
+            .await?,
+    ))
+}
+
+async fn cancel_firebase_authorization(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<crate::developer_firebase::FirebaseAuthorizationStatus>, ControlPlaneApiError> {
+    Ok(Json(
+        control_plane(&state)?
+            .cancel_firebase_authorization()
+            .await?,
+    ))
+}
+
+async fn disconnect_firebase_authorization(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<crate::developer_firebase::FirebaseAuthorizationStatus>, ControlPlaneApiError> {
+    Ok(Json(
+        control_plane(&state)?
+            .disconnect_firebase_authorization()
+            .await?,
+    ))
+}
+
+async fn list_firebase_projects(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<Vec<crate::developer_firebase::FirebaseProjectSummary>>, ControlPlaneApiError> {
+    Ok(Json(control_plane(&state)?.list_firebase_projects().await?))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ConfigureFirebaseProjectRequest {
+    project_id: String,
+}
+
+async fn configure_firebase_project(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<ConfigureFirebaseProjectRequest>,
+) -> Result<Json<crate::developer_firebase::FirebaseConfigurationReceipt>, ControlPlaneApiError> {
+    Ok(Json(
+        control_plane(&state)?
+            .configure_firebase_project(&request.project_id)
+            .await?,
+    ))
 }
 
 #[derive(Debug, Deserialize)]

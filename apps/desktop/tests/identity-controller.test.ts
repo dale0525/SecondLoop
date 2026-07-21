@@ -3,10 +3,14 @@
 import { createServer } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { parseDesktopRedirectUri } from "../src/main/identityCallbackServer";
+import {
+  parseDesktopRedirectUri,
+  prepareIdentityCallbackListener,
+} from "../src/main/identityCallbackServer";
 import { registerIdentityController } from "../src/main/identityController";
 import {
   IDENTITY_LOGOUT_CHANNEL,
+  IDENTITY_PASSWORD_CHANNEL,
   IDENTITY_START_CHANNEL,
   IDENTITY_STATUS_CHANNEL,
 } from "../src/shared/identity";
@@ -22,7 +26,10 @@ describe("desktop identity controller", () => {
   it("keeps the authorization URL and callback credentials in Main", async () => {
     const port = await unusedPort();
     const redirectUri = `http://127.0.0.1:${port}/identity/callback`;
-    const handlers = new Map<string, (event: { sender: { id: number } }) => unknown>();
+    const handlers = new Map<string, (
+      event: { sender: { id: number } },
+      value?: unknown,
+    ) => unknown>();
     const callbacks: unknown[] = [];
     const openExternal = vi.fn(async () => undefined);
     const ensureCredentialVault = vi.fn(async () => undefined);
@@ -82,6 +89,79 @@ describe("desktop identity controller", () => {
       .toEqual({ state: "signed_out", account: null });
   });
 
+  it("sends Firebase email credentials only to the trusted password endpoint", async () => {
+    const handlers = new Map<string, (
+      event: { sender: { id: number } },
+      value?: unknown,
+    ) => unknown>();
+    const bodies: unknown[] = [];
+    const dispose = registerIdentityController({
+      ensureCredentialVault: async () => undefined,
+      ipcMain: {
+        handle: (channel, handler) => handlers.set(channel, handler),
+        removeHandler: (channel) => handlers.delete(channel),
+      },
+      loadHostDiscovery: async () => firebaseDiscovery(),
+      openExternal: vi.fn(),
+      requesterWebContents: { id: 7 },
+      sidecarRequest: async (pathname, init) => {
+        expect(pathname).toBe("/identity/password");
+        bodies.push(JSON.parse(String(init?.body)) as unknown);
+        return jsonResponse({ state: "signed_in", account: account() });
+      },
+    });
+    disposers.push(dispose);
+
+    const result = await handlers.get(IDENTITY_PASSWORD_CHANNEL)!(
+      { sender: { id: 7 } },
+      { email: "person@example.test", password: "password-sentinel" },
+    );
+
+    expect(result).toMatchObject({
+      state: "signed_in",
+      account: { id: `usr_${"a".repeat(64)}` },
+    });
+    expect(bodies).toEqual([{
+      email: "person@example.test",
+      password: "password-sentinel",
+    }]);
+    expect(JSON.stringify(result)).not.toContain("password-sentinel");
+  });
+
+  it("rejects control characters in Firebase email credentials before sidecar transport", async () => {
+    const handlers = new Map<string, (
+      event: { sender: { id: number } },
+      value?: unknown,
+    ) => unknown>();
+    const sidecarRequest = vi.fn();
+    const dispose = registerIdentityController({
+      ensureCredentialVault: async () => undefined,
+      ipcMain: {
+        handle: (channel, handler) => handlers.set(channel, handler),
+        removeHandler: (channel) => handlers.delete(channel),
+      },
+      loadHostDiscovery: async () => firebaseDiscovery(),
+      openExternal: vi.fn(),
+      requesterWebContents: { id: 7 },
+      sidecarRequest,
+    });
+    disposers.push(dispose);
+    const passwordHandler = handlers.get(IDENTITY_PASSWORD_CHANNEL)!;
+
+    for (const request of [
+      { email: "person\r@example.test", password: "password-sentinel" },
+      { email: "person\n@example.test", password: "password-sentinel" },
+      { email: "person\x7f@example.test", password: "password-sentinel" },
+      { email: "person@example.test", password: "password\r-sentinel" },
+      { email: "person@example.test", password: "password\n-sentinel" },
+      { email: "person@example.test", password: "password\x7f-sentinel" },
+    ]) {
+      await expect(passwordHandler({ sender: { id: 7 } }, request))
+        .rejects.toThrow(/credentials are invalid/);
+    }
+    expect(sidecarRequest).not.toHaveBeenCalled();
+  });
+
   it("accepts only a fixed literal IPv4 loopback callback", () => {
     expect(parseDesktopRedirectUri("http://127.0.0.1:43122/identity/callback").port)
       .toBe("43122");
@@ -96,8 +176,32 @@ describe("desktop identity controller", () => {
     }
   });
 
+  it("keeps the callback listener available after a temporary completion failure", async () => {
+    const port = await unusedPort();
+    const redirectUri = `http://127.0.0.1:${port}/identity/callback`;
+    let attempts = 0;
+    const listener = await prepareIdentityCallbackListener({
+      redirectUri,
+      callback: async () => {
+        attempts += 1;
+        if (attempts === 1) throw new Error("temporary sidecar failure");
+      },
+    });
+    try {
+      const callback = `${redirectUri}?code=secret-code&state=secret-state`;
+      expect((await fetch(callback)).status).toBe(400);
+      expect((await fetch(callback)).status).toBe(200);
+      expect(attempts).toBe(2);
+    } finally {
+      await listener.close();
+    }
+  });
+
   it("rejects identity IPC from a different renderer", async () => {
-    const handlers = new Map<string, (event: { sender: { id: number } }) => unknown>();
+    const handlers = new Map<string, (
+      event: { sender: { id: number } },
+      value?: unknown,
+    ) => unknown>();
     const dispose = registerIdentityController({
       ipcMain: {
         handle: (channel, handler) => handlers.set(channel, handler),
@@ -120,6 +224,28 @@ function account() {
     id: `usr_${"a".repeat(64)}`,
     authenticatedAt: new Date().toISOString(),
     expiresAt: new Date(Date.now() + 60_000).toISOString(),
+  };
+}
+
+function firebaseDiscovery(): AgentAppHostDiscovery {
+  const value = discovery("http://127.0.0.1:43122/identity/callback");
+  return {
+    ...value,
+    access: {
+      ...value.access,
+      identity: {
+        mode: "required",
+        provider: {
+          id: "agentweave.identity.firebase",
+          version: "^0.1.0",
+          publicConfig: {
+            projectId: "sample-project-123",
+            firebaseWebKey: "public-web-key",
+            webApplicationId: "1:123:web:abc",
+          },
+        },
+      },
+    },
   };
 }
 

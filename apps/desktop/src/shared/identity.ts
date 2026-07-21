@@ -1,6 +1,12 @@
 export const IDENTITY_STATUS_CHANNEL = "agentweave:identity:status";
 export const IDENTITY_START_CHANNEL = "agentweave:identity:start";
 export const IDENTITY_LOGOUT_CHANNEL = "agentweave:identity:logout";
+export const IDENTITY_PASSWORD_CHANNEL = "agentweave:identity:password";
+
+export type IdentityPasswordRequest = Readonly<{
+  email: string;
+  password: string;
+}>;
 
 export type IdentityAccount = Readonly<{
   authenticatedAt: string;

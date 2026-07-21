@@ -20,6 +20,10 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{get, post},
 };
+use identity_firebase::{
+    FIREBASE_IDENTITY_PROVIDER_ID, FirebaseError, FirebaseIdentityProvider, FirebasePublicConfig,
+    FirebaseSecret, FirebaseSessionStore, ReqwestFirebaseHttpClient,
+};
 use identity_oidc::{
     GenericOidcProvider, OIDC_IDENTITY_PROVIDER_ID, OidcError, OidcHttpClient,
     OidcPluginPublicConfig, OidcSecretStore, PersistentOidcSecretStore, RemoteRevocation,
@@ -32,6 +36,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 use url::Url;
+use zeroize::Zeroizing;
 
 const MAX_CALLBACK_URL_BYTES: usize = 16 * 1024;
 
@@ -41,21 +46,30 @@ pub struct IdentityRuntime {
 }
 
 struct IdentityRuntimeInner {
+    request: SecurityContextRequest,
+    kind: IdentityRuntimeKind,
+    session_gate: RwLock<()>,
+}
+
+enum IdentityRuntimeKind {
+    Oidc(Box<OidcRuntime>),
+    Firebase(Arc<FirebaseIdentityProvider>),
+}
+
+struct OidcRuntime {
     provider_id: String,
     config: OidcPluginPublicConfig,
-    request: SecurityContextRequest,
     store: Arc<dyn OidcSecretStore>,
     http: Arc<dyn OidcHttpClient>,
     provider: RwLock<Option<Arc<GenericOidcProvider>>>,
     initialize: Mutex<()>,
-    session_gate: RwLock<()>,
 }
 
 impl std::fmt::Debug for IdentityRuntime {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("IdentityRuntime")
-            .field("provider_id", &self.inner.provider_id)
+            .field("provider_id", &self.provider_id())
             .field("app_id", &self.inner.request.app_id)
             .field("tenant_id", &self.inner.request.tenant_id)
             .finish_non_exhaustive()
@@ -122,67 +136,124 @@ impl IdentityRuntime {
         request.validate()?;
         Ok(Self {
             inner: Arc::new(IdentityRuntimeInner {
-                provider_id,
-                config,
                 request,
-                store,
-                http,
-                provider: RwLock::new(None),
-                initialize: Mutex::new(()),
+                kind: IdentityRuntimeKind::Oidc(Box::new(OidcRuntime {
+                    provider_id,
+                    config,
+                    store,
+                    http,
+                    provider: RwLock::new(None),
+                    initialize: Mutex::new(()),
+                })),
                 session_gate: RwLock::new(()),
             }),
         })
     }
 
-    pub fn redirect_uri(&self) -> &Url {
-        &self.inner.config.redirect_uri
+    pub fn firebase(
+        binding: &AgentAppProviderBinding,
+        app_id: impl Into<String>,
+        tenant_id: impl Into<String>,
+        store: Arc<dyn FirebaseSessionStore>,
+    ) -> anyhow::Result<Self> {
+        anyhow::ensure!(
+            binding.id.as_str() == FIREBASE_IDENTITY_PROVIDER_ID,
+            "required identity provider is not supported by this Host"
+        );
+        let config: FirebasePublicConfig = serde_json::from_value(binding.public_config.clone())
+            .map_err(|_| anyhow::anyhow!("Firebase public configuration is invalid"))?;
+        config
+            .validate()
+            .map_err(|_| anyhow::anyhow!("Firebase public configuration is invalid"))?;
+        let request = SecurityContextRequest {
+            app_id: app_id.into(),
+            tenant_id: tenant_id.into(),
+            audience: config.audience().into(),
+            required_scopes: Default::default(),
+        };
+        request.validate()?;
+        let http = Arc::new(
+            ReqwestFirebaseHttpClient::new()
+                .map_err(|_| anyhow::anyhow!("Firebase HTTP client is unavailable"))?,
+        );
+        let provider = Arc::new(
+            FirebaseIdentityProvider::new(config, store, http)
+                .map_err(|_| anyhow::anyhow!("Firebase identity provider is unavailable"))?,
+        );
+        Ok(Self {
+            inner: Arc::new(IdentityRuntimeInner {
+                request,
+                kind: IdentityRuntimeKind::Firebase(provider),
+                session_gate: RwLock::new(()),
+            }),
+        })
     }
 
-    async fn provider(&self) -> Result<Arc<GenericOidcProvider>, OidcError> {
-        if let Some(provider) = self.inner.provider.read().await.clone() {
-            return Ok(provider);
+    pub fn provider_id(&self) -> &str {
+        match &self.inner.kind {
+            IdentityRuntimeKind::Oidc(runtime) => &runtime.provider_id,
+            IdentityRuntimeKind::Firebase(_) => FIREBASE_IDENTITY_PROVIDER_ID,
         }
-        let _guard = self.inner.initialize.lock().await;
-        if let Some(provider) = self.inner.provider.read().await.clone() {
-            return Ok(provider);
+    }
+
+    pub fn redirect_uri(&self) -> Option<&Url> {
+        match &self.inner.kind {
+            IdentityRuntimeKind::Oidc(runtime) => Some(&runtime.config.redirect_uri),
+            IdentityRuntimeKind::Firebase(_) => None,
         }
-        let provider = Arc::new(
-            GenericOidcProvider::discover(
-                self.inner.provider_id.clone(),
-                self.inner.config.connection(),
-                self.inner.config.preset,
-                self.inner.http.clone(),
-                self.inner.store.clone(),
-            )
-            .await?,
-        );
-        *self.inner.provider.write().await = Some(provider.clone());
-        Ok(provider)
     }
 
     async fn security_context(&self) -> Result<SecurityContext, IdentityProviderError> {
-        let provider = self.provider().await.map_err(IdentityProviderError::from)?;
-        provider.security_context(&self.inner.request).await
+        match &self.inner.kind {
+            IdentityRuntimeKind::Oidc(runtime) => {
+                runtime
+                    .provider()
+                    .await
+                    .map_err(IdentityProviderError::from)?
+                    .security_context(&self.inner.request)
+                    .await
+            }
+            IdentityRuntimeKind::Firebase(provider) => {
+                provider.security_context(&self.inner.request).await
+            }
+        }
     }
 
     pub(crate) async fn gateway_test_assertion(
         &self,
-    ) -> Result<identity_oidc::SecretValue, OidcError> {
-        let provider = self.provider().await?;
-        provider.access_assertion(&self.inner.request).await
+    ) -> Result<IdentityAssertion, IdentityProviderError> {
+        let value = match &self.inner.kind {
+            IdentityRuntimeKind::Oidc(runtime) => runtime
+                .provider()
+                .await
+                .map_err(IdentityProviderError::from)?
+                .access_assertion(&self.inner.request)
+                .await
+                .map_err(IdentityProviderError::from)?
+                .expose_secret()
+                .to_owned(),
+            IdentityRuntimeKind::Firebase(provider) => provider
+                .gateway_assertion(&self.inner.request)
+                .await
+                .map_err(IdentityProviderError::from)?
+                .expose_secret()
+                .to_owned(),
+        };
+        Ok(IdentityAssertion(Zeroizing::new(value)))
     }
 
     async fn session_status(&self) -> IdentitySessionStatus {
-        let binding = self.binding();
-        match self.inner.store.session_metadata(&binding).await {
-            Ok(None) => return IdentitySessionStatus::signed_out(),
-            Err(_) => {
-                return IdentitySessionStatus {
-                    state: IdentitySessionState::Unavailable,
-                    account: None,
-                };
+        if let IdentityRuntimeKind::Oidc(runtime) = &self.inner.kind {
+            match runtime.store.session_metadata(&self.binding()).await {
+                Ok(None) => return IdentitySessionStatus::signed_out(),
+                Err(_) => {
+                    return IdentitySessionStatus {
+                        state: IdentitySessionState::Unavailable,
+                        account: None,
+                    };
+                }
+                Ok(Some(_)) => {}
             }
-            Ok(Some(_)) => {}
         }
         match self.security_context().await {
             Ok(context) => IdentitySessionStatus {
@@ -199,31 +270,71 @@ impl IdentityRuntime {
         }
     }
 
-    async fn clear_local_session(&self) -> Result<(), OidcError> {
-        let binding = self.binding();
-        let lease = self
-            .inner
-            .store
-            .lease_session(&binding)
-            .await
-            .map_err(map_store_error)?;
-        if let Some(lease) = lease {
-            self.inner
-                .store
-                .delete_leased_session(lease)
+    async fn clear_local_session(&self) -> Result<(), IdentityProviderError> {
+        match &self.inner.kind {
+            IdentityRuntimeKind::Oidc(runtime) => {
+                let lease = runtime
+                    .store
+                    .lease_session(&self.binding())
+                    .await
+                    .map_err(map_store_error)
+                    .map_err(IdentityProviderError::from)?;
+                if let Some(lease) = lease {
+                    runtime
+                        .store
+                        .delete_leased_session(lease)
+                        .await
+                        .map_err(map_store_error)
+                        .map_err(IdentityProviderError::from)?;
+                }
+                Ok(())
+            }
+            IdentityRuntimeKind::Firebase(provider) => provider
+                .sign_out()
                 .await
-                .map_err(map_store_error)?;
+                .map_err(IdentityProviderError::from),
         }
-        Ok(())
     }
 
     fn binding(&self) -> SessionBinding {
         SessionBinding::new(
-            &self.inner.provider_id,
+            self.provider_id(),
             &self.inner.request.app_id,
             &self.inner.request.tenant_id,
             &self.inner.request.audience,
         )
+    }
+}
+
+impl OidcRuntime {
+    async fn provider(&self) -> Result<Arc<GenericOidcProvider>, OidcError> {
+        if let Some(provider) = self.provider.read().await.clone() {
+            return Ok(provider);
+        }
+        let _guard = self.initialize.lock().await;
+        if let Some(provider) = self.provider.read().await.clone() {
+            return Ok(provider);
+        }
+        let provider = Arc::new(
+            GenericOidcProvider::discover(
+                self.provider_id.clone(),
+                self.config.connection(),
+                self.config.preset,
+                self.http.clone(),
+                self.store.clone(),
+            )
+            .await?,
+        );
+        *self.provider.write().await = Some(provider.clone());
+        Ok(provider)
+    }
+}
+
+pub(crate) struct IdentityAssertion(Zeroizing<String>);
+
+impl IdentityAssertion {
+    pub(crate) fn expose_secret(&self) -> &str {
+        self.0.as_str()
     }
 }
 
@@ -314,9 +425,8 @@ impl RequestSecurityContext {
 #[async_trait::async_trait]
 impl GatewayCredentialProvider for IdentityRuntime {
     async fn bearer_token(&self) -> Result<GatewayBearerToken, GatewayCredentialError> {
-        let provider = self.provider().await.map_err(|_| GatewayCredentialError)?;
-        let assertion = provider
-            .access_assertion(&self.inner.request)
+        let assertion = self
+            .gateway_test_assertion()
             .await
             .map_err(|_| GatewayCredentialError)?;
         GatewayBearerToken::new(assertion.expose_secret().to_owned())
@@ -368,6 +478,13 @@ struct AuthorizationCallbackRequest {
     callback_url: String,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PasswordSignInRequest {
+    email: FirebaseSecret,
+    password: FirebaseSecret,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct LogoutResponse {
@@ -389,6 +506,7 @@ pub(crate) fn routes() -> Router<Arc<AppState>> {
         .route("/identity/status", get(status))
         .route("/identity/authorization", post(begin_authorization))
         .route("/identity/callback", post(complete_authorization))
+        .route("/identity/password", post(sign_in_with_password))
         .route("/identity/logout", post(logout))
 }
 
@@ -437,7 +555,10 @@ async fn begin_authorization(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<AuthorizationStartResponse>, ApiError> {
     let runtime = runtime(&state)?;
-    let provider = runtime.provider().await.map_err(ApiError::from)?;
+    let IdentityRuntimeKind::Oidc(oidc) = &runtime.inner.kind else {
+        return Err(ApiError::InvalidRequest);
+    };
+    let provider = oidc.provider().await.map_err(ApiError::from)?;
     let start = provider
         .begin_authorization(&runtime.inner.request)
         .await
@@ -457,18 +578,39 @@ async fn complete_authorization(
     }
     let runtime = runtime(&state)?;
     let _session_guard = runtime.inner.session_gate.write().await;
+    let redirect_uri = runtime.redirect_uri().ok_or(ApiError::InvalidRequest)?;
     let callback = Url::parse(&request.callback_url).map_err(|_| ApiError::InvalidRequest)?;
-    if callback.scheme() != runtime.redirect_uri().scheme()
-        || callback.host_str() != runtime.redirect_uri().host_str()
-        || callback.port_or_known_default() != runtime.redirect_uri().port_or_known_default()
-        || callback.path() != runtime.redirect_uri().path()
+    if callback.scheme() != redirect_uri.scheme()
+        || callback.host_str() != redirect_uri.host_str()
+        || callback.port_or_known_default() != redirect_uri.port_or_known_default()
+        || callback.path() != redirect_uri.path()
     {
         return Err(ApiError::InvalidRequest);
     }
-    let provider = runtime.provider().await.map_err(ApiError::from)?;
+    let IdentityRuntimeKind::Oidc(oidc) = &runtime.inner.kind else {
+        return Err(ApiError::InvalidRequest);
+    };
+    let provider = oidc.provider().await.map_err(ApiError::from)?;
     state.turn_coordinator().cancel_all().await;
     provider
         .complete_authorization_url(&callback)
+        .await
+        .map_err(ApiError::from)?;
+    Ok(Json(runtime.session_status().await))
+}
+
+async fn sign_in_with_password(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<PasswordSignInRequest>,
+) -> Result<Json<IdentitySessionStatus>, ApiError> {
+    let runtime = runtime(&state)?;
+    let _session_guard = runtime.inner.session_gate.write().await;
+    let IdentityRuntimeKind::Firebase(provider) = &runtime.inner.kind else {
+        return Err(ApiError::InvalidRequest);
+    };
+    state.turn_coordinator().cancel_all().await;
+    provider
+        .sign_in_with_password(&runtime.inner.request, request.email, request.password)
         .await
         .map_err(ApiError::from)?;
     Ok(Json(runtime.session_status().await))
@@ -478,18 +620,24 @@ async fn logout(State(state): State<Arc<AppState>>) -> Result<Json<LogoutRespons
     let runtime = runtime(&state)?;
     let _session_guard = runtime.inner.session_gate.write().await;
     state.turn_coordinator().cancel_all().await;
-    let outcome = match runtime.provider().await {
-        Ok(provider) => Some(
-            provider
-                .logout(&runtime.inner.request)
-                .await
-                .map_err(ApiError::from)?,
-        ),
-        Err(_) => {
-            runtime
-                .clear_local_session()
-                .await
-                .map_err(ApiError::from)?;
+    let outcome = match &runtime.inner.kind {
+        IdentityRuntimeKind::Oidc(oidc) => match oidc.provider().await {
+            Ok(provider) => Some(
+                provider
+                    .logout(&runtime.inner.request)
+                    .await
+                    .map_err(ApiError::from)?,
+            ),
+            Err(_) => {
+                runtime
+                    .clear_local_session()
+                    .await
+                    .map_err(ApiError::from)?;
+                None
+            }
+        },
+        IdentityRuntimeKind::Firebase(provider) => {
+            provider.sign_out().await.map_err(ApiError::from)?;
             None
         }
     };
@@ -560,6 +708,35 @@ impl From<OidcError> for ApiError {
             | OidcError::Unavailable
             | OidcError::SessionBusy
             | OidcError::SecureStorage => Self::Unavailable,
+        }
+    }
+}
+
+impl From<FirebaseError> for ApiError {
+    fn from(error: FirebaseError) -> Self {
+        match error {
+            FirebaseError::InvalidConfiguration | FirebaseError::InvalidRequest => {
+                Self::InvalidRequest
+            }
+            FirebaseError::AccessDenied | FirebaseError::AuthenticationRequired => {
+                Self::AccessDenied
+            }
+            FirebaseError::InvalidResponse
+            | FirebaseError::Unavailable
+            | FirebaseError::SecureStorage => Self::Unavailable,
+        }
+    }
+}
+
+impl From<IdentityProviderError> for ApiError {
+    fn from(error: IdentityProviderError) -> Self {
+        match error.code {
+            IdentityProviderErrorCode::InvalidRequest => Self::InvalidRequest,
+            IdentityProviderErrorCode::AccessDenied
+            | IdentityProviderErrorCode::AuthenticationRequired => Self::AccessDenied,
+            IdentityProviderErrorCode::InvalidResponse | IdentityProviderErrorCode::Unavailable => {
+                Self::Unavailable
+            }
         }
     }
 }
