@@ -7,6 +7,7 @@ import {
   ShieldCheck,
   WandSparkles,
 } from "lucide-react";
+import type { ReactNode } from "react";
 
 import type { DeveloperProviderDescriptor } from "../../devProvidersApi";
 import {
@@ -25,6 +26,7 @@ export function DeveloperConfigurationStep({
   entitlementDescriptor,
   gatewayDescriptor,
   identityDescriptor,
+  identitySetup,
   onDraft,
   onSecret,
   secretValues,
@@ -34,6 +36,7 @@ export function DeveloperConfigurationStep({
   entitlementDescriptor: DeveloperProviderDescriptor;
   gatewayDescriptor: DeveloperProviderDescriptor;
   identityDescriptor: DeveloperProviderDescriptor;
+  identitySetup?: ReactNode;
   onDraft: (draft: ManagedProjectDraft) => void;
   onSecret: (slot: string, value: string) => void;
   secretValues: Readonly<Record<string, string>>;
@@ -109,28 +112,31 @@ export function DeveloperConfigurationStep({
           title={t("developer.release.identityConnection")}
           titleId="release-identity-config-title"
         />
-        <ProviderSchemaForm
-          descriptor={identityDescriptor}
-          excludeFieldIds={["scopes", "redirectUri"]}
-          onChange={updateIdentity}
-          selection={draft.providers.identity}
-        />
-        <details className="release-advanced release-auto-fields">
-          <summary>{t("developer.release.automaticLoginSettings")}</summary>
-          <Text as="p" color="gray" size="1">{t("developer.release.automaticLoginSettingsHint")}</Text>
+        {identitySetup}
+        {identityDescriptor.provider_id === "agentweave.identity.firebase" ? null : <>
           <ProviderSchemaForm
             descriptor={identityDescriptor}
-            fieldIds={["scopes", "redirectUri"]}
+            excludeFieldIds={["scopes", "redirectUri"]}
             onChange={updateIdentity}
             selection={draft.providers.identity}
           />
-          <ProviderSchemaForm
-            advanced
-            descriptor={identityDescriptor}
-            onChange={updateIdentity}
-            selection={draft.providers.identity}
-          />
-        </details>
+          <details className="release-advanced release-auto-fields">
+            <summary>{t("developer.release.automaticLoginSettings")}</summary>
+            <Text as="p" color="gray" size="1">{t("developer.release.automaticLoginSettingsHint")}</Text>
+            <ProviderSchemaForm
+              descriptor={identityDescriptor}
+              fieldIds={["scopes", "redirectUri"]}
+              onChange={updateIdentity}
+              selection={draft.providers.identity}
+            />
+            <ProviderSchemaForm
+              advanced
+              descriptor={identityDescriptor}
+              onChange={updateIdentity}
+              selection={draft.providers.identity}
+            />
+          </details>
+        </>}
       </section>
 
       <section className="release-config-section" aria-labelledby="release-model-service-title">

@@ -40,6 +40,20 @@
   color: var(--color-primary-text);
 }
 
+.identity-password-form {
+  display: grid;
+  gap: 12px;
+}
+
+.identity-password-form label {
+  display: grid;
+  gap: 7px;
+}
+
+.identity-password-form button {
+  justify-self: start;
+}
+
 .identity-gate-mark {
   width: 44px;
   height: 44px;
@@ -65,5 +79,9 @@
   .identity-gate button,
   .settings-identity-panel button {
     min-height: 44px;
+  }
+
+  .identity-password-form button {
+    width: 100%;
   }
 }

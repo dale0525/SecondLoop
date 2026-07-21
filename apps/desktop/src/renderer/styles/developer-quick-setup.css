@@ -268,6 +268,112 @@
   gap: 14px;
 }
 
+.release-firebase-card {
+  position: relative;
+  display: grid;
+  gap: 16px;
+  overflow: hidden;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--orange-8) 54%, var(--color-border));
+  border-radius: var(--radius-content);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--orange-7) 9%, transparent), transparent 54%),
+    var(--color-surface-subtle);
+}
+
+.release-firebase-card::after {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 180px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--orange-9));
+  content: "";
+}
+
+.release-firebase-card.is-ready {
+  border-color: color-mix(in srgb, var(--green-8) 58%, var(--color-border));
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--green-7) 7%, transparent), transparent 54%),
+    var(--color-surface-subtle);
+}
+
+.release-firebase-heading {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.release-firebase-heading > div {
+  display: grid;
+  gap: 3px;
+}
+
+.release-firebase-mark {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--orange-8) 56%, var(--color-border));
+  border-radius: 13px 13px 13px 5px;
+  background: color-mix(in srgb, var(--orange-4) 72%, var(--color-surface));
+  color: var(--orange-11);
+}
+
+.release-firebase-actions,
+.release-firebase-project-picker {
+  display: grid;
+  gap: 12px;
+}
+
+.release-firebase-actions > button,
+.release-firebase-project-picker > button {
+  justify-self: start;
+}
+
+.release-firebase-progress {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.release-firebase-progress span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 7px 9px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--color-surface) 82%, transparent);
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.release-firebase-card.is-ready .release-firebase-progress span {
+  border-color: color-mix(in srgb, var(--green-8) 36%, var(--color-border));
+  color: var(--green-11);
+}
+
+.release-firebase-progress code {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.release-test-identity {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--orange-8) 44%, var(--color-border));
+  border-radius: var(--radius-content);
+  background: color-mix(in srgb, var(--orange-3) 32%, var(--color-surface));
+}
+
 @media (max-width: 760px) {
   .release-recommended-stack {
     grid-template-columns: 40px minmax(0, 1fr);
@@ -307,5 +413,28 @@
 
   .release-config-section {
     padding: 15px;
+  }
+
+  .release-firebase-heading {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+
+  .release-firebase-heading > [class*="rt-Badge"] {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .release-firebase-actions > button,
+  .release-firebase-project-picker > button,
+  .release-firebase-progress {
+    width: 100%;
+  }
+
+  .release-firebase-progress {
+    grid-template-columns: 1fr;
+  }
+
+  .release-firebase-progress code {
+    grid-column: 1;
   }
 }

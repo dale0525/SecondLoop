@@ -88,7 +88,9 @@ export function managedProjectDraft(
     && existingGateway?.kind === "gateway_deployment") {
     return structuredClone(source) as ManagedProjectDraft;
   }
-  const identity = requiredProvider(providers, "identity", "agentweave.identity.oidc");
+  const identity = providers.find((provider) => provider.kind === "identity"
+    && provider.provider_id === "agentweave.identity.firebase")
+    ?? requiredProvider(providers, "identity", "agentweave.identity.oidc");
   const entitlement = providers.find((provider) => provider.kind === "entitlement"
     && provider.capabilities.includes("gateway_policy_projection_v1"));
   const gateway = requiredProvider(providers, "gateway_deployment", "cloudflare-workers");
@@ -97,14 +99,16 @@ export function managedProjectDraft(
   return {
     schemaVersion: 1,
     providers: {
-      identity: selectionFromDescriptor(identity, {
-        preset: "auth0",
-        scopes: ["openid", "profile", "offline_access"],
-        redirectUri: "http://127.0.0.1:8978/agentweave/identity/callback",
-        gatewayAlgorithm: "RS256",
-        gatewayDeviceMode: "disabled",
-        gatewayRequireNbf: false,
-      }),
+      identity: selectionFromDescriptor(identity, identity.provider_id === "agentweave.identity.oidc"
+        ? {
+            preset: "auth0",
+            scopes: ["openid", "profile", "offline_access"],
+            redirectUri: "http://127.0.0.1:8978/agentweave/identity/callback",
+            gatewayAlgorithm: "RS256",
+            gatewayDeviceMode: "disabled",
+            gatewayRequireNbf: false,
+          }
+        : {}),
       entitlement: selectionFromDescriptor(entitlement),
       gateway: selectionFromDescriptor(gateway),
     },
@@ -156,13 +160,9 @@ export function validateManagedDraft(
   providers: readonly DeveloperProviderDescriptor[] = [],
 ): string[] {
   const issues: string[] = [];
-  const identity = draft.providers.identity.publicConfig;
   const gateway = draft.providers.gateway.publicConfig;
   const entitlement = draft.providers.entitlement.publicConfig;
   for (const [label, value] of [
-    ["Identity issuer", identity.issuer],
-    ["Identity client ID", identity.clientId],
-    ["Gateway audience", identity.audience],
     ["Entitlement service URL", entitlement.baseUrl],
     ["Upstream model URL", gateway.upstreamBaseUrl],
     ["Model name", draft.modelAccess.profile.modelName],

@@ -6,6 +6,9 @@ use agent_runtime::app_manifest::{
     AgentAppModelAccess, AgentAppModelAuthentication, AgentAppModelConfigurationPolicy,
     AgentAppProviderBinding,
 };
+use identity_firebase::{
+    FIREBASE_IDENTITY_PROVIDER_ID, FirebasePublicConfig, firebase_identity_provider_descriptor,
+};
 use identity_oidc::{
     OidcHttpClient, OidcPluginPublicConfig, discover_gateway_verifier,
     oidc_identity_provider_descriptor,
@@ -120,10 +123,7 @@ pub(crate) async fn project_gateway_plan(
         &input.providers.gateway,
         &cloudflare_gateway_provider_descriptor()?,
     )?;
-    ensure_provider(
-        &input.providers.identity,
-        &oidc_identity_provider_descriptor(),
-    )?;
+    let verifier = project_identity_verifier(&input.providers.identity, http).await?;
     let entitlement_descriptor = entitlement_providers::entitlement_provider_descriptors()
         .into_iter()
         .find(|descriptor| descriptor.provider_id == HTTP_ENTITLEMENT_ID)
@@ -135,18 +135,6 @@ pub(crate) async fn project_gateway_plan(
             DevkitError::invalid_configuration("Cloudflare gateway configuration is invalid")
         })?;
     validate_gateway_config(&gateway)?;
-    let identity: OidcPluginPublicConfig =
-        serde_json::from_value(input.providers.identity.public_config.clone()).map_err(|_| {
-            DevkitError::invalid_configuration("OIDC public configuration is invalid")
-        })?;
-    let verifier = discover_gateway_verifier(&identity, http)
-        .await
-        .map_err(|_| {
-            DevkitError::new(
-                DevkitErrorCode::VerificationFailed,
-                "OIDC gateway verifier discovery failed",
-            )
-        })?;
     let entitlement: HttpEntitlementGatewayConfig = serde_json::from_value(
         input.providers.entitlement.public_config.clone(),
     )
@@ -279,6 +267,59 @@ pub(crate) async fn project_gateway_plan(
             ),
         ]),
     })
+}
+
+async fn project_identity_verifier(
+    binding: &AgentAppProviderBinding,
+    http: &dyn OidcHttpClient,
+) -> DevkitResult<Value> {
+    if binding.id.as_str() == identity_oidc::OIDC_IDENTITY_PROVIDER_ID {
+        ensure_provider(binding, &oidc_identity_provider_descriptor())?;
+        let identity: OidcPluginPublicConfig =
+            serde_json::from_value(binding.public_config.clone()).map_err(|_| {
+                DevkitError::invalid_configuration("OIDC public configuration is invalid")
+            })?;
+        let verifier = discover_gateway_verifier(&identity, http)
+            .await
+            .map_err(|_| {
+                DevkitError::new(
+                    DevkitErrorCode::VerificationFailed,
+                    "OIDC gateway verifier discovery failed",
+                )
+            })?;
+        return serde_json::to_value(verifier).map_err(|_| {
+            DevkitError::new(DevkitErrorCode::Internal, "identity projection failed")
+        });
+    }
+    if binding.id.as_str() == FIREBASE_IDENTITY_PROVIDER_ID {
+        ensure_provider(binding, &firebase_identity_provider_descriptor())?;
+        let config: FirebasePublicConfig = serde_json::from_value(binding.public_config.clone())
+            .map_err(|_| {
+                DevkitError::invalid_configuration("Firebase public configuration is invalid")
+            })?;
+        config.validate().map_err(|_| {
+            DevkitError::invalid_configuration("Firebase public configuration is invalid")
+        })?;
+        return Ok(json!({
+            "id": FIREBASE_IDENTITY_PROVIDER_ID,
+            "kind": "oidc",
+            "issuer": config.issuer(),
+            "audience": config.audience(),
+            "jwksUrl": FirebasePublicConfig::jwks_url(),
+            "algorithm": "RS256",
+            "header": "authorization",
+            "requireNbf": false,
+            "clockSkewSeconds": 60,
+            "projection": {
+                "subjectClaim": "sub",
+                "deviceMode": "disabled"
+            }
+        }));
+    }
+    Err(DevkitError::new(
+        DevkitErrorCode::Unsupported,
+        "selected identity provider is unavailable or incompatible",
+    ))
 }
 
 fn validate_project_identity(input: &GatewayProjectPlanInput) -> DevkitResult<()> {
@@ -520,6 +561,33 @@ mod tests {
             max_response_bytes: 65_536,
         };
         assert!(entitlement_projection_url(&invalid).is_err());
+    }
+
+    #[tokio::test]
+    async fn firebase_identity_uses_the_pinned_secure_token_verifier() {
+        let binding: AgentAppProviderBinding = serde_json::from_value(json!({
+            "id": "agentweave.identity.firebase",
+            "version": "0.1.0",
+            "publicConfig": {
+                "projectId": "sample-project-123",
+                "firebaseWebKey": "public-web-key",
+                "webApplicationId": "1:123:web:abc",
+                "authDomain": "sample-project-123.firebaseapp.com"
+            }
+        }))
+        .unwrap();
+
+        let verifier = project_identity_verifier(&binding, &FakeDiscovery)
+            .await
+            .unwrap();
+
+        assert_eq!(verifier["kind"], "oidc");
+        assert_eq!(
+            verifier["issuer"],
+            "https://securetoken.google.com/sample-project-123"
+        );
+        assert_eq!(verifier["audience"], "sample-project-123");
+        assert_eq!(verifier["projection"]["subjectClaim"], "sub");
     }
 
     #[tokio::test]

@@ -13,6 +13,21 @@ export type CloudflareAuthorizationPhase =
   | "ready"
   | "expired";
 
+export type FirebaseAuthorizationPhase =
+  | "disconnected"
+  | "awaiting_callback"
+  | "select_project"
+  | "ready"
+  | "expired";
+
+export type FirebaseAuthorizationStatus = Readonly<{
+  providerId: string;
+  phase: FirebaseAuthorizationPhase;
+  projectId: string | null;
+  expiresAtUnixMs: number | null;
+  publicOauthClientAvailable: boolean;
+}>;
+
 export type DeveloperControlStatus = Readonly<{
   authorization: Readonly<{
     providerId: string;
@@ -21,6 +36,7 @@ export type DeveloperControlStatus = Readonly<{
     expiresAtUnixMs: number | null;
     publicOauthClientAvailable: boolean;
   }>;
+  firebaseAuthorization?: FirebaseAuthorizationStatus;
   gatewayTemplate: Readonly<{ version: string; sha256: string }> | null;
   sensitiveBindings: Readonly<Record<string, string>>;
   pendingDeployment: DeveloperPendingDeployment | null;
@@ -30,6 +46,23 @@ export type CloudflareAccount = Readonly<{
   accountId: string;
   displayName: string | null;
   providerId: string;
+}>;
+
+export type FirebaseProject = Readonly<{
+  projectId: string;
+  projectNumber: string;
+  displayName: string;
+}>;
+
+export type FirebaseConfigurationReceipt = Readonly<{
+  projectId: string;
+  displayName: string;
+  publicConfig: Readonly<{
+    projectId: string;
+    firebaseWebKey: string;
+    webApplicationId: string;
+    authDomain?: string;
+  }>;
 }>;
 
 export type GatewayTarget = Readonly<{
@@ -135,6 +168,43 @@ export async function listCloudflareAccounts(): Promise<CloudflareAccount[]> {
 
 export async function selectCloudflareAccount(accountId: string): Promise<void> {
   await request("cloudflare.selectAccount", { accountId });
+}
+
+export async function connectFirebasePublic(): Promise<void> {
+  await request("firebase.connect", { client: { mode: "agent_weave_public" } });
+}
+
+export async function connectFirebaseCustom(input: {
+  clientId: string;
+  clientSecret?: string;
+}): Promise<void> {
+  await request("firebase.connect", {
+    client: {
+      mode: "custom",
+      clientId: input.clientId,
+      ...(input.clientSecret ? { clientSecret: input.clientSecret } : {}),
+    },
+  });
+}
+
+export async function cancelFirebaseConnection(): Promise<void> {
+  await request("firebase.cancel");
+}
+
+export async function disconnectFirebase(): Promise<void> {
+  await request("firebase.disconnect");
+}
+
+export async function listFirebaseProjects(): Promise<FirebaseProject[]> {
+  const value = await request("firebase.projects");
+  if (!Array.isArray(value)) throw new Error("Firebase project response is invalid");
+  return value.map(parseFirebaseProject);
+}
+
+export async function configureFirebaseProject(
+  projectId: string,
+): Promise<FirebaseConfigurationReceipt> {
+  return parseFirebaseReceipt(await request("firebase.configure", { projectId }));
 }
 
 export async function planGateway(input: {
@@ -258,6 +328,9 @@ function parseControlStatus(value: unknown): DeveloperControlStatus {
     "expired",
   ]).has(phase as CloudflareAuthorizationPhase)) throw new Error("Cloudflare status is invalid");
   const bindings = record(root.sensitiveBindings);
+  const firebaseAuthorization = root.firebaseAuthorization === undefined
+    ? undefined
+    : parseFirebaseAuthorization(root.firebaseAuthorization);
   return Object.freeze({
     authorization: Object.freeze({
       providerId: text(authorization.providerId),
@@ -266,6 +339,7 @@ function parseControlStatus(value: unknown): DeveloperControlStatus {
       expiresAtUnixMs: nullableInteger(authorization.expiresAtUnixMs),
       publicOauthClientAvailable: boolean(authorization.publicOauthClientAvailable),
     }),
+    ...(firebaseAuthorization ? { firebaseAuthorization } : {}),
     gatewayTemplate: root.gatewayTemplate === null
       ? null
       : Object.freeze({
@@ -278,6 +352,49 @@ function parseControlStatus(value: unknown): DeveloperControlStatus {
     pendingDeployment: root.pendingDeployment === null
       ? null
       : parsePendingDeployment(root.pendingDeployment),
+  });
+}
+
+function parseFirebaseAuthorization(value: unknown): FirebaseAuthorizationStatus {
+  const authorization = record(value);
+  const phase = text(authorization.phase);
+  if (!new Set<FirebaseAuthorizationPhase>([
+    "disconnected",
+    "awaiting_callback",
+    "select_project",
+    "ready",
+    "expired",
+  ]).has(phase as FirebaseAuthorizationPhase)) throw new Error("Firebase status is invalid");
+  return Object.freeze({
+    providerId: text(authorization.providerId),
+    phase: phase as FirebaseAuthorizationPhase,
+    projectId: nullableText(authorization.projectId),
+    expiresAtUnixMs: nullableInteger(authorization.expiresAtUnixMs),
+    publicOauthClientAvailable: boolean(authorization.publicOauthClientAvailable),
+  });
+}
+
+function parseFirebaseProject(value: unknown): FirebaseProject {
+  const project = record(value);
+  return Object.freeze({
+    projectId: text(project.projectId),
+    projectNumber: text(project.projectNumber),
+    displayName: text(project.displayName),
+  });
+}
+
+function parseFirebaseReceipt(value: unknown): FirebaseConfigurationReceipt {
+  const receipt = record(value);
+  const config = record(receipt.publicConfig);
+  return Object.freeze({
+    projectId: text(receipt.projectId),
+    displayName: text(receipt.displayName),
+    publicConfig: Object.freeze({
+      projectId: text(config.projectId),
+      firebaseWebKey: text(config.firebaseWebKey),
+      webApplicationId: text(config.webApplicationId),
+      ...(config.authDomain === undefined ? {} : { authDomain: text(config.authDomain) }),
+    }),
   });
 }
 

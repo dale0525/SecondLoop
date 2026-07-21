@@ -3,6 +3,7 @@ import { CircleAlert, LogIn, LogOut, UserRoundCheck } from "lucide-react";
 
 import { useI18n } from "../i18n/I18nProvider";
 import { useIdentitySession } from "../identitySession";
+import { IdentityPasswordForm } from "./IdentityPasswordForm";
 
 export function SettingsIdentity(): JSX.Element {
   const { t } = useI18n();
@@ -50,13 +51,15 @@ export function SettingsIdentity(): JSX.Element {
               <Callout.Text>{t("identity.unavailable")}</Callout.Text>
             </Callout.Root>
           ) : null}
-          <Button
-            disabled={identity.state === "loading"}
-            onClick={() => void identity.start()}
-          >
-            {identity.state === "loading" ? <Spinner /> : <LogIn size={16} />}
-            {identity.state === "unavailable" ? t("identity.tryAgain") : t("identity.signIn")}
-          </Button>
+          {identity.method === "password" ? <IdentityPasswordForm /> : (
+            <Button
+              disabled={identity.state === "loading"}
+              onClick={() => void identity.start()}
+            >
+              {identity.state === "loading" ? <Spinner /> : <LogIn size={16} />}
+              {identity.state === "unavailable" ? t("identity.tryAgain") : t("identity.signIn")}
+            </Button>
+          )}
         </Flex>
       )}
     </section>

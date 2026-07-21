@@ -14,6 +14,7 @@ import {
   type IdentityCallbackListener,
 } from "./identityCallbackServer";
 import type { SidecarRequest } from "./sidecarSupervisor";
+import { connectDeveloperFirebase } from "./developerFirebaseController";
 
 const MAX_RESPONSE_BYTES = 1024 * 1024;
 const MAX_REQUEST_BYTES = 2 * 1024 * 1024;
@@ -43,6 +44,7 @@ export function registerDeveloperAccessController(options: {
   ensureCredentialVault: () => Promise<void>;
   ipcMain: IpcMainLike;
   invalidateDeployment?: () => Promise<DeveloperProjectSnapshot>;
+  firebaseRedirectUri?: string;
   loadProject: () => Promise<DeveloperProjectSnapshot>;
   openExternal: (url: string) => Promise<unknown> | unknown;
   recordDeployment: (
@@ -58,7 +60,8 @@ export function registerDeveloperAccessController(options: {
     test: DeveloperGatewayTestReceipt,
   ) => Promise<DeveloperProjectSnapshot>;
 }): () => void {
-  let listener: IdentityCallbackListener | null = null;
+  let cloudflareListener: IdentityCallbackListener | null = null;
+  let firebaseListener: IdentityCallbackListener | null = null;
   const planRevisions = new Map<string, string>();
   const destroyPlanRevisions = new Map<string, string>();
   const pendingDeployments = new Map<string, PendingDeployment>();
@@ -67,9 +70,14 @@ export function registerDeveloperAccessController(options: {
       throw new Error("Developer access is restricted to the requester window");
     }
   };
-  const closeListener = async () => {
-    const active = listener;
-    listener = null;
+  const closeCloudflareListener = async () => {
+    const active = cloudflareListener;
+    cloudflareListener = null;
+    await active?.close();
+  };
+  const closeFirebaseListener = async () => {
+    const active = firebaseListener;
+    firebaseListener = null;
     await active?.close();
   };
 
@@ -78,8 +86,18 @@ export function registerDeveloperAccessController(options: {
     const request = parseRequest(value);
     await options.ensureCredentialVault();
     if (request.operation === "cloudflare.connect") {
-      return connectCloudflare(options, request.input, closeListener, (active) => {
-        listener = active;
+      return connectCloudflare(options, request.input, closeCloudflareListener, (active) => {
+        cloudflareListener = active;
+      });
+    }
+    if (request.operation === "firebase.connect") {
+      return connectDeveloperFirebase({
+        closeListener: closeFirebaseListener,
+        input: request.input,
+        openExternal: options.openExternal,
+        redirectUri: options.firebaseRedirectUri,
+        requestJson: (description) => requestSidecarJson(options.sidecarRequest, description),
+        setListener: (active) => { firebaseListener = active; },
       });
     }
     const lifecycleProject = LIFECYCLE_TARGET_OPERATIONS.has(request.operation)
@@ -112,9 +130,14 @@ export function registerDeveloperAccessController(options: {
       publicResponse(response);
       const status = exactRecord(response, [
         "authorization",
+        "firebaseAuthorization",
         "gatewayTemplate",
         "sensitiveBindings",
-      ]);
+      ], true);
+      if (["authorization", "gatewayTemplate", "sensitiveBindings"]
+        .some((key) => !Object.hasOwn(status, key))) {
+        throw new Error("Developer control status is invalid");
+      }
       const project = await options.loadProject();
       for (const [key, pending] of pendingDeployments) {
         if (pending.projectRevision !== project.revision) pendingDeployments.delete(key);
@@ -195,20 +218,23 @@ export function registerDeveloperAccessController(options: {
       pendingDeployments.delete(key);
       return Object.freeze<DeveloperGatewayTestProjectUpdate>({ project, test });
     }
-    if (request.operation === "cloudflare.cancel") await closeListener();
+    if (request.operation === "cloudflare.cancel") await closeCloudflareListener();
+    if (request.operation === "firebase.cancel") await closeFirebaseListener();
     if (request.operation === "cloudflare.disconnect") {
-      await closeListener();
+      await closeCloudflareListener();
       planRevisions.clear();
       destroyPlanRevisions.clear();
       pendingDeployments.clear();
     }
+    if (request.operation === "firebase.disconnect") await closeFirebaseListener();
     if (request.operation === "cloudflare.accounts") return parseAccounts(response);
     return publicResponse(response);
   });
 
   return () => {
     options.ipcMain.removeHandler(DEVELOPER_ACCESS_REQUEST_CHANNEL);
-    void closeListener();
+    void closeCloudflareListener();
+    void closeFirebaseListener();
   };
 }
 
@@ -283,6 +309,23 @@ function describeRequest(request: DeveloperAccessRequest): RequestDescription {
       return json("POST", "/dev/control/cloudflare/accounts", {
         accountId: requiredString(exactRecord(request.input, ["accountId"]), "accountId", 256),
       });
+    case "firebase.cancel":
+      noInput(request.input);
+      return { method: "DELETE", pathname: "/dev/control/firebase/authorization/pending" };
+    case "firebase.disconnect":
+      noInput(request.input);
+      return { method: "DELETE", pathname: "/dev/control/firebase/authorization" };
+    case "firebase.projects":
+      noInput(request.input);
+      return get("/dev/control/firebase/projects");
+    case "firebase.configure":
+      return json("POST", "/dev/control/firebase/projects", {
+        projectId: requiredString(
+          exactRecord(request.input, ["projectId"]),
+          "projectId",
+          30,
+        ),
+      });
     case "gateway.plan": {
       throw new Error("Gateway planning requires the trusted developer project snapshot");
     }
@@ -304,6 +347,8 @@ function describeRequest(request: DeveloperAccessRequest): RequestDescription {
       });
     case "cloudflare.connect":
       throw new Error("Cloudflare connect must use the protected authorization flow");
+    case "firebase.connect":
+      throw new Error("Firebase connect must use the protected authorization flow");
   }
 }
 
@@ -928,12 +973,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 const OPERATIONS = new Set<DeveloperAccessOperation>([
-  "status",
-  "cloudflare.connect",
-  "cloudflare.cancel",
-  "cloudflare.disconnect",
-  "cloudflare.accounts",
-  "cloudflare.selectAccount",
+  "status", "cloudflare.connect", "cloudflare.cancel", "cloudflare.disconnect",
+  "cloudflare.accounts", "cloudflare.selectAccount",
+  "firebase.connect", "firebase.cancel", "firebase.disconnect",
+  "firebase.projects", "firebase.configure",
   "gateway.plan",
   "gateway.apply",
   "gateway.inspect",

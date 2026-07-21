@@ -10,6 +10,8 @@ const SECRET_STAGING_LEASE_MINUTES: i64 = 10;
 
 #[path = "credential_persistence.rs"]
 mod persistence;
+#[path = "credential_provider_leases.rs"]
+mod provider_leases;
 #[path = "credential_status.rs"]
 mod status;
 #[path = "credential_validation.rs"]
@@ -645,34 +647,6 @@ impl CredentialVault {
                 credential,
             );
         Ok(())
-    }
-
-    pub async fn lease_provider_refresh_secret(
-        &self,
-        scope: &CredentialScope,
-        provider_id: &str,
-        credential_id: &str,
-    ) -> anyhow::Result<SecretMaterial> {
-        scope.validate()?;
-        let credential = self
-            .get_provider_credential(scope, credential_id)
-            .await?
-            .ok_or_else(|| anyhow::anyhow!("provider credential is unavailable"))?;
-        anyhow::ensure!(
-            credential.provider_id == provider_id,
-            "OAuth provider mismatch"
-        );
-        anyhow::ensure!(
-            credential.revoked_at.is_none(),
-            "provider credential is revoked"
-        );
-        let secret_id = credential
-            .refresh_secret_id
-            .ok_or_else(|| anyhow::anyhow!("provider refresh credential is unavailable"))?;
-        self.store
-            .load(scope, &secret_id)
-            .await?
-            .ok_or_else(|| anyhow::anyhow!("provider refresh credential is unavailable"))
     }
 
     pub async fn replace_provider_credential(

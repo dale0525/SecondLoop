@@ -14,6 +14,7 @@ export async function prepareIdentityCallbackListener(options: {
 }): Promise<IdentityCallbackListener> {
   const redirect = parseDesktopRedirectUri(options.redirectUri);
   let handled = false;
+  let processing = false;
   let closed = false;
   let timer: NodeJS.Timeout | null = null;
   const server = createServer(async (request, response) => {
@@ -22,13 +23,14 @@ export async function prepareIdentityCallbackListener(options: {
     response.setHeader("x-content-type-options", "nosniff");
     if (
       handled
+      || processing
       || request.method !== "GET"
       || !isLoopbackAddress(request.socket.remoteAddress)
       || request.headers.host !== redirect.host
       || !request.url
       || Buffer.byteLength(request.url, "utf8") > MAX_CALLBACK_URL_BYTES
     ) {
-      response.statusCode = handled ? 410 : 400;
+      response.statusCode = handled ? 410 : processing ? 409 : 400;
       response.end("Authorization callback was rejected.");
       return;
     }
@@ -49,16 +51,18 @@ export async function prepareIdentityCallbackListener(options: {
       response.end("Authorization callback was rejected.");
       return;
     }
-    handled = true;
+    processing = true;
     try {
       await options.callback(callback.toString());
+      handled = true;
       response.statusCode = 200;
       response.end("Authorization completed. You can return to the app.");
+      void close();
     } catch {
       response.statusCode = 400;
       response.end("Authorization could not be completed. Return to the app and try again.");
     } finally {
-      void close();
+      processing = false;
     }
   });
 

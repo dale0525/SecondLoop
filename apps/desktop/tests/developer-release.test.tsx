@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -237,6 +237,137 @@ describe("developer release workspace", () => {
     expect(screen.getByText("Endpoint and authentication filled automatically")).toBeInTheDocument();
     expect(screen.getByText("https://api.openai.com")).toBeInTheDocument();
     expect(screen.queryByText("Upstream model URL")).not.toBeInTheDocument();
+  });
+
+  it("configures the only Firebase project without manual identity fields", async () => {
+    let firebasePhase: "select_project" | "ready" = "select_project";
+    const accessRequest = vi.fn(async (operation: string, input?: unknown) => {
+      if (operation === "status") {
+        return {
+          ...controlStatus("ready", "0123456789abcdef0123456789abcdef") as Record<string, unknown>,
+          firebaseAuthorization: {
+            providerId: "google.firebase",
+            phase: firebasePhase,
+            projectId: firebasePhase === "ready" ? "sample-project-123" : null,
+            expiresAtUnixMs: Date.now() + 60_000,
+            publicOauthClientAvailable: true,
+          },
+        };
+      }
+      if (operation === "firebase.projects") return [{
+        projectId: "sample-project-123",
+        projectNumber: "123456789",
+        displayName: "Sample Project",
+      }];
+      if (operation === "firebase.configure") {
+        expect(input).toEqual({ projectId: "sample-project-123" });
+        firebasePhase = "ready";
+        return {
+          projectId: "sample-project-123",
+          displayName: "Sample Project",
+          publicConfig: {
+            projectId: "sample-project-123",
+            firebaseWebKey: "public-firebase-web-key",
+            webApplicationId: "1:123:web:abc",
+            authDomain: "sample-project-123.firebaseapp.com",
+          },
+        };
+      }
+      throw new Error(`Unexpected operation: ${operation}`);
+    });
+    installReleaseBridge(userConfigurableSnapshot(), { accessRequest });
+    window.history.replaceState(null, "", "/#developer/access/setup");
+
+    render(<App />);
+
+    expect(await screen.findByText("Firebase Email Login")).toBeInTheDocument();
+    expect(await screen.findByText("Public login configuration verified")).toBeInTheDocument();
+    expect(screen.getByText("sample-project-123")).toBeInTheDocument();
+    expect(accessRequest).toHaveBeenCalledWith("firebase.configure", {
+      projectId: "sample-project-123",
+    });
+    expect(screen.queryByText("Issuer URL")).not.toBeInTheDocument();
+  });
+
+  it("labels the Firebase fallback with the Google OAuth client identity", async () => {
+    installReleaseBridge(userConfigurableSnapshot(), {
+      controlStatus: {
+        ...controlStatus(
+          "ready",
+          "0123456789abcdef0123456789abcdef",
+        ) as Record<string, unknown>,
+        firebaseAuthorization: {
+          providerId: "google.firebase",
+          phase: "disconnected",
+          projectId: null,
+          expiresAtUnixMs: null,
+          publicOauthClientAvailable: false,
+        },
+      },
+    });
+    window.history.replaceState(null, "", "/#developer/access/setup");
+
+    render(<App />);
+
+    expect(await screen.findByRole("textbox", {
+      name: "Google OAuth client ID",
+    })).toBeVisible();
+    expect(screen.queryByRole("textbox", {
+      name: "Cloudflare OAuth client ID",
+    })).not.toBeInTheDocument();
+  });
+
+  it("retries the Firebase project list without restarting Google authorization", async () => {
+    let projectRequests = 0;
+    const accessRequest = vi.fn(async (operation: string) => {
+      if (operation === "status") {
+        return {
+          ...controlStatus(
+            "ready",
+            "0123456789abcdef0123456789abcdef",
+          ) as Record<string, unknown>,
+          firebaseAuthorization: {
+            providerId: "google.firebase",
+            phase: "select_project",
+            projectId: null,
+            expiresAtUnixMs: Date.now() + 60_000,
+            publicOauthClientAvailable: true,
+          },
+        };
+      }
+      if (operation === "firebase.projects") {
+        projectRequests += 1;
+        if (projectRequests === 1) throw new Error("temporary project list failure");
+        return [
+          {
+            projectId: "sample-project-123",
+            projectNumber: "123456789",
+            displayName: "Sample Project",
+          },
+          {
+            projectId: "team-project-456",
+            projectNumber: "987654321",
+            displayName: "Team Project",
+          },
+        ];
+      }
+      throw new Error(`Unexpected operation: ${operation}`);
+    });
+    installReleaseBridge(userConfigurableSnapshot(), { accessRequest });
+    window.history.replaceState(null, "", "/#developer/access/setup");
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    expect(await screen.findByRole("button", { name: "Retry project list" })).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Retry project list" }));
+
+    await waitFor(() => expect(projectRequests).toBe(2));
+    expect(screen.queryByRole("button", { name: "Retry project list" })).not.toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Firebase project" })).toBeVisible();
+    expect(screen.queryByText(
+      "Firebase projects could not be loaded. Reconnect Google and check project permissions.",
+    )).not.toBeInTheDocument();
   });
 
   it("can continue after reviewing the connected account from the previous step", async () => {
@@ -507,6 +638,12 @@ function providerDescriptors(): DeveloperProviderDescriptor[] {
     },
   ];
   return [
+    descriptor("identity", "agentweave.identity.firebase", "Firebase Email Login", [
+      field("projectId", "Firebase Project ID"),
+      field("firebaseWebKey", "Firebase web key"),
+      field("webApplicationId", "Firebase Web App ID"),
+      field("authDomain", "Authentication domain", false),
+    ]),
     descriptor("identity", "agentweave.identity.oidc", "OpenID Connect", [
       field("preset", "Provider preset", true, "generic"),
       field("issuer", "Issuer URL"),

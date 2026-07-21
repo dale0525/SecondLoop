@@ -139,8 +139,10 @@ dependencies = [
  "fs2",
  "futures",
  "hex",
+ "identity-firebase",
  "identity-oidc",
  "model-gateway",
+ "reqwest",
  "rustix",
  "same-file",
  "semver",
@@ -1388,6 +1390,24 @@ dependencies = [
  "zerofrom",
  "zerotrie",
  "zerovec",
+]
+
+[[package]]
+name = "identity-firebase"
+version = "0.1.0"
+dependencies = [
+ "agent-devkit",
+ "agent-runtime",
+ "async-trait",
+ "chrono",
+ "reqwest",
+ "semver",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "url",
+ "zeroize",
 ]
 
 [[package]]

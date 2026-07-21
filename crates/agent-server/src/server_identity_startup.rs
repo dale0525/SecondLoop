@@ -1,6 +1,9 @@
 use super::server_app::{ResolvedServerApp, resolve_secret_store};
 use agent_runtime::{
-    app_manifest::AgentAppIdentityMode, credential::SecretMaterial, storage::Storage,
+    app_manifest::AgentAppIdentityMode,
+    credential::{CredentialVault, SecretMaterial},
+    credential_sqlite::SqliteCredentialMetadataStore,
+    storage::Storage,
 };
 use std::{
     path::{Path, PathBuf},
@@ -34,13 +37,35 @@ pub(super) async fn resolve_identity_runtime(
         .ok_or_else(|| {
             anyhow::anyhow!("required identity provider needs the persistent Credential Vault")
         })?;
-    agent_server::identity_api::IdentityRuntime::oidc(
-        binding,
-        app.app_id(),
-        tenant_id,
-        storage.sqlite_pool(),
-        secrets,
-    )
-    .await
-    .map(Some)
+    if binding.id.as_str() == identity_oidc::OIDC_IDENTITY_PROVIDER_ID {
+        return agent_server::identity_api::IdentityRuntime::oidc(
+            binding,
+            app.app_id(),
+            tenant_id,
+            storage.sqlite_pool(),
+            secrets,
+        )
+        .await
+        .map(Some);
+    }
+    if binding.id.as_str() == identity_firebase::FIREBASE_IDENTITY_PROVIDER_ID {
+        let metadata = SqliteCredentialMetadataStore::from_storage(storage).await?;
+        let vault = Arc::new(CredentialVault::new_persistent(secrets, metadata));
+        let store = Arc::new(
+            agent_server::firebase_identity_store::VaultFirebaseSessionStore::new(
+                vault,
+                app.app_id().to_owned(),
+                tenant_id.to_owned(),
+            )
+            .map_err(|_| anyhow::anyhow!("Firebase secure storage is unavailable"))?,
+        );
+        return agent_server::identity_api::IdentityRuntime::firebase(
+            binding,
+            app.app_id(),
+            tenant_id,
+            store,
+        )
+        .map(Some);
+    }
+    anyhow::bail!("required identity provider is not supported by this Host")
 }

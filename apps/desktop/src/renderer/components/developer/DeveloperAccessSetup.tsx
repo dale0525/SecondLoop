@@ -19,9 +19,14 @@ import type { DeveloperProjectSnapshot } from "../../../shared/developerProject"
 import {
   applyGateway,
   cancelCloudflareConnection,
+  cancelFirebaseConnection,
+  configureFirebaseProject,
   connectCloudflareCustom,
   connectCloudflarePublic,
+  connectFirebaseCustom,
+  connectFirebasePublic,
   listCloudflareAccounts,
+  listFirebaseProjects,
   loadDeveloperControlStatus,
   planGateway,
   saveDeveloperProject,
@@ -32,6 +37,7 @@ import {
   type GatewayDestroyUpdate,
   type GatewayMutationUpdate,
   type GatewayPlan,
+  type FirebaseProject,
   type SensitivePlanInput,
 } from "../../developerAccessApi";
 import type { DeveloperProviderDescriptor } from "../../devProvidersApi";
@@ -49,6 +55,8 @@ import { useIdentitySession } from "../../identitySession";
 import { DeveloperConfigurationStep } from "./DeveloperConfigurationStep";
 import { DeveloperConnectionStep } from "./DeveloperConnectionStep";
 import { DeveloperDeploymentOperations } from "./DeveloperDeploymentOperations";
+import { DeveloperFirebaseIdentitySetup } from "./DeveloperFirebaseIdentitySetup";
+import { IdentityPasswordForm } from "../IdentityPasswordForm";
 
 const STEP_COUNT = 3;
 
@@ -82,6 +90,9 @@ export function DeveloperAccessSetup({
   const [workingSnapshot, setWorkingSnapshot] = useState(snapshot);
   const [controlStatus, setControlStatus] = useState(initialControlStatus);
   const [accounts, setAccounts] = useState<CloudflareAccount[]>([]);
+  const [firebaseProjects, setFirebaseProjects] = useState<FirebaseProject[]>([]);
+  const [firebaseProjectsFailed, setFirebaseProjectsFailed] = useState(false);
+  const [firebaseProjectsLoading, setFirebaseProjectsLoading] = useState(false);
   const [secretValues, setSecretValues] = useState<Record<string, string>>({});
   const [secretRevisions, setSecretRevisions] = useState<Record<string, string>>({});
   const [customOauth, setCustomOauth] = useState(false);
@@ -173,13 +184,34 @@ export function DeveloperAccessSetup({
   }, [controlStatus?.authorization.accountId, draft.deployment.cloudflare.accountId]);
 
   useEffect(() => {
-    const phase = controlStatus?.authorization.phase;
-    if (phase !== "awaiting_callback") return;
+    const cloudflarePhase = controlStatus?.authorization.phase;
+    const firebasePhase = controlStatus?.firebaseAuthorization?.phase;
+    if (cloudflarePhase !== "awaiting_callback" && firebasePhase !== "awaiting_callback") return;
     const timer = window.setInterval(() => {
       void refreshControl().catch(() => undefined);
     }, 1_500);
     return () => window.clearInterval(timer);
-  }, [controlStatus?.authorization.phase, refreshControl]);
+  }, [controlStatus?.authorization.phase, controlStatus?.firebaseAuthorization?.phase, refreshControl]);
+
+  const loadFirebaseProjectOptions = useCallback(async () => {
+    setFirebaseProjectsLoading(true);
+    setFirebaseProjectsFailed(false);
+    setError(null);
+    try {
+      setFirebaseProjects(await listFirebaseProjects());
+    } catch {
+      setFirebaseProjects([]);
+      setFirebaseProjectsFailed(true);
+      setError(t("developer.release.errorFirebaseProjects"));
+    } finally {
+      setFirebaseProjectsLoading(false);
+    }
+  }, [t]);
+
+  useEffect(() => {
+    if (controlStatus?.firebaseAuthorization?.phase !== "select_project") return;
+    void loadFirebaseProjectOptions();
+  }, [controlStatus?.firebaseAuthorization?.phase, loadFirebaseProjectOptions]);
 
   useEffect(() => {
     if (controlStatus?.authorization.phase !== "select_account") return;
@@ -220,7 +252,8 @@ export function DeveloperAccessSetup({
       ...draft,
       providers: {
         ...draft.providers,
-        [kind]: selectionFromDescriptor(descriptor, kind === "identity" ? {
+        [kind]: selectionFromDescriptor(descriptor, kind === "identity"
+          && descriptor.provider_id !== "agentweave.identity.firebase" ? {
           scopes: ["openid", "profile", "offline_access"],
           redirectUri: "http://127.0.0.1:8978/agentweave/identity/callback",
           gatewayAlgorithm: "RS256",
@@ -261,6 +294,45 @@ export function DeveloperAccessSetup({
         phase: "awaiting_callback",
       },
     });
+  });
+
+  const connectFirebaseIdentity = (client: {
+    clientId?: string;
+    clientSecret?: string;
+    publicClient: boolean;
+  }) => run("firebase-oauth", async () => {
+    if (client.publicClient) await connectFirebasePublic();
+    else if (client.clientId) {
+      await connectFirebaseCustom({
+        clientId: client.clientId,
+        ...(client.clientSecret ? { clientSecret: client.clientSecret } : {}),
+      });
+    } else {
+      throw new Error(t("developer.release.errorFirebaseOauth"));
+    }
+    updateControlStatus({
+      ...(controlStatus ?? emptyControlStatus()),
+      firebaseAuthorization: {
+        ...(controlStatus?.firebaseAuthorization ?? emptyFirebaseAuthorization()),
+        phase: "awaiting_callback",
+      },
+    });
+  });
+
+  const configureFirebaseIdentity = (projectId: string) => run("firebase-configure", async () => {
+    const receipt = await configureFirebaseProject(projectId);
+    const descriptor = identityProviders.find(
+      (provider) => provider.provider_id === "agentweave.identity.firebase",
+    );
+    if (!descriptor) throw new Error(t("developer.release.errorFirebaseProvider"));
+    mutateDraft({
+      ...draft,
+      providers: {
+        ...draft.providers,
+        identity: selectionFromDescriptor(descriptor, { ...receipt.publicConfig }),
+      },
+    });
+    await refreshControl();
   });
 
   const selectAccount = async (accountId: string): Promise<boolean> => {
@@ -412,6 +484,25 @@ export function DeveloperAccessSetup({
             entitlementDescriptor={entitlementDescriptor}
             gatewayDescriptor={gatewayDescriptor}
             identityDescriptor={identityDescriptor}
+            identitySetup={identityDescriptor.provider_id === "agentweave.identity.firebase" ? (
+              <DeveloperFirebaseIdentitySetup
+                busy={busy}
+                configuredProjectId={typeof draft.providers.identity.publicConfig.projectId === "string"
+                  ? draft.providers.identity.publicConfig.projectId
+                  : null}
+                onCancel={() => run("firebase-cancel", async () => {
+                  await cancelFirebaseConnection();
+                  await refreshControl();
+                })}
+                onConfigure={configureFirebaseIdentity}
+                onConnect={connectFirebaseIdentity}
+                onRetryProjects={() => void loadFirebaseProjectOptions()}
+                projects={firebaseProjects}
+                projectsFailed={firebaseProjectsFailed}
+                projectsLoading={firebaseProjectsLoading}
+                status={controlStatus?.firebaseAuthorization}
+              />
+            ) : undefined}
             onDraft={mutateDraft}
             onSecret={(slot, value) => {
               setSecretValues((current) => ({ ...current, [slot]: value }));
@@ -430,6 +521,7 @@ export function DeveloperAccessSetup({
               busy={busy}
               completed={completed || workingSnapshot.deploymentStatus === "ready"}
               identityState={identitySession.state}
+              identityMethod={identitySession.method}
               issues={visibleIssues}
               onApply={apply}
               onPlan={createPlan}
@@ -501,6 +593,7 @@ function DeployStep({
   busy,
   completed,
   identityState,
+  identityMethod,
   issues,
   onApply,
   onPlan,
@@ -516,6 +609,7 @@ function DeployStep({
   busy: string | null;
   completed: boolean;
   identityState: string;
+  identityMethod: "browser" | "password";
   issues: readonly string[];
   onApply: () => void;
   onPlan: () => void;
@@ -530,9 +624,15 @@ function DeployStep({
     <section className="release-step-content">
       <StepHeading description={t("developer.release.deployDescription")} icon={<PackageCheck aria-hidden="true" size={22} />} title={t("developer.release.deployTitle")} />
       {issues.length > 0 ? <Callout.Root color="orange"><TriangleAlert aria-hidden="true" /><Callout.Text>{issues[0]}</Callout.Text></Callout.Root> : null}
+      {identityMethod === "password" && identityState !== "signed_in" ? (
+        <div className="release-test-identity">
+          <strong>{t("developer.release.firebaseTestLogin")}</strong>
+          <IdentityPasswordForm />
+        </div>
+      ) : null}
       <div className="release-operation-list">
         <OperationRow action={<Button disabled={busy !== null || issues.length > 0} onClick={onSave} variant="soft">{busy === "save" ? <Spinner /> : null}{t("developer.release.saveProject")}</Button>} done={issues.length === 0} title={t("developer.release.operationSave")} />
-        <OperationRow action={identityState === "signed_in" ? <Badge color="green">{t("identity.signedIn")}</Badge> : <Button disabled={busy !== null || !bootstrapReady} onClick={onSignIn} variant="soft">{busy === "identity" ? <Spinner /> : null}{t("developer.release.signInTestUser")}</Button>} done={identityState === "signed_in"} title={t("developer.release.operationIdentity")} />
+        <OperationRow action={identityState === "signed_in" ? <Badge color="green">{t("identity.signedIn")}</Badge> : identityMethod === "password" ? <Badge color="orange">{t("developer.release.useLoginForm")}</Badge> : <Button disabled={busy !== null || !bootstrapReady} onClick={onSignIn} variant="soft">{busy === "identity" ? <Spinner /> : null}{t("developer.release.signInTestUser")}</Button>} done={identityState === "signed_in"} title={t("developer.release.operationIdentity")} />
         <OperationRow action={plan ? <Badge color="blue">{plan.operations.length} {t("developer.release.operations")}</Badge> : <Button disabled={busy !== null || !authorizationReady || issues.length > 0} onClick={onPlan}>{busy === "plan" ? <Spinner /> : null}{t("developer.release.createPlan")}</Button>} done={plan !== null || applied || completed} title={t("developer.release.operationPlan")} />
         <OperationRow action={applied || completed ? <Badge color="green">{t("developer.release.deployed")}</Badge> : <Button disabled={busy !== null || !plan} onClick={onApply}>{busy === "apply" ? <Spinner /> : null}{t("developer.release.deployGateway")}</Button>} done={applied || completed} title={t("developer.release.operationDeploy")} />
         <OperationRow action={completed ? <Badge color="green">{t("developer.release.verified")}</Badge> : <Button disabled={busy !== null || !applied || identityState !== "signed_in"} onClick={onVerify}>{busy === "verify" ? <Spinner /> : null}{t("developer.release.verifyGateway")}</Button>} done={completed} title={t("developer.release.operationVerify")} />
@@ -662,6 +762,16 @@ function emptyControlStatus(): DeveloperControlStatus {
     gatewayTemplate: null,
     sensitiveBindings: {},
     pendingDeployment: null,
+  };
+}
+
+function emptyFirebaseAuthorization(): NonNullable<DeveloperControlStatus["firebaseAuthorization"]> {
+  return {
+    providerId: "google.firebase",
+    phase: "disconnected",
+    projectId: null,
+    expiresAtUnixMs: null,
+    publicOauthClientAvailable: false,
   };
 }
 
