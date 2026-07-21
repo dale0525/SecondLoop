@@ -1,0 +1,59 @@
+---
+import BrandMark from "./BrandMark.astro";
+import { alternatePath, localizedPath, repositoryUrl, type Locale } from "../lib/i18n";
+
+interface Props {
+  locale: Locale;
+  currentPath: string;
+}
+
+const { locale, currentPath } = Astro.props;
+const copy = locale === "zh"
+  ? { home: "首页", oauth: "OAuth 帮助", privacy: "隐私", terms: "条款", github: "GitHub", menu: "菜单", language: "English" }
+  : { home: "Home", oauth: "OAuth help", privacy: "Privacy", terms: "Terms", github: "GitHub", menu: "Menu", language: "中文" };
+const links = [
+  { label: copy.home, href: localizedPath(locale, "/") },
+  { label: copy.oauth, href: localizedPath(locale, "/oauth-help/") },
+  { label: copy.privacy, href: localizedPath(locale, "/privacy/") },
+  { label: copy.terms, href: localizedPath(locale, "/terms/") },
+];
+const normalizedCurrent = currentPath.endsWith("/") ? currentPath : `${currentPath}/`;
+const isCurrent = (href: string) => {
+  const normalizedHref = href.endsWith("/") ? href : `${href}/`;
+  return normalizedCurrent === normalizedHref;
+};
+---
+
+<header class="site-header">
+  <div class="site-header__inner">
+    <a class="brand-lockup" href={localizedPath(locale, "/")} aria-label="AgentWeave home">
+      <BrandMark />
+      <span class="brand-lockup__text">
+        <strong>AgentWeave</strong>
+        <small>by SecondLoop</small>
+      </span>
+    </a>
+
+    <nav class="desktop-nav" aria-label={copy.menu}>
+      {links.map((link) => (
+        <a href={link.href} aria-current={isCurrent(link.href) ? "page" : undefined}>{link.label}</a>
+      ))}
+      <a href={repositoryUrl} target="_blank" rel="noreferrer">{copy.github}<span aria-hidden="true">↗</span></a>
+      <a class="language-link" href={alternatePath(locale, currentPath)}>{copy.language}</a>
+    </nav>
+
+    <details class="mobile-nav">
+      <summary>
+        <span>{copy.menu}</span>
+        <span class="mobile-nav__glyph" aria-hidden="true"></span>
+      </summary>
+      <nav aria-label={copy.menu}>
+        {links.map((link) => (
+          <a href={link.href} aria-current={isCurrent(link.href) ? "page" : undefined}>{link.label}</a>
+        ))}
+        <a href={repositoryUrl} target="_blank" rel="noreferrer">{copy.github}<span aria-hidden="true">↗</span></a>
+        <a href={alternatePath(locale, currentPath)}>{copy.language}</a>
+      </nav>
+    </details>
+  </div>
+</header>

@@ -1,0 +1,80 @@
+---
+import LegalLayout from "../../components/LegalLayout.astro";
+import { contactEmail } from "../../lib/i18n";
+---
+
+<LegalLayout
+  locale="zh"
+  currentPath="/zh/privacy/"
+  title="隐私政策"
+  eyebrow="信任 / 数据 / 控制"
+  updated="2026 年 7 月 22 日"
+  description="AgentWeave 网站与开发者工具如何处理 Google 授权数据、本地凭据和网站请求。"
+>
+  <div class="policy-callout">
+    <p><strong>简要说明。</strong>AgentWeave 网站不使用分析工具、广告 Cookie，也没有用户账号数据库。AgentWeave Developer Tools 将 Google 授权凭据保存在本地，并且只在你要求配置 Firebase 时直接发送给 Google API。</p>
+  </div>
+
+  <h2>1. 适用范围与发布方</h2>
+  <p>本政策适用于 <code>agentweave.secondloop.app</code> 网站，以及显示为 <strong>AgentWeave Developer Tools by SecondLoop</strong> 的 Google OAuth 流程。</p>
+  <p>AgentWeave 是由 SecondLoop 项目团队维护的开源 Agent App Framework。本网站提供项目介绍、法律披露与授权帮助。如有问题，请联系 <a href={`mailto:${contactEmail}`}>{contactEmail}</a>。</p>
+
+  <h2>2. Google 授权流程的用途</h2>
+  <p>该授权流程帮助开发者选择或创建 Google Cloud 项目，启用 Firebase 所需 API，将 Firebase 添加到项目，并配置 Firebase Authentication 的邮箱密码登录。它是开发者配置流程，不是 Agent App 最终用户的登录流程。</p>
+  <p>Google 会在授权前显示所请求的权限。AgentWeave 不能自行授权，也不会获得你的 Google 密码。</p>
+
+  <h2>3. 处理的信息</h2>
+  <h3>Google 授权与项目数据</h3>
+  <ul>
+    <li>OAuth 授权响应、access token、refresh token、过期信息与所选 OAuth 客户端元数据。</li>
+    <li>Google API 返回的 Cloud 项目 ID、项目显示名称、生命周期状态与 Firebase 项目配置。</li>
+    <li>完成你所请求配置所需的 API 启用结果和 Firebase 配置结果。</li>
+  </ul>
+  <h3>本地应用数据</h3>
+  <p>授权 state、PKCE verifier、token 与相关凭据材料通过 Host 的本地敏感值存储保存。它们不会通过普通产品 API 或 UI 返回，也不会上传到 SecondLoop 运营的凭据服务。</p>
+  <h3>网站请求数据</h3>
+  <p>本静态网站由 Cloudflare Pages 提供。Cloudflare 可能处理 IP 地址、浏览器与设备信息、请求 URL、时间戳和安全事件等标准请求信息，以交付和保护网站。网站不添加分析脚本、广告像素或非必要 Cookie。</p>
+
+  <h2>4. 信息的使用方式</h2>
+  <p>Google 授权和项目数据仅用于：</p>
+  <ul>
+    <li>完成开发者主动发起的 Firebase 配置；</li>
+    <li>显示配置进度、项目选项与可处理的错误；</li>
+    <li>在开发者继续已授权配置时刷新授权；</li>
+    <li>断开、重试或撤销本地授权状态。</li>
+  </ul>
+  <p>我们不会将 Google 用户数据用于广告、画像、信贷决策或训练通用 AI 模型。</p>
+
+  <h2>5. Google API Services User Data Policy</h2>
+  <div class="policy-callout">
+    <p>AgentWeave 对从 Google API 获得的信息的使用，以及向其他应用的传输，将遵守 <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noreferrer">Google API Services User Data Policy</a>，包括 Limited Use 要求。</p>
+  </div>
+  <p>访问仅限于开发者指示的 Firebase 配置流程。Google 用户数据不会被出售、用于个性化广告或传输给数据经纪商。</p>
+
+  <h2>6. 存储与保留</h2>
+  <p>OAuth 凭据会保留在本地 AgentWeave Host 的敏感存储中，直到你断开连接、撤销访问、清除相关本地应用数据，或者凭据到期且无法刷新。短期授权状态仅在当前配置窗口内有效，并在完成、取消或过期后删除。</p>
+  <p>网站本身不维护用户数据库。Cloudflare 可能根据其服务配置和政策保留运营与安全日志。</p>
+
+  <h2>7. 共享与服务提供方</h2>
+  <p>AgentWeave 会把 OAuth 和项目请求直接发送到授权、Cloud Resource Manager、Service Usage、Firebase Management 与 Identity Toolkit 配置所需的 Google 端点。Cloudflare 提供网站交付与安全服务。我们不会出售 Google 用户数据或与无关第三方共享。</p>
+  <p>当你访问 GitHub、Google 或其他第三方链接后，将适用相应服务自己的政策。</p>
+
+  <h2>8. 你的选择与删除方式</h2>
+  <ul>
+    <li>如果你不希望授予 Google 显示的权限，请不要开始连接。</li>
+    <li>在 AgentWeave Developer Tools 中断开或重新配置 Firebase 授权。</li>
+    <li>从 <a href="https://myaccount.google.com/connections" target="_blank" rel="noreferrer">Google 账号连接</a>中移除 AgentWeave 访问。</li>
+    <li>清除本地 AgentWeave 应用数据或卸载应用，以移除本地凭据；平台备份行为可能另有影响。</li>
+  </ul>
+  <p>具体步骤参见 <a href="/zh/oauth-help/">OAuth 帮助页面</a>。</p>
+
+  <h2>9. 安全措施</h2>
+  <p>Desktop 授权流程使用外部浏览器、仅限 <code>127.0.0.1</code> 的 loopback 回调、每次请求独立的 state 与 S256 PKCE。敏感值使用脱敏类型和 Host 控制的存储。任何安全措施都不是绝对的；授予生产访问前应先使用专用测试项目验证。</p>
+
+  <h2>10. 儿童与受监管用途</h2>
+  <p>AgentWeave Developer Tools 面向开发者，不针对儿童。AgentWeave 0.1.x 不作为已经完成受监管或高风险数据评审的解决方案。App 团队仍需自行负责隐私、安全、保留和合规评审。</p>
+
+  <h2>11. 政策变更与联系</h2>
+  <p>随着框架、授权 scope 或部署方式变化，我们可能更新本政策。发布重大修改时，会同步更新上方生效日期。</p>
+  <p>如有隐私或删除请求，请联系 <a href={`mailto:${contactEmail}`}>{contactEmail}</a>。</p>
+</LegalLayout>

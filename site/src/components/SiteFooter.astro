@@ -1,0 +1,50 @@
+---
+import BrandMark from "./BrandMark.astro";
+import { localizedPath, repositoryUrl, contactEmail, type Locale } from "../lib/i18n";
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const copy = locale === "zh"
+  ? {
+      descriptor: "面向产品与工程团队的开源 Agent App Framework。",
+      note: "AgentWeave 由 SecondLoop 项目团队维护。",
+      privacy: "隐私政策",
+      terms: "服务条款",
+      oauth: "OAuth 帮助",
+      contact: "联系",
+    }
+  : {
+      descriptor: "An open-source Agent App Framework for product and engineering teams.",
+      note: "AgentWeave is maintained by the SecondLoop project team.",
+      privacy: "Privacy",
+      terms: "Terms",
+      oauth: "OAuth help",
+      contact: "Contact",
+    };
+---
+
+<footer class="site-footer">
+  <div class="site-footer__grid">
+    <div class="site-footer__identity">
+      <BrandMark size={30} />
+      <div>
+        <strong>AgentWeave</strong>
+        <p>{copy.descriptor}</p>
+      </div>
+    </div>
+    <nav aria-label="Footer">
+      <a href={localizedPath(locale, "/oauth-help/")}>{copy.oauth}</a>
+      <a href={localizedPath(locale, "/privacy/")}>{copy.privacy}</a>
+      <a href={localizedPath(locale, "/terms/")}>{copy.terms}</a>
+      <a href={`mailto:${contactEmail}`}>{copy.contact}</a>
+      <a href={repositoryUrl} target="_blank" rel="noreferrer">GitHub ↗</a>
+    </nav>
+  </div>
+  <div class="site-footer__fineprint">
+    <span>© 2026 AgentWeave contributors.</span>
+    <span>{copy.note}</span>
+  </div>
+</footer>

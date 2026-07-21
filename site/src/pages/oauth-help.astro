@@ -1,0 +1,72 @@
+---
+import LegalLayout from "../components/LegalLayout.astro";
+import { contactEmail } from "../lib/i18n";
+---
+
+<LegalLayout
+  locale="en"
+  currentPath="/oauth-help/"
+  title="Google OAuth help"
+  eyebrow="CONNECT / CONFIGURE / REVOKE"
+  updated="July 22, 2026"
+  description="What AgentWeave Developer Tools requests from Google, how Firebase setup works, and how to revoke or remove local authorization."
+>
+  <div class="policy-callout">
+    <p><strong>This is a developer setup flow.</strong> Google authorization is used to configure Firebase for an Agent App. It is separate from the email-and-password login that the resulting App may later offer to its end users.</p>
+  </div>
+
+  <h2>1. Before you connect</h2>
+  <ul>
+    <li>Use a Google account that is allowed to create or administer the intended Cloud project.</li>
+    <li>Start with a dedicated test project that contains no production users or regulated data.</li>
+    <li>Review the account name, application name, publisher domain, and requested permissions on Google's consent screen.</li>
+    <li>Do not continue if the browser is not on a Google-owned authorization domain.</li>
+  </ul>
+
+  <h2>2. Permissions requested</h2>
+  <p>The current setup flow requests these Google OAuth scopes:</p>
+  <ul class="scope-list">
+    <li><code>https://www.googleapis.com/auth/cloud-platform</code><span>Read and manage the selected Google Cloud project and enable services needed by the requested Firebase setup.</span></li>
+    <li><code>https://www.googleapis.com/auth/firebase</code><span>View and administer Firebase project configuration needed to add Firebase and enable email authentication.</span></li>
+  </ul>
+  <p>These permissions are broad because project creation, API enablement, and Firebase configuration cross multiple Google services. AgentWeave uses them only for the developer-directed setup workflow. Do not grant them for a project you are not authorized to manage.</p>
+
+  <h2>3. What happens during setup</h2>
+  <ol>
+    <li>AgentWeave creates a short-lived authorization state and an S256 PKCE verifier in local sensitive storage.</li>
+    <li>Your default browser opens Google's authorization page.</li>
+    <li>After you consent, Google redirects to a temporary <code>127.0.0.1</code> callback owned by the local AgentWeave Host.</li>
+    <li>AgentWeave exchanges the one-time authorization code directly with Google's token endpoint.</li>
+    <li>You select an existing project or request a new project, then AgentWeave enables the required APIs and applies the Firebase Authentication configuration.</li>
+    <li>The public Firebase web configuration is returned to the developer workspace. OAuth tokens remain in local sensitive storage.</li>
+  </ol>
+
+  <h2>4. Desktop OAuth client metadata</h2>
+  <p>The Client ID is public and appears in every authorization request. Google Desktop installed applications cannot keep a shared client secret confidential, so the Desktop client secret is treated as public client metadata rather than proof of application identity. This follows the native-app OAuth model described by <a href="https://www.rfc-editor.org/rfc/rfc8252.html#section-8.5" target="_blank" rel="noreferrer">RFC 8252 section 8.5</a>.</p>
+  <p>Public client metadata cannot issue a token by itself. Token issuance still requires user consent, a one-time authorization code, the matching PKCE verifier, and the exact callback. Access tokens and refresh tokens remain confidential.</p>
+
+  <h2>5. Disconnect or revoke access</h2>
+  <h3>From AgentWeave</h3>
+  <p>Open <strong>Developer Tools → Required information → User login</strong>, then disconnect or restart the Firebase authorization. This removes the active local binding and its locally stored authorization material.</p>
+  <h3>From your Google Account</h3>
+  <ol>
+    <li>Open <a href="https://myaccount.google.com/connections" target="_blank" rel="noreferrer">Google Account → Third-party apps and services</a>.</li>
+    <li>Select <strong>AgentWeave Developer Tools by SecondLoop</strong>.</li>
+    <li>Choose the option to remove or revoke access.</li>
+  </ol>
+  <p>Revocation prevents future refreshes. An access token already issued by Google may remain valid until its short expiry. To remove all local application state, also clear the AgentWeave app data using your operating system's application-data controls or uninstall the app.</p>
+
+  <h2>6. Common problems</h2>
+  <h3>“Access blocked” or an unverified-app warning</h3>
+  <p>Confirm that the application is named AgentWeave Developer Tools by SecondLoop and that the publisher pages use <code>secondloop.app</code>. During a controlled pilot, Google may apply an unverified-user limit until the OAuth verification process is complete.</p>
+  <h3>The callback page cannot connect</h3>
+  <p>Keep AgentWeave open while the browser completes authorization. Local firewall, proxy, or endpoint security software must allow the temporary IPv4 loopback callback. Do not replace the callback with a public URL.</p>
+  <h3>No projects appear</h3>
+  <p>The Google account may lack project listing or creation permissions, an organization policy may restrict project creation, or the selected project may be in an unsupported lifecycle state. Try a dedicated account or ask the organization administrator for the required role.</p>
+  <h3>API enablement or Firebase setup fails</h3>
+  <p>Verify billing and organization policy, confirm that you can enable services in the project, and retry after any Google service propagation delay. AgentWeave keeps retryable authorization state for a limited period rather than silently switching projects.</p>
+
+  <h2>7. Get help</h2>
+  <p>Before contacting support, record the visible error category and the step that failed. Do not send access tokens, refresh tokens, authorization codes, passwords, or downloaded OAuth credential files.</p>
+  <p>For OAuth and privacy help, contact <a href={`mailto:${contactEmail}`}>{contactEmail}</a>.</p>
+</LegalLayout>
