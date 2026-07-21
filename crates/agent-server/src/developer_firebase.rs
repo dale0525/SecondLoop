@@ -1,5 +1,6 @@
 use crate::developer_control_plane::{DeveloperControlPlane, now_unix_ms};
 use crate::developer_firebase_models::*;
+pub(crate) use crate::developer_firebase_oauth::FirebaseOAuthDefaults;
 use agent_devkit::{
     DeveloperAuthorization, DevkitError, DevkitErrorCode, DevkitResult, SensitiveInputHandle,
     SensitiveInputResolver, SensitiveInputStore, SensitiveValue,
@@ -25,51 +26,6 @@ pub(crate) const CAPABILITY_PROJECTS: &str = "firebase.projects.manage";
 pub(crate) const CAPABILITY_AUTH: &str = "firebase.authentication.configure";
 const MAX_RESPONSE_BYTES: usize = 1024 * 1024;
 const MAX_LIST_PAGES: usize = 1_000;
-
-#[derive(Clone, Debug, Default)]
-pub struct FirebaseOAuthDefaults {
-    client_id: Option<String>,
-    client_secret: Option<String>,
-}
-
-impl FirebaseOAuthDefaults {
-    pub fn from_environment() -> anyhow::Result<Self> {
-        let client_id = environment_override("AGENTWEAVE_FIREBASE_OAUTH_CLIENT_ID")?;
-        let client_secret = environment_override("AGENTWEAVE_FIREBASE_OAUTH_CLIENT_SECRET")?;
-        if client_id.is_none() && client_secret.is_some() {
-            anyhow::bail!("Firebase OAuth client secret requires a client ID");
-        }
-        for value in [client_id.as_deref(), client_secret.as_deref()]
-            .into_iter()
-            .flatten()
-        {
-            anyhow::ensure!(
-                !value.trim().is_empty()
-                    && value.len() <= 4096
-                    && !value.chars().any(char::is_control),
-                "Firebase OAuth client configuration is invalid"
-            );
-        }
-        Ok(Self {
-            client_id,
-            client_secret,
-        })
-    }
-
-    fn public_client_available(&self) -> bool {
-        self.client_id.is_some()
-    }
-}
-
-fn environment_override(name: &str) -> anyhow::Result<Option<String>> {
-    match std::env::var(name) {
-        Ok(value) => Ok(Some(value)),
-        Err(std::env::VarError::NotPresent) => Ok(None),
-        Err(std::env::VarError::NotUnicode(_)) => {
-            anyhow::bail!("{name} must contain valid Unicode")
-        }
-    }
-}
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(

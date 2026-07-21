@@ -17,6 +17,7 @@ mod developer_control_plane_deployment;
 mod developer_control_plane_oauth;
 mod developer_firebase;
 mod developer_firebase_models;
+mod developer_firebase_oauth;
 mod developer_firebase_refresh;
 mod developer_gateway_projection;
 mod developer_sensitive_store;
