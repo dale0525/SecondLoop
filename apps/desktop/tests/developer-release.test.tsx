@@ -289,32 +289,80 @@ describe("developer release workspace", () => {
     expect(screen.queryByText("Issuer URL")).not.toBeInTheDocument();
   });
 
-  it("labels the Firebase fallback with the Google OAuth client identity", async () => {
-    installReleaseBridge(userConfigurableSnapshot(), {
-      controlStatus: {
-        ...controlStatus(
-          "ready",
-          "0123456789abcdef0123456789abcdef",
-        ) as Record<string, unknown>,
-        firebaseAuthorization: {
-          providerId: "google.firebase",
-          phase: "disconnected",
-          projectId: null,
-          expiresAtUnixMs: null,
-          publicOauthClientAvailable: false,
-        },
-      },
+  it("starts Firebase public OAuth from the primary action", async () => {
+    const accountId = "0123456789abcdef0123456789abcdef";
+    const accessRequest = vi.fn(async (operation: string) => {
+      if (operation === "status") {
+        return {
+          ...controlStatus("ready", accountId) as Record<string, unknown>,
+          firebaseAuthorization: {
+            providerId: "google.firebase",
+            phase: "disconnected",
+            projectId: null,
+            expiresAtUnixMs: null,
+            publicOauthClientAvailable: true,
+          },
+        };
+      }
+      if (operation === "firebase.connect") return undefined;
+      throw new Error(`Unexpected operation: ${operation}`);
     });
+    installReleaseBridge(userConfigurableSnapshot(), { accessRequest });
     window.history.replaceState(null, "", "/#developer/access/setup");
+    const user = userEvent.setup();
+
+    render(<App />);
+    await user.click(await screen.findByRole("button", { name: "Configure with Google" }));
+
+    expect(accessRequest).toHaveBeenCalledWith("firebase.connect", {
+      client: { mode: "agent_weave_public" },
+    });
+  });
+
+  it("labels the Firebase fallback with the Google OAuth client identity", async () => {
+    const accountId = "0123456789abcdef0123456789abcdef";
+    const accessRequest = vi.fn(async (operation: string) => {
+      if (operation === "status") {
+        return {
+          ...controlStatus("ready", accountId) as Record<string, unknown>,
+          firebaseAuthorization: {
+            providerId: "google.firebase",
+            phase: "disconnected",
+            projectId: null,
+            expiresAtUnixMs: null,
+            publicOauthClientAvailable: false,
+          },
+        };
+      }
+      if (operation === "firebase.connect") return undefined;
+      throw new Error(`Unexpected operation: ${operation}`);
+    });
+    installReleaseBridge(userConfigurableSnapshot(), { accessRequest });
+    window.history.replaceState(null, "", "/#developer/access/setup");
+    const user = userEvent.setup();
 
     render(<App />);
 
-    expect(await screen.findByRole("textbox", {
+    const clientId = await screen.findByRole("textbox", {
       name: "Google OAuth client ID",
-    })).toBeVisible();
+    });
+    expect(clientId).toBeVisible();
     expect(screen.queryByRole("textbox", {
       name: "Cloudflare OAuth client ID",
     })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", {
+      name: "Configure with Google",
+    })).not.toBeInTheDocument();
+
+    await user.type(clientId, "custom-client.apps.googleusercontent.com");
+    await user.click(screen.getByRole("button", { name: "Connect Google" }));
+
+    expect(accessRequest).toHaveBeenCalledWith("firebase.connect", {
+      client: {
+        mode: "custom",
+        clientId: "custom-client.apps.googleusercontent.com",
+      },
+    });
   });
 
   it("retries the Firebase project list without restarting Google authorization", async () => {
