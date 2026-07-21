@@ -69,10 +69,11 @@ impl FirebaseSessionStore for VaultFirebaseSessionStore {
         else {
             return Ok(None);
         };
-        if credential.provider_id != FIREBASE_IDENTITY_PROVIDER_ID
-            || credential.revoked_at.is_some()
-        {
+        if credential.provider_id != FIREBASE_IDENTITY_PROVIDER_ID {
             return Err(FirebaseError::SecureStorage);
+        }
+        if credential.revoked_at.is_some() {
+            return Ok(None);
         }
         let access = self.material(false).await?;
         let wire: AccessWire = access
@@ -154,4 +155,46 @@ impl FirebaseSessionStore for VaultFirebaseSessionStore {
 fn secret_id(kind: &str) -> Result<SecretId> {
     SecretId::parse(&format!("firebase-{kind}-{}", Uuid::new_v4().simple()))
         .map_err(|_| FirebaseError::SecureStorage)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use agent_runtime::{
+        credential::InMemorySecretStore, credential_sqlite::SqliteCredentialMetadataStore,
+        storage::Storage,
+    };
+    use chrono::Duration;
+
+    #[tokio::test]
+    async fn revoked_firebase_credential_loads_as_an_absent_session() {
+        let storage = Storage::connect("sqlite::memory:").await.unwrap();
+        let metadata = SqliteCredentialMetadataStore::from_storage(&storage)
+            .await
+            .unwrap();
+        let store = VaultFirebaseSessionStore::new(
+            Arc::new(CredentialVault::new_persistent(
+                Arc::new(InMemorySecretStore::default()),
+                metadata,
+            )),
+            "com.example.app".into(),
+            "local".into(),
+        )
+        .unwrap();
+        store
+            .save_session(FirebaseSession {
+                subject: "firebase-subject".into(),
+                id_token: FirebaseSecret::new("id-token-sentinel"),
+                refresh_token: FirebaseSecret::new("refresh-token-sentinel"),
+                authenticated_at: Utc::now() - Duration::minutes(1),
+                expires_at: Utc::now() + Duration::hours(1),
+            })
+            .await
+            .unwrap();
+        assert!(store.load_session().await.unwrap().is_some());
+
+        store.delete_session().await.unwrap();
+
+        assert!(store.load_session().await.unwrap().is_none());
+    }
 }
