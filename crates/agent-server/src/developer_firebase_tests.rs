@@ -126,6 +126,17 @@ async fn one_click_configuration_binds_project_and_returns_public_web_config() {
             ),
             response(200, json!({"projectId": "sample-project-123"})),
             response(200, json!({"name": "operations/enable-auth", "done": true})),
+            response(
+                404,
+                json!({
+                    "error": {
+                        "code": 404,
+                        "message": "CONFIGURATION_NOT_FOUND",
+                        "status": "NOT_FOUND"
+                    }
+                }),
+            ),
+            response(200, json!({})),
             response(200, json!({"signIn": {"email": {"enabled": true}}})),
             response(
                 200,
@@ -179,7 +190,7 @@ async fn one_click_configuration_binds_project_and_returns_public_web_config() {
         .into_owned();
     let status = control
         .complete_firebase_authorization(&format!(
-            "http://127.0.0.1:43892/firebase/callback?code=one-time-code&state={state}"
+            "http://127.0.0.1:43892/firebase/callback?code=one-time-code&state={state}&iss=https%3A%2F%2Faccounts.google.com"
         ))
         .await
         .unwrap();
@@ -201,8 +212,13 @@ async fn one_click_configuration_binds_project_and_returns_public_web_config() {
     assert!(
         requests
             .iter()
-            .any(|request| request.contains("identitytoolkit.googleapis.com/v2"))
+            .any(|request| request.contains("identitytoolkit.googleapis.com/admin/v2"))
     );
+    assert!(requests.iter().any(|request| {
+        request.contains(
+            "identitytoolkit.googleapis.com/v2/projects/sample-project-123/identityPlatform:initializeAuth",
+        )
+    }));
     assert!(requests.iter().any(|request| {
         request.contains("cloudresourcemanager.googleapis.com/v1/projects")
             && request.contains("pageToken=projects-next%2Fwith%2Breserved")
@@ -212,6 +228,304 @@ async fn one_click_configuration_binds_project_and_returns_public_web_config() {
             && request.contains("pageToken=apps-next%2Fwith%2Breserved")
     }));
     assert!(!serde_json::to_string(&status).unwrap().contains("token"));
+}
+
+#[tokio::test]
+async fn email_password_configuration_succeeds_without_initializing_an_existing_auth_project() {
+    let storage = Storage::connect("sqlite::memory:").await.unwrap();
+    let mut control = DeveloperControlPlane::cloudflare(
+        storage.sqlite_pool(),
+        Arc::new(InMemorySecretStore::default()),
+        "firebase-existing-auth-project",
+        "com.example.agent",
+        crate::developer_control_plane::CloudflareOAuthDefaults::default(),
+    )
+    .await
+    .unwrap();
+    let fake = Arc::new(FakeFirebaseHttp {
+        responses: Mutex::new(VecDeque::from([
+            response(
+                200,
+                json!({
+                    "access_token": "google-access-token",
+                    "refresh_token": "google-refresh-token",
+                    "expires_in": 3600,
+                    "scope": format!("{GOOGLE_SCOPE_CLOUD} {GOOGLE_SCOPE_FIREBASE}"),
+                    "token_type": "Bearer"
+                }),
+            ),
+            response(200, json!({"signIn": {"email": {"enabled": true}}})),
+        ])),
+        requests: Mutex::new(Vec::new()),
+    });
+    control.firebase_http = fake.clone();
+    let start = control
+        .start_firebase_authorization(
+            FirebaseOAuthClientSelection::Custom {
+                client_id: "desktop-client.apps.googleusercontent.com".into(),
+                client_secret: None,
+            },
+            Url::parse("http://127.0.0.1:43900/firebase/callback").unwrap(),
+        )
+        .await
+        .unwrap();
+    let state = Url::parse(&start.authorization_url)
+        .unwrap()
+        .query_pairs()
+        .find(|(name, _)| name == "state")
+        .unwrap()
+        .1
+        .into_owned();
+    control
+        .complete_firebase_authorization(&format!(
+            "http://127.0.0.1:43900/firebase/callback?code=one-time-code&state={state}"
+        ))
+        .await
+        .unwrap();
+    let authorization = control
+        .load_firebase_authorization()
+        .await
+        .unwrap()
+        .unwrap();
+    control
+        .enable_email_password(
+            &authorization,
+            &FirebaseProjectSummary {
+                project_id: "existing-auth-project".into(),
+                project_number: "123456789".into(),
+                display_name: "Existing Auth Project".into(),
+            },
+        )
+        .await
+        .unwrap();
+
+    let requests = fake.requests.lock().await;
+    assert_eq!(
+        requests
+            .iter()
+            .filter(|request| request.contains("identitytoolkit.googleapis.com/admin/v2"))
+            .count(),
+        1
+    );
+    assert!(
+        requests
+            .iter()
+            .all(|request| !request.contains("identityPlatform:initializeAuth"))
+    );
+}
+
+#[tokio::test]
+async fn initialize_auth_transient_failures_remain_retryable() {
+    let storage = Storage::connect("sqlite::memory:").await.unwrap();
+    let mut control = DeveloperControlPlane::cloudflare(
+        storage.sqlite_pool(),
+        Arc::new(InMemorySecretStore::default()),
+        "firebase-auth-retry-project",
+        "com.example.agent",
+        crate::developer_control_plane::CloudflareOAuthDefaults::default(),
+    )
+    .await
+    .unwrap();
+    let fake = Arc::new(FakeFirebaseHttp {
+        responses: Mutex::new(VecDeque::from([
+            response(
+                200,
+                json!({
+                    "access_token": "google-access-token",
+                    "refresh_token": "google-refresh-token",
+                    "expires_in": 3600,
+                    "scope": format!("{GOOGLE_SCOPE_CLOUD} {GOOGLE_SCOPE_FIREBASE}"),
+                    "token_type": "Bearer"
+                }),
+            ),
+            response(404, json!({})),
+            response(503, json!({})),
+            response(404, json!({})),
+            response(429, json!({})),
+        ])),
+        requests: Mutex::new(Vec::new()),
+    });
+    control.firebase_http = fake;
+    let start = control
+        .start_firebase_authorization(
+            FirebaseOAuthClientSelection::Custom {
+                client_id: "desktop-client.apps.googleusercontent.com".into(),
+                client_secret: None,
+            },
+            Url::parse("http://127.0.0.1:43901/firebase/callback").unwrap(),
+        )
+        .await
+        .unwrap();
+    let state = Url::parse(&start.authorization_url)
+        .unwrap()
+        .query_pairs()
+        .find(|(name, _)| name == "state")
+        .unwrap()
+        .1
+        .into_owned();
+    control
+        .complete_firebase_authorization(&format!(
+            "http://127.0.0.1:43901/firebase/callback?code=one-time-code&state={state}"
+        ))
+        .await
+        .unwrap();
+    let authorization = control
+        .load_firebase_authorization()
+        .await
+        .unwrap()
+        .unwrap();
+    let project = FirebaseProjectSummary {
+        project_id: "auth-retry-project".into(),
+        project_number: "123456789".into(),
+        display_name: "Auth Retry Project".into(),
+    };
+
+    assert_eq!(
+        control
+            .enable_email_password(&authorization, &project)
+            .await
+            .unwrap_err()
+            .code,
+        DevkitErrorCode::Unavailable
+    );
+    let rate_limited = control
+        .enable_email_password(&authorization, &project)
+        .await
+        .unwrap_err();
+    assert_eq!(rate_limited.code, DevkitErrorCode::RateLimited);
+    assert_eq!(rate_limited.retry_after_ms, Some(1_000));
+}
+
+#[tokio::test]
+async fn oauth_callback_rejects_an_unexpected_authorization_server_issuer() {
+    let storage = Storage::connect("sqlite::memory:").await.unwrap();
+    let mut control = DeveloperControlPlane::cloudflare(
+        storage.sqlite_pool(),
+        Arc::new(InMemorySecretStore::default()),
+        "firebase-issuer-test-project",
+        "com.example.agent",
+        crate::developer_control_plane::CloudflareOAuthDefaults::default(),
+    )
+    .await
+    .unwrap();
+    let fake = Arc::new(FakeFirebaseHttp {
+        responses: Mutex::new(VecDeque::new()),
+        requests: Mutex::new(Vec::new()),
+    });
+    control.firebase_http = fake.clone();
+    let start = control
+        .start_firebase_authorization(
+            FirebaseOAuthClientSelection::Custom {
+                client_id: "desktop-client.apps.googleusercontent.com".into(),
+                client_secret: None,
+            },
+            Url::parse("http://127.0.0.1:43898/firebase/callback").unwrap(),
+        )
+        .await
+        .unwrap();
+    let state = Url::parse(&start.authorization_url)
+        .unwrap()
+        .query_pairs()
+        .find(|(name, _)| name == "state")
+        .unwrap()
+        .1
+        .into_owned();
+
+    assert_eq!(
+        control
+            .complete_firebase_authorization(&format!(
+                "http://127.0.0.1:43898/firebase/callback?code=one-time-code&state={state}&iss=https%3A%2F%2Fevil.example"
+            ))
+            .await
+            .unwrap_err()
+            .code,
+        DevkitErrorCode::InvalidAuthorization
+    );
+    assert!(fake.requests.lock().await.is_empty());
+}
+
+#[tokio::test]
+async fn project_list_normalizes_a_missing_display_name_without_dropping_the_batch() {
+    let storage = Storage::connect("sqlite::memory:").await.unwrap();
+    let mut control = DeveloperControlPlane::cloudflare(
+        storage.sqlite_pool(),
+        Arc::new(InMemorySecretStore::default()),
+        "firebase-project-list-test",
+        "com.example.agent",
+        crate::developer_control_plane::CloudflareOAuthDefaults::default(),
+    )
+    .await
+    .unwrap();
+    control.firebase_http = Arc::new(FakeFirebaseHttp {
+        responses: Mutex::new(VecDeque::from([
+            response(
+                200,
+                json!({
+                    "access_token": "google-access-token",
+                    "refresh_token": "google-refresh-token",
+                    "expires_in": 3600,
+                    "scope": format!("{GOOGLE_SCOPE_CLOUD} {GOOGLE_SCOPE_FIREBASE}"),
+                    "token_type": "Bearer"
+                }),
+            ),
+            response(
+                200,
+                json!({
+                    "projects": [
+                        {
+                            "projectId": "missing-name-project",
+                            "projectNumber": "123456789",
+                            "lifecycleState": "ACTIVE"
+                        },
+                        {
+                            "projectId": "named-project-123",
+                            "projectNumber": "987654321",
+                            "name": "Named Project",
+                            "lifecycleState": "ACTIVE"
+                        }
+                    ]
+                }),
+            ),
+        ])),
+        requests: Mutex::new(Vec::new()),
+    });
+    let start = control
+        .start_firebase_authorization(
+            FirebaseOAuthClientSelection::Custom {
+                client_id: "desktop-client.apps.googleusercontent.com".into(),
+                client_secret: None,
+            },
+            Url::parse("http://127.0.0.1:43899/firebase/callback").unwrap(),
+        )
+        .await
+        .unwrap();
+    let state = Url::parse(&start.authorization_url)
+        .unwrap()
+        .query_pairs()
+        .find(|(name, _)| name == "state")
+        .unwrap()
+        .1
+        .into_owned();
+    control
+        .complete_firebase_authorization(&format!(
+            "http://127.0.0.1:43899/firebase/callback?code=one-time-code&state={state}"
+        ))
+        .await
+        .unwrap();
+
+    let projects = control.list_firebase_projects().await.unwrap();
+
+    assert_eq!(projects.len(), 2);
+    let missing_name = projects
+        .iter()
+        .find(|project| project.project_id == "missing-name-project")
+        .unwrap();
+    assert_eq!(missing_name.display_name, "missing-name-project");
+    let named = projects
+        .iter()
+        .find(|project| project.project_id == "named-project-123")
+        .unwrap();
+    assert_eq!(named.display_name, "Named Project");
 }
 
 #[tokio::test]
