@@ -35,6 +35,13 @@ const privacy = readFileSync(join(distRoot, "privacy/index.html"), "utf8");
 assert.ok(privacy.includes("Limited Use requirements"));
 assert.ok(privacy.includes("not uploaded to a SecondLoop-operated credential service"));
 
+const home = readFileSync(join(distRoot, "index.html"), "utf8");
+assert.ok(home.includes("AgentWeave is an open-source Agent App Framework that weaves"));
+assert.ok(home.includes("</span> <em>Agent App Framework.</em>"));
+
+const zhHome = readFileSync(join(distRoot, "zh/index.html"), "utf8");
+assert.ok(zhHome.includes("AgentWeave 是一个开源 Agent App Framework，把"));
+
 const oauthHelp = readFileSync(join(distRoot, "oauth-help/index.html"), "utf8");
 assert.ok(oauthHelp.includes("S256 PKCE"));
 assert.ok(oauthHelp.includes("127.0.0.1"));
