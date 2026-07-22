@@ -50,7 +50,7 @@ function requestId(request, cryptoImpl) {
 }
 
 function commerceStore(config, env, nowSeconds) {
-  if (config.policy.sourceMode !== "commerce_provider") return null;
+  if (config.setup || config.policy.sourceMode !== "commerce_provider") return null;
   return new CommerceStore(env[config.bindings.commerce], {
     appId: config.appId,
     environment: config.commerce.environment,
@@ -151,7 +151,7 @@ export function createEntitlementWorker({
         const store = commerceStore(config, env, nowSeconds);
         if (request.method === "GET" && url.pathname === "/healthz") {
           return json({
-            status: "ready",
+            status: config.setup ? "setup_required" : "ready",
             service: "entitlement-policy",
             schema_version: 1,
             protocol_version: "2",
@@ -165,11 +165,18 @@ export function createEntitlementWorker({
         if (request.method === "GET" && url.pathname === "/.well-known/agentweave-entitlement-policy") {
           return json({
             providerId: "agentweave.entitlements.cloudflare_policy",
+            setupMode: config.setup?.mode ?? null,
             capabilities: ["gateway_policy_projection_v2", ...(config.commerce ? [
               "checkout_session_v1", "customer_portal_v1", "signed_webhook_v1",
               "subscription_reconciliation_v1", "product_discovery_v1", "test_environment_v1",
             ] : [])],
           });
+        }
+        if (config.setup) {
+          if (request.method === "POST" && url.pathname === "/agentweave/commerce/v1/webhooks/creem") {
+            fail(503, "commerce_setup_required", "Commerce webhook setup is not complete.");
+          }
+          fail(503, "entitlement_setup_required", "The entitlement service setup is not complete.");
         }
         if (request.method === "POST" && url.pathname === "/agentweave/entitlements/projection") {
           return handleProjection(request, config, store, env, { cryptoImpl, nowSeconds });
@@ -278,7 +285,7 @@ export function createEntitlementWorker({
 
     async scheduled(_event, env, context) {
       const config = loadEntitlementConfig(env);
-      if (!config.commerce) return;
+      if (config.setup || !config.commerce) return;
       const store = commerceStore(config, env, nowSeconds);
       const api = new CreemApi(config, env.CREEM_API_KEY, { fetchImpl });
       const candidates = await store.reconciliationCandidates(50);

@@ -14,8 +14,66 @@ describe("developer access controller", () => {
       "access.plan",
       "access.apply",
       "access.test",
+      "commerce.creem.bootstrap",
       "commerce.creem.products",
     ]));
+  });
+
+  it("binds automatic Creem webhook bootstrap to the current public project", async () => {
+    const harness = ipcHarness();
+    const revision = "a".repeat(64);
+    const snapshot = commerceProjectSnapshot(revision);
+    const bodies: unknown[] = [];
+    registerDeveloperAccessController({
+      ensureCredentialVault: async () => undefined,
+      ipcMain: harness.ipcMain,
+      loadProject: async () => snapshot,
+      openExternal: vi.fn(),
+      recordDeployment: vi.fn(),
+      redirectUri: "http://127.0.0.1:48972/agentweave/cloudflare/callback",
+      requesterWebContents: { id: 7 },
+      sidecarRequest: async (pathname, init) => {
+        expect(pathname).toContain("/dev/control/commerce/creem/bootstrap");
+        bodies.push(JSON.parse(String(init?.body)) as unknown);
+        return jsonResponse({
+          state: "bootstrap_ready",
+          providerId: "cloudflare-workers",
+          providerVersion: "0.1.0",
+          target: {
+            accountId: "0123456789abcdef0123456789abcdef",
+            deploymentId: "deployment-1",
+            workerName: "example-entitlements",
+            environment: "production",
+          },
+          versionId: "version-setup",
+          endpoint: "https://example-entitlements.workers.dev",
+          webhookUrl: "https://example-entitlements.workers.dev/agentweave/commerce/v1/webhooks/creem",
+          operationId: "4f290eb3-8712-4f7d-bde8-0a98aa95e33b",
+          completedAtUnixMs: 1_700_000_000_000,
+        });
+      },
+      verifyDeployment: vi.fn(),
+    });
+
+    const receipt = await harness.invoke({
+      operation: "commerce.creem.bootstrap",
+      input: {
+        expectedProjectRevision: revision,
+        idempotencyKey: "4f290eb3-8712-4f7d-bde8-0a98aa95e33b",
+      },
+    });
+
+    expect(receipt).toMatchObject({
+      state: "bootstrap_ready",
+      webhookUrl: "https://example-entitlements.workers.dev/agentweave/commerce/v1/webhooks/creem",
+    });
+    expect(bodies[0]).toMatchObject({
+      project: {
+        projectRevision: revision,
+        providers: { commerce: { id: "agentweave.commerce.creem" } },
+      },
+    });
+    expect(JSON.stringify(bodies[0])).not.toMatch(/apiKey|webhookSecret|secretValue/i);
   });
 
   it("keeps the Cloudflare authorization URL and callback credentials in Main", async () => {
@@ -505,6 +563,53 @@ function appManagedProject() {
         environment: "production",
       },
     },
+  };
+}
+
+function commerceProjectSnapshot(revision: string) {
+  const project = {
+    schemaVersion: 2,
+    providers: {
+      identity: { id: "agentweave.identity.firebase", version: "0.1.0", publicConfig: {} },
+      entitlement: {
+        id: "agentweave.entitlements.cloudflare_policy",
+        version: "0.1.0",
+        publicConfig: {},
+      },
+      commerce: {
+        id: "agentweave.commerce.creem",
+        version: "0.1.0",
+        publicConfig: { environment: "test" },
+      },
+      gateway: { id: "cloudflare-workers", version: "0.1.0", publicConfig: {} },
+    },
+    modelAccess: { configurationPolicy: "user_configurable" },
+    deployment: {
+      provider: "cloudflare",
+      cloudflare: {
+        accountId: "0123456789abcdef0123456789abcdef",
+        gatewayWorkerName: "example-gateway",
+        environment: "production",
+        entitlement: {
+          mode: "managed_worker",
+          workerName: "example-entitlements",
+          policy: {
+            sourceMode: "commerce_provider",
+            tenantLimits: { maxRequests: 0, maxUnits: 0 },
+            productPlans: [],
+          },
+        },
+      },
+    },
+  };
+  return {
+    appRoot: "/project/app",
+    revision,
+    desiredHash: `sha256:${"d".repeat(64)}`,
+    manifest: { appId: "com.example.app" },
+    project,
+    deploymentStatus: "missing" as const,
+    deploymentMessage: "Verification required",
   };
 }
 

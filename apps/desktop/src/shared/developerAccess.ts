@@ -20,6 +20,7 @@ export type DeveloperAccessOperation =
   | "access.rollback"
   | "access.destroyPlan"
   | "access.destroyApply"
+  | "commerce.creem.bootstrap"
   | "commerce.creem.products"
   | "commerce.creem.dashboard"
   | "gateway.plan"
@@ -143,6 +144,18 @@ export type DeveloperAccessCommerceVerification = Readonly<{
   capabilities: ReadonlyArray<string>;
   webhookVerifiedAtUnixMs: number | null;
   portalVerifiedAtUnixMs: number | null;
+}>;
+
+export type DeveloperCreemWebhookBootstrapReceipt = Readonly<{
+  state: "bootstrap_ready" | "existing_entitlement" | "commerce_active";
+  providerId: string;
+  providerVersion: string;
+  target: DeveloperGatewayDeploymentReceipt["target"];
+  versionId: string;
+  endpoint: string;
+  webhookUrl: string;
+  operationId: string | null;
+  completedAtUnixMs: number;
 }>;
 
 export type DeveloperAccessBundleTestReceipt = Readonly<{

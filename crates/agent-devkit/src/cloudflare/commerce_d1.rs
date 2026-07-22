@@ -16,6 +16,7 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
 pub(super) const COMMERCE_D1_BINDING_NAME: &str = "COMMERCE";
+const CREEM_PROVIDER_ID: &str = "agentweave.commerce.creem";
 const MIGRATION_TABLE: &str = "agentweave_commerce_migrations";
 const MIGRATIONS: [(&str, &str); 2] = [
     (
@@ -80,6 +81,33 @@ pub(super) fn validate_entitlement_public_configuration(
         return Err(DevkitError::invalid_configuration(
             "Cloudflare entitlement configuration is invalid or too large",
         ));
+    }
+    if let Some(setup) = config.get("setup") {
+        let valid = setup.as_object().is_some_and(|setup| {
+            setup.len() == 3
+                && setup.get("mode").and_then(Value::as_str) == Some("commerce_webhook")
+                && setup.get("providerId").and_then(Value::as_str) == Some(CREEM_PROVIDER_ID)
+                && setup
+                    .get("environment")
+                    .and_then(Value::as_str)
+                    .is_some_and(|value| matches!(value, "test" | "production"))
+        }) && config.len() == 6
+            && config.get("schemaVersion").and_then(Value::as_u64) == Some(1)
+            && ["environment", "appId", "deploymentId", "configurationId"]
+                .into_iter()
+                .all(|name| {
+                    config
+                        .get(name)
+                        .and_then(Value::as_str)
+                        .is_some_and(|value| !value.is_empty())
+                });
+        return if valid {
+            Ok(false)
+        } else {
+            Err(DevkitError::invalid_configuration(
+                "Cloudflare Commerce webhook setup configuration is invalid",
+            ))
+        };
     }
     let source_mode = config
         .get("policy")

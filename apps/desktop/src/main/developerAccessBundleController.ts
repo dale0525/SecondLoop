@@ -4,6 +4,7 @@ import type {
   DeveloperAccessBundleResourceReceipt,
   DeveloperAccessBundleTestReceipt,
   DeveloperAccessRequest,
+  DeveloperCreemWebhookBootstrapReceipt,
   DeveloperPendingAccessBundle,
   DeveloperGatewayDeploymentReceipt,
   DeveloperGatewayTestReceipt,
@@ -14,7 +15,8 @@ const PLAN_HASH = /^[a-f0-9]{64}$/;
 const PROJECT_REVISION = /^[a-f0-9]{64}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ACCESS_OPERATIONS = new Set([
-  "access.plan", "access.apply", "access.test", "commerce.creem.products",
+  "access.plan", "access.apply", "access.test", "commerce.creem.bootstrap",
+  "commerce.creem.products",
 ]);
 
 type RequestDescription = Readonly<{
@@ -135,11 +137,41 @@ export function createDeveloperAccessBundleController(options: {
             pathname: "/dev/control/commerce/creem/products",
           }));
         }
+        case "commerce.creem.bootstrap": {
+          const snapshot = await options.loadProject();
+          const { body, revision } = bootstrapRequest(request.input, snapshot);
+          const receipt = parseCommerceWebhookBootstrap(await options.requestJson({
+            body,
+            method: "POST",
+            pathname: "/dev/control/commerce/creem/bootstrap",
+          }));
+          const current = await options.loadProject();
+          if (current.revision !== revision) {
+            throw new Error("Developer project changed while the Creem webhook Worker was prepared");
+          }
+          return receipt;
+        }
         default:
           throw new Error("Developer access bundle operation is invalid");
       }
     },
   });
+}
+
+function bootstrapRequest(value: unknown, snapshot: DeveloperProjectSnapshot) {
+  const input = exactRecord(value, ["expectedProjectRevision", "idempotencyKey"], true);
+  const revision = requiredString(input.expectedProjectRevision, "expectedProjectRevision", 64);
+  if (!PROJECT_REVISION.test(revision) || snapshot.revision !== revision) {
+    throw new Error("Developer project changed; reload before preparing the Creem webhook Worker");
+  }
+  const body = {
+    project: projectInput(snapshot, revision),
+    ...(input.idempotencyKey === undefined
+      ? {}
+      : { idempotencyKey: requiredString(input.idempotencyKey, "idempotencyKey", 256) }),
+  };
+  boundedJson(body);
+  return { body, revision };
 }
 
 function planRequest(value: unknown, snapshot: DeveloperProjectSnapshot) {
@@ -153,22 +185,8 @@ function planRequest(value: unknown, snapshot: DeveloperProjectSnapshot) {
   if (!PROJECT_REVISION.test(revision) || snapshot.revision !== revision) {
     throw new Error("Developer project changed; reload before planning the access deployment");
   }
-  const project = exactRecord(snapshot.project, [
-    "deployment",
-    "modelAccess",
-    "providers",
-    "schemaVersion",
-  ]);
-  if (project.schemaVersion !== 2) throw new Error("Managed access deployment requires project schema v2");
-  const providers = exactRecord(project.providers, ["commerce", "entitlement", "gateway", "identity"]);
   const body = {
-    project: {
-      projectRevision: revision,
-      appId: requiredString(snapshot.manifest.appId, "appId", 255),
-      providers,
-      modelAccess: project.modelAccess,
-      deployment: project.deployment,
-    },
+    project: projectInput(snapshot, revision),
     sensitiveInputs: boundedObject(input.sensitiveInputs),
     ...(input.idempotencyKey === undefined
       ? {}
@@ -179,6 +197,57 @@ function planRequest(value: unknown, snapshot: DeveloperProjectSnapshot) {
   };
   boundedJson(body);
   return { body, revision };
+}
+
+function projectInput(snapshot: DeveloperProjectSnapshot, revision: string) {
+  const project = exactRecord(snapshot.project, [
+    "deployment",
+    "modelAccess",
+    "providers",
+    "schemaVersion",
+  ]);
+  if (project.schemaVersion !== 2) throw new Error("Managed access deployment requires project schema v2");
+  const providers = exactRecord(project.providers, ["commerce", "entitlement", "gateway", "identity"]);
+  return {
+    projectRevision: revision,
+    appId: requiredString(snapshot.manifest.appId, "appId", 255),
+    providers,
+    modelAccess: project.modelAccess,
+    deployment: project.deployment,
+  };
+}
+
+function parseCommerceWebhookBootstrap(value: unknown): DeveloperCreemWebhookBootstrapReceipt {
+  rejectSensitiveResponse(value);
+  const receipt = exactRecord(value, [
+    "completedAtUnixMs", "endpoint", "operationId", "providerId", "providerVersion",
+    "state", "target", "versionId", "webhookUrl",
+  ]);
+  if (!new Set(["bootstrap_ready", "existing_entitlement", "commerce_active"]).has(receipt.state as string)) {
+    throw new Error("Creem webhook bootstrap state is invalid");
+  }
+  const endpoint = requiredHttpsUrl(receipt.endpoint, "endpoint");
+  const webhookUrl = requiredHttpsUrl(receipt.webhookUrl, "webhookUrl");
+  const expected = new URL(endpoint);
+  expected.pathname = "/agentweave/commerce/v1/webhooks/creem";
+  expected.search = "";
+  expected.hash = "";
+  if (expected.toString() !== webhookUrl) {
+    throw new Error("Creem webhook bootstrap URL is not bound to the entitlement Worker");
+  }
+  return Object.freeze({
+    state: receipt.state as DeveloperCreemWebhookBootstrapReceipt["state"],
+    providerId: requiredString(receipt.providerId, "providerId", 128),
+    providerVersion: requiredString(receipt.providerVersion, "providerVersion", 64),
+    target: parseTarget(receipt.target),
+    versionId: requiredString(receipt.versionId, "versionId", 128),
+    endpoint,
+    webhookUrl,
+    operationId: receipt.operationId == null
+      ? null
+      : uuid(receipt.operationId),
+    completedAtUnixMs: safeInteger(receipt.completedAtUnixMs),
+  });
 }
 
 function parsePlan(value: unknown): DeveloperAccessBundlePlan {
@@ -422,6 +491,16 @@ function nullableHttpsUrl(value: unknown): string | null {
   const text = requiredString(value, "endpoint", 2048);
   const parsed = new URL(text);
   if (parsed.protocol !== "https:" || parsed.username || parsed.password) throw new Error("Endpoint is invalid");
+  return text;
+}
+
+function requiredHttpsUrl(value: unknown, label: string): string {
+  const text = requiredString(value, label, 2048);
+  const parsed = new URL(text);
+  if (parsed.protocol !== "https:" || parsed.username || parsed.password
+    || !parsed.hostname.endsWith(".workers.dev")) {
+    throw new Error(`${label} is invalid`);
+  }
   return text;
 }
 

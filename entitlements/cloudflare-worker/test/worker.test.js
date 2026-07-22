@@ -136,6 +136,21 @@ function uniformConfig() {
   };
 }
 
+function webhookSetupConfig() {
+  return {
+    schemaVersion: 1,
+    environment: "production",
+    appId: "com.example.agent",
+    deploymentId: "deployment-test",
+    configurationId: "configuration-test",
+    setup: {
+      mode: "commerce_webhook",
+      providerId: "agentweave.commerce.creem",
+      environment: "test",
+    },
+  };
+}
+
 function environment(database, config = commerceConfig()) {
   return {
     ENTITLEMENT_CONFIG_JSON: JSON.stringify(config),
@@ -262,6 +277,41 @@ test("health binds the deployment and immutable Worker version", async () => {
     deployment_id: "deployment-test",
     remote_version: "worker-version-7",
   });
+});
+
+test("webhook bootstrap publishes the route without activating Commerce", async () => {
+  const parsed = parseEntitlementConfig(webhookSetupConfig());
+  assert.equal(parsed.setup.mode, "commerce_webhook");
+  assert.equal(parsed.policy, null);
+  const worker = createEntitlementWorker();
+  const env = {
+    ENTITLEMENT_CONFIG_JSON: JSON.stringify(webhookSetupConfig()),
+    CF_VERSION_METADATA: { id: "worker-version-setup" },
+  };
+  const health = await worker.fetch(new Request("https://entitlement.example/healthz"), env);
+  assert.equal(health.status, 200);
+  assert.equal((await health.json()).status, "setup_required");
+  const webhook = await worker.fetch(new Request(
+    "https://entitlement.example/agentweave/commerce/v1/webhooks/creem",
+    { method: "POST" },
+  ), env);
+  assert.equal(webhook.status, 503);
+  assert.equal((await webhook.json()).error.code, "commerce_setup_required");
+  const projection = await worker.fetch(new Request(
+    "https://entitlement.example/agentweave/entitlements/projection",
+    { method: "POST" },
+  ), env);
+  assert.equal(projection.status, 503);
+  assert.equal((await projection.json()).error.code, "entitlement_setup_required");
+});
+
+test("webhook bootstrap rejects unsupported Commerce providers", () => {
+  const config = webhookSetupConfig();
+  config.setup.providerId = "agentweave.commerce.other";
+  assert.throws(
+    () => parseEntitlementConfig(config),
+    (error) => error?.code === "entitlement_misconfigured",
+  );
 });
 
 test("uniform policy returns a signed v2 projection with explicit unlimited fields", async () => {

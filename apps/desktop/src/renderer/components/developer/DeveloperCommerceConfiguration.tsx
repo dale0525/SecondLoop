@@ -9,13 +9,13 @@ import {
   Text,
   TextField,
 } from "@radix-ui/themes";
-import { CheckCircle2, CreditCard, ExternalLink, PackageSearch, ShieldAlert, Webhook } from "lucide-react";
+import { CheckCircle2, CreditCard, PackageSearch, ShieldAlert, Webhook } from "lucide-react";
 import { useState } from "react";
 
 import {
   discoverCreemProducts,
   type CreemProduct,
-} from "../../developerAccessApi";
+} from "../../developerCommerceApi";
 import type { DeveloperProviderDescriptor } from "../../devProvidersApi";
 import {
   selectionFromDescriptor,
@@ -24,9 +24,16 @@ import {
   type ManagedProjectDraft,
 } from "../../developerProjectModel";
 import { useI18n } from "../../i18n/I18nProvider";
+import { DeveloperCommerceWebhookSetup } from "./DeveloperCommerceWebhookSetup";
+import type {
+  CreemWebhookBootstrapStatus,
+  CreemWebhookEndpoint,
+} from "./useCreemWebhookBootstrap";
 
 export function DeveloperCommerceConfiguration({
+  bootstrap,
   commerceProviders,
+  configuredSlots,
   draft,
   onDraft,
   onProductsConnected,
@@ -34,7 +41,14 @@ export function DeveloperCommerceConfiguration({
   productionUnlocked,
   secretValues,
 }: {
+  bootstrap: Readonly<{
+    error: string | null;
+    receipt: CreemWebhookEndpoint | null;
+    retry: () => void;
+    status: CreemWebhookBootstrapStatus;
+  }>;
   commerceProviders: readonly DeveloperProviderDescriptor[];
+  configuredSlots: ReadonlySet<string>;
   draft: ManagedProjectDraft;
   onDraft: (draft: ManagedProjectDraft) => void;
   onProductsConnected: () => Promise<void>;
@@ -54,6 +68,7 @@ export function DeveloperCommerceConfiguration({
   const environment = draft.providers.commerce?.publicConfig.environment === "production"
     ? "production"
     : "test";
+  const credentialsReady = bootstrap.status === "ready";
 
   const chooseMode = (mode: string) => {
     if (managed.mode !== "managed_worker") return;
@@ -161,47 +176,55 @@ export function DeveloperCommerceConfiguration({
 
       {commerceMode && draft.providers.commerce ? (
         <div className="release-commerce-body">
-          <div className="release-two-columns release-schema-fields">
-            <label className="release-field">
-              <Text size="2" weight="medium">{t("developer.release.creemEnvironment")}</Text>
-              <Select.Root onValueChange={(value) => updateCommerceConfig("environment", value)} value={environment}>
-                <Select.Trigger />
-                <Select.Content>
-                  <Select.Item value="test">Test</Select.Item>
-                  <Select.Item disabled={!productionUnlocked} value="production">Production</Select.Item>
-                </Select.Content>
-              </Select.Root>
-              {!productionUnlocked ? <Text color="gray" size="1">{t("developer.release.productionLockedHint")}</Text> : null}
-            </label>
-            <label className="release-field">
-              <Text size="2" weight="medium">{t("developer.release.checkoutSuccessUrl")}</Text>
-              <TextField.Root
-                onChange={(event) => updateCommerceConfig("successUrl", event.target.value)}
-                placeholder="https://example.com/billing/success"
-                value={String(draft.providers.commerce.publicConfig.successUrl ?? "")}
-              />
-            </label>
-          </div>
+          <label className="release-field release-creem-environment">
+            <Text size="2" weight="medium">{t("developer.release.creemEnvironment")}</Text>
+            <Select.Root onValueChange={(value) => updateCommerceConfig("environment", value)} value={environment}>
+              <Select.Trigger />
+              <Select.Content>
+                <Select.Item value="test">Test</Select.Item>
+                <Select.Item disabled={!productionUnlocked} value="production">Production</Select.Item>
+              </Select.Content>
+            </Select.Root>
+            {!productionUnlocked ? <Text color="gray" size="1">{t("developer.release.productionLockedHint")}</Text> : null}
+          </label>
+          <DeveloperCommerceWebhookSetup
+            error={bootstrap.error}
+            onRetry={bootstrap.retry}
+            receipt={bootstrap.receipt}
+            status={bootstrap.status}
+          />
           <div className="release-creem-connect">
             <label className="release-field">
-              <Text size="2" weight="medium">{t("developer.release.creemApiKey")}</Text>
+              <span className="release-field-label">
+                <Text size="2" weight="medium">{t("developer.release.creemApiKey")}</Text>
+                {configuredSlots.has("commerce.apiKey") ? (
+                  <Badge color="green" size="1">{t("developer.release.stored")}</Badge>
+                ) : null}
+              </span>
               <TextField.Root
                 autoComplete="off"
+                disabled={!credentialsReady}
                 onChange={(event) => onSecret("commerce.apiKey", event.target.value)}
                 placeholder={t("developer.release.secretStoredPlaceholder")}
                 type="password"
                 value={secretValues["commerce.apiKey"] ?? ""}
               />
             </label>
-            <Button disabled={connecting} onClick={() => void connect()}>
+            <Button disabled={connecting || !credentialsReady} onClick={() => void connect()}>
               {connecting ? <Spinner /> : <PackageSearch aria-hidden="true" size={16} />}
               {t("developer.release.discoverProducts")}
             </Button>
           </div>
           <label className="release-field release-webhook-secret-field">
-            <Text size="2" weight="medium">{t("developer.release.creemWebhookSecret")}</Text>
+            <span className="release-field-label">
+              <Text size="2" weight="medium">{t("developer.release.creemWebhookSecret")}</Text>
+              {configuredSlots.has("commerce.webhookSecret") ? (
+                <Badge color="green" size="1">{t("developer.release.stored")}</Badge>
+              ) : null}
+            </span>
             <TextField.Root
               autoComplete="off"
+              disabled={!credentialsReady}
               onChange={(event) => onSecret("commerce.webhookSecret", event.target.value)}
               placeholder={t("developer.release.secretStoredPlaceholder")}
               type="password"
@@ -220,10 +243,15 @@ export function DeveloperCommerceConfiguration({
               <Callout.Text>{t("developer.release.productDiscoveryEmptyState")}</Callout.Text>
             </Callout.Root>
           )}
-          <Callout.Root color="blue" size="1">
-            <ExternalLink aria-hidden="true" />
-            <Callout.Text>{t("developer.release.webhookManualStep")}</Callout.Text>
-          </Callout.Root>
+          <label className="release-field release-checkout-success-field">
+            <Text size="2" weight="medium">{t("developer.release.checkoutSuccessUrl")}</Text>
+            <TextField.Root
+              onChange={(event) => updateCommerceConfig("successUrl", event.target.value)}
+              placeholder="https://example.com/billing/success"
+              value={String(draft.providers.commerce.publicConfig.successUrl ?? "")}
+            />
+            <Text color="gray" size="1">{t("developer.release.checkoutSuccessUrlHint")}</Text>
+          </label>
         </div>
       ) : null}
     </section>

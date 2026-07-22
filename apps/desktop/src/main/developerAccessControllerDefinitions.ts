@@ -48,6 +48,7 @@ export const DEVELOPER_ACCESS_OPERATIONS = new Set<DeveloperAccessOperation>([
   "access.rollback",
   "access.destroyPlan",
   "access.destroyApply",
+  "commerce.creem.bootstrap",
   "commerce.creem.products",
   "commerce.creem.dashboard",
   "gateway.plan",

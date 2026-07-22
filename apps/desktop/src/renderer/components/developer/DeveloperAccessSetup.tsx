@@ -65,6 +65,7 @@ import { DeveloperConnectionStep } from "./DeveloperConnectionStep";
 import { DeveloperDeploymentOperations } from "./DeveloperDeploymentOperations";
 import { DeveloperFirebaseIdentitySetup } from "./DeveloperFirebaseIdentitySetup";
 import { IdentityPasswordForm } from "../IdentityPasswordForm";
+import { useCreemWebhookBootstrap } from "./useCreemWebhookBootstrap";
 
 const STEP_COUNT = 3;
 
@@ -169,6 +170,16 @@ export function DeveloperAccessSetup({
     updateControlStatus(status);
     return status;
   }, [updateControlStatus]);
+  const acceptBootstrapProject = useCallback((saved: DeveloperProjectSnapshot) => {
+    setWorkingSnapshot(saved);
+    onProjectSaved(saved);
+  }, [onProjectSaved]);
+  const commerceBootstrap = useCreemWebhookBootstrap({
+    authorizationReady,
+    draft,
+    onProjectSaved: acceptBootstrapProject,
+    snapshot: workingSnapshot,
+  });
 
   useEffect(() => {
     onControlStatusRef.current = onControlStatus;
@@ -528,6 +539,7 @@ export function DeveloperAccessSetup({
         {step === 2 && identityDescriptor && entitlementDescriptor && gatewayDescriptor ? (
           <DeveloperConfigurationStep
             commerceProviders={commerceProviders}
+            commerceBootstrap={commerceBootstrap}
             configuredSlots={configuredSlots}
             draft={draft}
             entitlementDescriptor={entitlementDescriptor}

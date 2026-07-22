@@ -2,7 +2,7 @@ import { Badge, Button, Callout } from "@radix-ui/themes";
 import { Check, Clipboard, ExternalLink, FlaskConical, Webhook } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { openCreemWebhookDashboard } from "../../developerAccessApi";
+import { openCreemWebhookDashboard } from "../../developerCommerceApi";
 import { useI18n } from "../../i18n/I18nProvider";
 
 const WEBHOOK_PATH = "/agentweave/commerce/v1/webhooks/creem";

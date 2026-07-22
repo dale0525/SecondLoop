@@ -1,5 +1,6 @@
 .release-commerce,
 .release-commerce-body,
+.release-commerce-bootstrap,
 .release-commerce-verification,
 .release-product-mappings,
 .release-uniform-policy {
@@ -41,6 +42,69 @@
 
 .release-creem-connect > button {
   min-height: 40px;
+}
+
+.release-creem-environment {
+  max-width: 320px;
+}
+
+.release-commerce-bootstrap {
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--blue-8) 42%, var(--color-border));
+  border-radius: var(--radius-control);
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--blue-8) 7%, transparent), transparent 52%),
+    var(--color-surface-muted);
+}
+
+.release-commerce-bootstrap > header {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+}
+
+.release-commerce-bootstrap > header > span {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  color: var(--blue-11);
+}
+
+.release-commerce-bootstrap h4,
+.release-commerce-bootstrap p {
+  margin: 0;
+}
+
+.release-commerce-bootstrap header p,
+.release-commerce-bootstrap-ready > p,
+.release-commerce-bootstrap-progress small {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.release-commerce-bootstrap-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-control);
+}
+
+.release-commerce-bootstrap-progress > div,
+.release-commerce-bootstrap-ready {
+  display: grid;
+  gap: 8px;
+}
+
+.release-checkout-success-field {
+  padding-top: 2px;
 }
 
 .release-webhook-secret-field > [class*="rt-Text"] {
@@ -317,6 +381,7 @@
 
 @media (max-width: 760px) {
   .release-commerce-mode,
+  .release-commerce-bootstrap > header,
   .release-creem-connect,
   .release-product-fields,
   .release-webhook-url {
@@ -325,6 +390,15 @@
 
   .release-commerce-mode [data-radix-collection-item] {
     min-height: 0;
+  }
+
+  .release-commerce-bootstrap > header {
+    grid-template-columns: 36px minmax(0, 1fr);
+  }
+
+  .release-commerce-bootstrap > header > [class*="rt-Badge"] {
+    grid-column: 2;
+    justify-self: start;
   }
 
   .release-creem-connect > button,

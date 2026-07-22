@@ -91,6 +91,12 @@ pub(crate) struct GatewayProjectProjection {
     pub entitlement_worker_name: Option<String>,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct CommerceWebhookBootstrapProjection {
+    pub target: DeploymentReferenceInput,
+    pub entitlement_config: Value,
+}
+
 #[derive(Clone, Copy, Debug, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
 enum UpstreamAuthentication {
@@ -365,6 +371,94 @@ pub(crate) async fn project_gateway_plan(
     })
 }
 
+pub(crate) fn project_commerce_webhook_bootstrap(
+    input: &GatewayProjectPlanInput,
+) -> DevkitResult<CommerceWebhookBootstrapProjection> {
+    validate_project_envelope(input)?;
+    if input.providers.gateway.id.as_str() != "cloudflare-workers"
+        || input.providers.entitlement.id.as_str() != MANAGED_ENTITLEMENT_ID
+    {
+        return Err(DevkitError::invalid_configuration(
+            "Creem webhook bootstrap requires Cloudflare Workers and managed entitlements",
+        ));
+    }
+    let commerce = input.providers.commerce.as_ref().ok_or_else(|| {
+        DevkitError::invalid_configuration("Creem webhook bootstrap requires a Commerce provider")
+    })?;
+    if commerce.id.as_str() != commerce_creem::CREEM_PROVIDER_ID {
+        return Err(DevkitError::invalid_configuration(
+            "Creem webhook bootstrap requires the Creem provider",
+        ));
+    }
+    let commerce_environment = commerce
+        .public_config
+        .get("environment")
+        .and_then(Value::as_str)
+        .filter(|value| matches!(*value, "test" | "production"))
+        .ok_or_else(|| DevkitError::invalid_configuration("Commerce environment is invalid"))?;
+    let environment = input
+        .deployment
+        .cloudflare
+        .environment
+        .as_deref()
+        .unwrap_or("production");
+    if !matches!(environment, "development" | "staging" | "production") {
+        return Err(DevkitError::invalid_configuration(
+            "gateway environment is unsupported",
+        ));
+    }
+    let gateway_worker_name = input
+        .deployment
+        .cloudflare
+        .gateway_worker_name
+        .as_ref()
+        .or(input.deployment.cloudflare.worker_name.as_ref())
+        .ok_or_else(|| DevkitError::invalid_configuration("gateway Worker name is missing"))?;
+    let entitlement = input
+        .deployment
+        .cloudflare
+        .entitlement
+        .as_ref()
+        .filter(|value| value.mode == "managed_worker")
+        .ok_or_else(|| {
+            DevkitError::invalid_configuration("managed entitlement target is missing")
+        })?;
+    let entitlement_worker_name = entitlement.worker_name.as_ref().ok_or_else(|| {
+        DevkitError::invalid_configuration("managed entitlement Worker name is missing")
+    })?;
+    if gateway_worker_name == entitlement_worker_name {
+        return Err(DevkitError::invalid_configuration(
+            "gateway and entitlement Worker names must differ",
+        ));
+    }
+    let deployment_id = deployment_id(
+        &input.app_id,
+        &input.deployment.cloudflare.account_id,
+        gateway_worker_name,
+        environment,
+    );
+    Ok(CommerceWebhookBootstrapProjection {
+        target: DeploymentReferenceInput {
+            account_id: input.deployment.cloudflare.account_id.clone(),
+            deployment_id: deployment_id.clone(),
+            worker_name: entitlement_worker_name.clone(),
+            environment: Some(environment.into()),
+        },
+        entitlement_config: json!({
+            "schemaVersion": 1,
+            "environment": environment,
+            "appId": input.app_id,
+            "deploymentId": deployment_id,
+            "configurationId": input.project_revision,
+            "setup": {
+                "mode": "commerce_webhook",
+                "providerId": commerce_creem::CREEM_PROVIDER_ID,
+                "environment": commerce_environment,
+            },
+        }),
+    })
+}
+
 async fn project_identity_verifier(
     binding: &AgentAppProviderBinding,
     http: &dyn OidcHttpClient,
@@ -501,6 +595,20 @@ fn project_entitlement_worker_config(
 }
 
 fn validate_project_identity(input: &GatewayProjectPlanInput) -> DevkitResult<()> {
+    validate_project_envelope(input)?;
+    if input.model_access.configuration_policy != AgentAppModelConfigurationPolicy::AppManaged
+        || input.model_access.profile.as_ref().is_none_or(|profile| {
+            profile.authentication != AgentAppModelAuthentication::UserIdentity
+        })
+    {
+        return Err(DevkitError::invalid_configuration(
+            "gateway deployment requires app-managed user-identity model access",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_project_envelope(input: &GatewayProjectPlanInput) -> DevkitResult<()> {
     let revision_ok = input.project_revision.len() == 64
         && input
             .project_revision
@@ -512,15 +620,6 @@ fn validate_project_identity(input: &GatewayProjectPlanInput) -> DevkitResult<()
     if !revision_ok || !app_ok || input.deployment.provider != "cloudflare" {
         return Err(DevkitError::invalid_configuration(
             "developer project gateway projection is invalid",
-        ));
-    }
-    if input.model_access.configuration_policy != AgentAppModelConfigurationPolicy::AppManaged
-        || input.model_access.profile.as_ref().is_none_or(|profile| {
-            profile.authentication != AgentAppModelAuthentication::UserIdentity
-        })
-    {
-        return Err(DevkitError::invalid_configuration(
-            "gateway deployment requires app-managed user-identity model access",
         ));
     }
     Ok(())
@@ -696,157 +795,5 @@ const fn default_entitlement_response_bytes() -> u64 {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use identity_oidc::{OidcHttpError, OidcHttpRequest, OidcHttpResponse};
-
-    struct FakeDiscovery;
-
-    #[async_trait::async_trait]
-    impl OidcHttpClient for FakeDiscovery {
-        async fn send(&self, request: OidcHttpRequest) -> Result<OidcHttpResponse, OidcHttpError> {
-            let final_url = request.url().clone();
-            Ok(OidcHttpResponse::new(
-                200,
-                final_url,
-                serde_json::to_vec(&json!({
-                    "issuer": "https://identity.example.test/",
-                    "authorization_endpoint": "https://identity.example.test/authorize",
-                    "token_endpoint": "https://identity.example.test/token",
-                    "jwks_uri": "https://identity.example.test/jwks.json",
-                    "code_challenge_methods_supported": ["S256"],
-                    "id_token_signing_alg_values_supported": ["RS256"]
-                }))
-                .unwrap(),
-            ))
-        }
-    }
-
-    #[test]
-    fn deployment_identity_is_stable_and_delimiter_safe() {
-        let first = deployment_id("com.example.app", "account", "worker", "production");
-        let second = deployment_id("com.example.app", "account", "worker", "production");
-        assert_eq!(first, second);
-        assert!(first.starts_with("aw-"));
-        assert_eq!(first.len(), 35);
-    }
-
-    #[test]
-    fn entitlement_projection_requires_an_https_origin() {
-        let invalid = HttpEntitlementGatewayConfig {
-            base_url: "https://example.test/path".into(),
-            timeout_milliseconds: 5_000,
-            max_response_bytes: 65_536,
-        };
-        assert!(entitlement_projection_url(&invalid).is_err());
-    }
-
-    #[tokio::test]
-    async fn firebase_identity_uses_the_pinned_secure_token_verifier() {
-        let binding: AgentAppProviderBinding = serde_json::from_value(json!({
-            "id": "agentweave.identity.firebase",
-            "version": "0.1.0",
-            "publicConfig": {
-                "projectId": "sample-project-123",
-                "firebaseWebKey": "public-web-key",
-                "webApplicationId": "1:123:web:abc",
-                "authDomain": "sample-project-123.firebaseapp.com"
-            }
-        }))
-        .unwrap();
-
-        let verifier = project_identity_verifier(&binding, &FakeDiscovery)
-            .await
-            .unwrap();
-
-        assert_eq!(verifier["kind"], "oidc");
-        assert_eq!(
-            verifier["issuer"],
-            "https://securetoken.google.com/sample-project-123"
-        );
-        assert_eq!(verifier["audience"], "sample-project-123");
-        assert_eq!(verifier["projection"]["subjectClaim"], "sub");
-    }
-
-    #[tokio::test]
-    async fn selected_plugins_are_projected_into_a_gateway_plan() {
-        let input: GatewayProjectPlanInput = serde_json::from_value(json!({
-            "projectRevision": "a".repeat(64),
-            "appId": "com.example.agent",
-            "providers": {
-                "identity": {
-                    "id": "agentweave.identity.oidc",
-                    "version": "0.1.0",
-                    "publicConfig": {
-                        "preset": "auth0",
-                        "issuer": "https://identity.example.test/",
-                        "clientId": "native-client",
-                        "audience": "https://gateway.example.test",
-                        "scopes": ["openid", "profile", "offline_access"],
-                        "redirectUri": "com.example.agent:/oauth/callback",
-                        "gatewayAlgorithm": "RS256",
-                        "gatewayTenantClaim": "organization.id"
-                    }
-                },
-                "entitlement": {
-                    "id": "agentweave.entitlements.http",
-                    "version": "0.1.0",
-                    "publicConfig": {
-                        "baseUrl": "https://entitlements.example.test/",
-                        "timeoutMilliseconds": 5000,
-                        "maxResponseBytes": 65536
-                    }
-                },
-                "gateway": {
-                    "id": "cloudflare-workers",
-                    "version": "0.1.0",
-                    "publicConfig": {
-                        "upstreamBaseUrl": "https://api.openai.com/v1",
-                        "upstreamAuthentication": "bearer"
-                    }
-                }
-            },
-            "modelAccess": {
-                "configurationPolicy": "app_managed",
-                "profile": {
-                    "providerId": "cloudflare-gateway",
-                    "endpointType": "responses",
-                    "baseUrl": "https://gateway.invalid/v1",
-                    "modelName": "approved-model",
-                    "authentication": "user_identity",
-                    "headers": {}
-                }
-            },
-            "deployment": {
-                "provider": "cloudflare",
-                "cloudflare": {
-                    "accountId": "0123456789abcdef0123456789abcdef",
-                    "workerName": "example-agent-gateway",
-                    "environment": "production"
-                }
-            }
-        }))
-        .unwrap();
-
-        let projected = project_gateway_plan(input, &FakeDiscovery).await.unwrap();
-
-        assert_eq!(
-            projected.gateway_config["auth"]["providers"][0]["jwksUrl"],
-            "https://identity.example.test/jwks.json"
-        );
-        assert_eq!(
-            projected.gateway_config["entitlements"]["mode"],
-            "signed_http"
-        );
-        assert_eq!(
-            projected.gateway_config["routes"][0]["path"],
-            "/v1/responses"
-        );
-        assert_eq!(
-            projected.secret_bindings["gateway.upstreamApiKey"],
-            UPSTREAM_SECRET_BINDING
-        );
-        assert!(projected.target.deployment_id.starts_with("aw-"));
-        assert_eq!(projected.entitlement_bootstrap["subjects"], json!([]));
-    }
-}
+#[path = "developer_gateway_projection_tests.rs"]
+mod tests;

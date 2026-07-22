@@ -256,6 +256,13 @@
   font-size: 11px;
 }
 
+.release-inline-sensitive-fields {
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--blue-8) 24%, var(--color-border));
+  border-radius: var(--radius-control);
+  background: var(--color-surface-muted);
+}
+
 .release-secret-section {
   background:
     linear-gradient(145deg, color-mix(in srgb, var(--amber-8) 5%, transparent), transparent 46%),

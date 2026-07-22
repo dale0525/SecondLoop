@@ -3,6 +3,8 @@ import { fail } from "./errors.js";
 const ENVIRONMENTS = new Set(["development", "staging", "production"]);
 const COMMERCE_ENVIRONMENTS = new Set(["test", "production"]);
 const SOURCE_MODES = new Set(["uniform_bounded", "commerce_provider"]);
+const COMMERCE_WEBHOOK_SETUP_MODE = "commerce_webhook";
+const CREEM_PROVIDER_ID = "agentweave.commerce.creem";
 
 function invalid(message) {
   fail(503, "entitlement_misconfigured", "The entitlement service is not configured.", {
@@ -139,11 +141,42 @@ export function parseEntitlementConfig(rawValue) {
   const value = object(raw, "entitlement config");
   onlyKeys(value, [
     "schemaVersion", "environment", "appId", "deploymentId", "configurationId",
-    "auth", "policy", "commerce", "bindings",
+    "auth", "policy", "commerce", "bindings", "setup",
   ], "entitlement config");
   if (value.schemaVersion !== 1) invalid("schemaVersion must be 1");
   const environment = string(value.environment, "environment", 32);
   if (!ENVIRONMENTS.has(environment)) invalid("environment is unsupported");
+  const appId = string(value.appId, "appId", 128);
+  const deploymentId = string(value.deploymentId, "deploymentId", 128);
+  const configurationId = string(value.configurationId, "configurationId", 256);
+  if (value.setup !== undefined) {
+    if (value.auth !== undefined || value.policy !== undefined
+      || value.commerce !== undefined || value.bindings !== undefined) {
+      invalid("setup configuration cannot activate entitlement policy or Commerce");
+    }
+    const setup = object(value.setup, "setup");
+    onlyKeys(setup, ["mode", "providerId", "environment"], "setup");
+    if (setup.mode !== COMMERCE_WEBHOOK_SETUP_MODE) invalid("setup mode is unsupported");
+    if (setup.providerId !== CREEM_PROVIDER_ID) invalid("setup provider is unsupported");
+    const commerceEnvironment = string(setup.environment, "setup.environment", 32);
+    if (!COMMERCE_ENVIRONMENTS.has(commerceEnvironment)) invalid("setup environment is unsupported");
+    return Object.freeze({
+      schemaVersion: 1,
+      environment,
+      appId,
+      deploymentId,
+      configurationId,
+      setup: Object.freeze({
+        mode: COMMERCE_WEBHOOK_SETUP_MODE,
+        providerId: CREEM_PROVIDER_ID,
+        environment: commerceEnvironment,
+      }),
+      auth: null,
+      policy: null,
+      commerce: null,
+      bindings: Object.freeze({ commerce: "COMMERCE" }),
+    });
+  }
   const auth = object(value.auth, "auth");
   onlyKeys(auth, ["mode", "providers"], "auth");
   if (auth.mode !== "required" || !Array.isArray(auth.providers) || auth.providers.length === 0) {
@@ -186,9 +219,10 @@ export function parseEntitlementConfig(rawValue) {
   return Object.freeze({
     schemaVersion: 1,
     environment,
-    appId: string(value.appId, "appId", 128),
-    deploymentId: string(value.deploymentId, "deploymentId", 128),
-    configurationId: string(value.configurationId, "configurationId", 256),
+    appId,
+    deploymentId,
+    configurationId,
+    setup: null,
     auth: Object.freeze({ mode: "required", providers: Object.freeze(providers) }),
     policy: Object.freeze({
       sourceMode,
@@ -207,6 +241,7 @@ export function parseEntitlementConfig(rawValue) {
 export function loadEntitlementConfig(env) {
   if (typeof env?.ENTITLEMENT_CONFIG_JSON !== "string") invalid("ENTITLEMENT_CONFIG_JSON is missing");
   const config = parseEntitlementConfig(env.ENTITLEMENT_CONFIG_JSON);
+  if (config.setup?.mode === COMMERCE_WEBHOOK_SETUP_MODE) return config;
   const missing = [];
   if (typeof env.ENTITLEMENT_PROJECTION_SECRET !== "string" || env.ENTITLEMENT_PROJECTION_SECRET.length < 32) {
     missing.push("ENTITLEMENT_PROJECTION_SECRET");
