@@ -6,11 +6,11 @@ import { fileURLToPath } from "node:url";
 const siteRoot = fileURLToPath(new URL("..", import.meta.url));
 const distRoot = join(siteRoot, "dist");
 const routes = [
-  ["index.html", "lang=\"en\"", "Build the agent app."],
+  ["index.html", "lang=\"en\"", "AgentWeave is an open-source"],
   ["privacy/index.html", "lang=\"en\"", "Google API Services User Data Policy"],
   ["terms/index.html", "lang=\"en\"", "Terms of service"],
   ["oauth-help/index.html", "lang=\"en\"", "https://www.googleapis.com/auth/cloud-platform"],
-  ["zh/index.html", "lang=\"zh-CN\"", "构建你的 Agent App"],
+  ["zh/index.html", "lang=\"zh-CN\"", "AgentWeave 是开源的"],
   ["zh/privacy/index.html", "lang=\"zh-CN\"", "Google API Services User Data Policy"],
   ["zh/terms/index.html", "lang=\"zh-CN\"", "服务条款"],
   ["zh/oauth-help/index.html", "lang=\"zh-CN\"", "开发者工具 → 补充必要信息 → 用户登录"],
@@ -25,6 +25,7 @@ for (const [route, language, requiredCopy] of routes) {
   assert.match(html, /<h1[\s>]/, `${route} must contain a primary heading`);
   assert.ok(html.includes(language), `${route} must declare ${language}`);
   assert.ok(html.includes(requiredCopy), `${route} is missing required copy`);
+  assert.ok(!html.includes("AgentWeave Developer Tools by SecondLoop"), `${route} uses the retired OAuth application name`);
   assert.match(html, /rel="canonical"/, `${route} must expose a canonical URL`);
   assert.doesNotMatch(html, /fonts\.googleapis\.com|google-analytics\.com|googletagmanager\.com/i);
   assert.doesNotMatch(html, /<(script|img)[^>]+(?:src)="https?:\/\//i, `${route} must not load remote scripts or images`);
