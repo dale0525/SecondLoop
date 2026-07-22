@@ -15,6 +15,10 @@ const routes = [
   ["zh/terms/index.html", "lang=\"zh-CN\"", "服务条款"],
   ["zh/oauth-help/index.html", "lang=\"zh-CN\"", "开发者工具 → 补充必要信息 → 用户登录"],
 ];
+const remoteResourcePattern = /<(?:script|img)\b[^>]*\bsrc="https?:\/\/[^\"]*"[^>]*>|<link\b(?=[^>]*\brel="(?:stylesheet|preload|modulepreload)")(?=[^>]*\bhref="https?:\/\/)[^>]*>/i;
+
+assert.match('<link rel="stylesheet" href="https://example.com/app.css">', remoteResourcePattern);
+assert.match('<link href="https://example.com/app.css" rel="preload" as="style">', remoteResourcePattern);
 
 assert.ok(existsSync(distRoot), "site/dist must exist before verification");
 
@@ -27,8 +31,10 @@ for (const [route, language, requiredCopy] of routes) {
   assert.ok(html.includes(requiredCopy), `${route} is missing required copy`);
   assert.ok(!html.includes("AgentWeave Developer Tools by SecondLoop"), `${route} uses the retired OAuth application name`);
   assert.match(html, /rel="canonical"/, `${route} must expose a canonical URL`);
+  assert.ok(html.includes('property="og:image" content="https://agentweave.secondloop.app/favicon.svg"'), `${route} must expose an Open Graph image`);
+  assert.ok(html.includes('name="twitter:image" content="https://agentweave.secondloop.app/favicon.svg"'), `${route} must expose a Twitter image`);
   assert.doesNotMatch(html, /fonts\.googleapis\.com|google-analytics\.com|googletagmanager\.com/i);
-  assert.doesNotMatch(html, /<(script|img)[^>]+(?:src)="https?:\/\//i, `${route} must not load remote scripts or images`);
+  assert.doesNotMatch(html, remoteResourcePattern, `${route} must not load remote scripts, images, or stylesheets`);
 }
 
 const privacy = readFileSync(join(distRoot, "privacy/index.html"), "utf8");
@@ -41,6 +47,7 @@ assert.ok(home.includes("</span> <em>Agent App Framework.</em>"));
 
 const zhHome = readFileSync(join(distRoot, "zh/index.html"), "utf8");
 assert.ok(zhHome.includes("AgentWeave 是一个开源 Agent App Framework，把"));
+assert.ok(zhHome.includes("</span> <em>Agent App Framework。</em>"));
 
 const oauthHelp = readFileSync(join(distRoot, "oauth-help/index.html"), "utf8");
 assert.ok(oauthHelp.includes("S256 PKCE"));

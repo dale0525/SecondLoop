@@ -20,6 +20,7 @@ interface Props {
 const { locale, title, description, currentPath } = Astro.props;
 const canonical = new URL(currentPath, siteOrigin).toString();
 const alternate = new URL(alternatePath(locale, currentPath), siteOrigin).toString();
+const socialImage = new URL("/favicon.svg", siteOrigin).toString();
 const lang = locale === "zh" ? "zh-CN" : "en";
 const alternateLang = locale === "zh" ? "en" : "zh-CN";
 ---
@@ -37,9 +38,13 @@ const alternateLang = locale === "zh" ? "en" : "zh-CN";
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={socialImage} />
+    <meta property="og:image:alt" content="AgentWeave" />
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={socialImage} />
+    <meta name="twitter:image:alt" content="AgentWeave" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="canonical" href={canonical} />
     <link rel="alternate" hreflang={alternateLang} href={alternate} />
