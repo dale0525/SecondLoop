@@ -51,14 +51,14 @@ import { contactEmail } from "../../lib/i18n";
   <h3>从 Google 账号操作</h3>
   <ol>
     <li>打开 <a href="https://myaccount.google.com/connections" target="_blank" rel="noreferrer">Google 账号 → 第三方应用和服务</a>。</li>
-    <li>选择 <strong>AgentWeave Developer Tools by SecondLoop</strong>。</li>
+    <li>选择 <strong>AgentWeave</strong>。</li>
     <li>选择移除或撤销访问。</li>
   </ol>
   <p>撤销后无法继续刷新 token。Google 已签发的 access token 可能在短暂有效期结束前仍然可用。如需移除全部本地状态，还应通过操作系统的应用数据管理清除 AgentWeave 数据，或卸载应用。</p>
 
   <h2>6. 常见问题</h2>
   <h3>出现“访问被阻止”或未验证应用警告</h3>
-  <p>确认应用名称为 AgentWeave Developer Tools by SecondLoop，并且发布方页面使用 <code>secondloop.app</code>。OAuth 验证完成前，Google 可能对受控试点应用施加未验证用户数量限制。</p>
+  <p>确认应用名称为 AgentWeave，并且发布方页面使用 <code>secondloop.app</code>。OAuth 验证完成前，Google 可能对受控试点应用施加未验证用户数量限制。</p>
   <h3>回调页面无法连接</h3>
   <p>浏览器完成授权时请保持 AgentWeave 运行。本地防火墙、代理或终端安全软件需要允许临时 IPv4 loopback 回调。不要把该回调替换成公开 URL。</p>
   <h3>没有显示任何项目</h3>
