@@ -12,6 +12,9 @@ import {
   validateProjectMatchesRuntime,
 } from "../../../../scripts/agentweave-project.mjs";
 import type {
+  DeveloperAccessBundleMutationReceipt,
+  DeveloperAccessBundleReceipt,
+  DeveloperAccessBundleTestReceipt,
   DeveloperGatewayDeploymentReceipt,
   DeveloperGatewayTestReceipt,
 } from "../shared/developerAccess";
@@ -23,6 +26,7 @@ import {
   type DeveloperPackageReceipt,
   type DeveloperProjectSaveRequest,
   type DeveloperProjectSnapshot,
+  type DeveloperVerifiedAccessBundle,
   type DeveloperVerifiedDeployment,
 } from "../shared/developerProject";
 
@@ -127,7 +131,6 @@ export async function recordDeveloperGatewayDeployment(options: {
     };
     validateProjectMatchesRuntime(project, manifest);
     await writePairWithJournal(root, manifest, project);
-    await rm(path.join(root, ".agentweave", "deployment.lock"), { force: true });
     return loadSnapshot(root);
   });
 }
@@ -176,6 +179,172 @@ export async function verifyDeveloperGatewayDeployment(options: {
     };
     validateDeploymentLockData(lock, { app: manifest, project });
     await writeJsonAtomic(path.join(root, ".agentweave", "deployment.lock"), lock, 0o600);
+    return loadSnapshot(root);
+  });
+}
+
+export async function recordDeveloperAccessBundle(options: {
+  appRoot: string | null;
+  expectedRevision: string;
+  receipt: DeveloperAccessBundleReceipt;
+}): Promise<DeveloperProjectSnapshot> {
+  validateExpectedRevision(options.expectedRevision);
+  return serializeProjectMutation(options.appRoot, async (root) => {
+    const current = await loadSnapshot(root);
+    if (current.revision !== options.expectedRevision) {
+      throw new Error("Developer project changed after the access deployment plan was created");
+    }
+    const project = projectWithAccessBundleEndpoints(current.project, options.receipt);
+    const manifest = {
+      ...current.manifest,
+      schemaVersion: 2,
+      ...projectRuntimeProjection(project),
+    };
+    validateProjectMatchesRuntime(project, manifest);
+    await writePairWithJournal(root, manifest, project);
+    await rm(path.join(root, ".agentweave", "deployment.lock"), { force: true });
+    return loadSnapshot(root);
+  });
+}
+
+export async function verifyDeveloperAccessBundle(options: {
+  appRoot: string | null;
+  bundle: DeveloperAccessBundleReceipt;
+  expectedRevision: string;
+  test: DeveloperAccessBundleTestReceipt;
+}): Promise<DeveloperProjectSnapshot> {
+  validateExpectedRevision(options.expectedRevision);
+  return serializeProjectMutation(options.appRoot, async (root) => {
+    const current = await loadSnapshot(root);
+    if (current.revision !== options.expectedRevision) {
+      throw new Error("Developer project changed before access verification completed");
+    }
+    const project = projectWithAccessBundleEndpoints(current.project, options.bundle);
+    const previousLock = await readOptionalJsonObject(
+      path.join(root, ".agentweave", "deployment.lock"),
+      "Deployment lock",
+    );
+    validateProjectMatchesRuntime(project, current.manifest);
+    validateAccessBundleTestReceipt(project, options.bundle, options.test);
+    const providers = projectProviders(project);
+    const gateway = requiredProviderSelection(providers, "gateway");
+    const entitlement = requiredProviderSelection(providers, "entitlement");
+    const commerce = isRecord(providers.commerce) ? providers.commerce : null;
+    const gatewayResource = accessWorkerReceipt(options.bundle, "model-gateway");
+    const entitlementResource = accessWorkerReceipt(options.bundle, "entitlement-policy");
+    const commerceVerification = options.test.commerce;
+    const lock = {
+      schemaVersion: 2,
+      desiredHash: computeProjectDesiredHash(project),
+      runtimeProjectionHash: computeRuntimeProjectionHash(current.manifest),
+      providers: {
+        gateway: lockedProvider(gateway),
+        entitlement: lockedProvider(entitlement),
+        commerce: commerce ? lockedProvider(commerce) : null,
+      },
+      bundle: {
+        provider: "cloudflare",
+        bundleRevision: digestHash(options.bundle.planHash),
+        rollbackTarget: rollbackTargetFromPreviousLock(previousLock, options.bundle),
+        bindings: {
+          entitlementProjection: {
+            configured: true,
+            revision: options.test.projectionSecretRevision,
+          },
+        },
+        resources: {
+          gateway: lockedAccessReference(gatewayResource, true),
+          entitlementPolicy: lockedAccessReference(entitlementResource, false),
+          commerceProjection: commerce && commerceVerification
+            ? {
+                providerId: String(commerce.id),
+                providerVersion: String(commerce.version),
+                environment: commerceEnvironment(commerce),
+                databaseId: commerceVerification.databaseId,
+                migrationHash: digestHash(commerceVerification.migrationHash),
+                capabilities: [...commerceVerification.capabilities].sort(),
+                portalVerifiedAtUnixMs: commerceVerification.portalVerifiedAtUnixMs,
+                webhookVerifiedAtUnixMs: commerceVerification.webhookVerifiedAtUnixMs,
+              }
+            : null,
+        },
+        verification: {
+          protocolVersion: `${options.test.gateway.protocolVersion}/${
+            options.test.entitlementPolicy.protocolVersion}`,
+          testedAtUnixMs: options.test.testedAtUnixMs,
+          hostCapabilities: commerce
+            ? ["commerce_checkout_v1", "commerce_customer_portal_v1"]
+            : [],
+          userEntrypoints: commerce ? ["settings.billing"] : [],
+        },
+      },
+    };
+    validateDeploymentLockData(lock, { app: current.manifest, project });
+    await writeJsonAtomic(path.join(root, ".agentweave", "deployment.lock"), lock, 0o600);
+    return loadSnapshot(root);
+  });
+}
+
+export async function recordDeveloperAccessBundleLifecycle(options: {
+  appRoot: string | null;
+  expectedRevision: string;
+  mutation: DeveloperAccessBundleMutationReceipt;
+}): Promise<DeveloperProjectSnapshot> {
+  validateExpectedRevision(options.expectedRevision);
+  const lifecycleVerification = options.mutation.verification;
+  if (options.mutation.outcome !== "succeeded" || lifecycleVerification === null) {
+    throw new Error("Only a verified access bundle mutation can update the deployment lock");
+  }
+  return serializeProjectMutation(options.appRoot, async (root) => {
+    const current = await loadSnapshot(root);
+    if (current.revision !== options.expectedRevision || !current.verifiedBundle) {
+      throw new Error("Verified access deployment changed before lifecycle verification completed");
+    }
+    const lockPath = path.join(root, ".agentweave", "deployment.lock");
+    const rawLock = await readOptionalJsonObject(lockPath, "Deployment lock");
+    if (rawLock === null) throw new Error("Verified access deployment lock is unavailable");
+    validateDeploymentLockData(rawLock, { app: current.manifest, project: current.project });
+    const lock = cloneRecord(rawLock);
+    const bundle = lock.bundle as Record<string, unknown>;
+    const resources = bundle.resources as Record<string, unknown>;
+    const gateway = resources.gateway as Record<string, unknown>;
+    const entitlement = resources.entitlementPolicy as Record<string, unknown>;
+    const gatewayMutation = options.mutation.resources["model-gateway"];
+    const entitlementMutation = options.mutation.resources["entitlement-policy"];
+    if (!gatewayMutation || !entitlementMutation) {
+      throw new Error("Access lifecycle receipt is incomplete");
+    }
+    const previousVersions = {
+      gatewayVersionId: String(gateway.versionId),
+      entitlementVersionId: String(entitlement.versionId),
+    };
+    if (gatewayMutation.versionId) gateway.versionId = gatewayMutation.versionId;
+    if (entitlementMutation.versionId) entitlement.versionId = entitlementMutation.versionId;
+    const test = lifecycleVerification;
+    validateLifecycleTestTarget(test.gateway, gateway);
+    validateLifecycleTestTarget(test.entitlementPolicy, entitlement);
+    validateLifecycleCommerce(current.project, test);
+    if (gatewayMutation.versionId || entitlementMutation.versionId) {
+      bundle.rollbackTarget = previousVersions;
+      bundle.bundleRevision = digestHash(lifecycleRevision(options.mutation));
+    }
+    const bindings = bundle.bindings as Record<string, unknown>;
+    const projection = bindings.entitlementProjection as Record<string, unknown>;
+    projection.revision = options.mutation.configuredRevision ?? test.projectionSecretRevision;
+    projection.configured = true;
+    const verification = bundle.verification as Record<string, unknown>;
+    verification.protocolVersion = `${test.gateway.protocolVersion}/${test.entitlementPolicy.protocolVersion}`;
+    verification.testedAtUnixMs = test.testedAtUnixMs;
+    if (test.commerce && resources.commerceProjection) {
+      const commerce = resources.commerceProjection as Record<string, unknown>;
+      commerce.databaseId = test.commerce.databaseId;
+      commerce.migrationHash = digestHash(test.commerce.migrationHash);
+      commerce.capabilities = [...test.commerce.capabilities].sort();
+      commerce.webhookVerifiedAtUnixMs = test.commerce.webhookVerifiedAtUnixMs;
+      commerce.portalVerifiedAtUnixMs = test.commerce.portalVerifiedAtUnixMs;
+    }
+    validateDeploymentLockData(lock, { app: current.manifest, project: current.project });
+    await writeJsonAtomic(lockPath, lock, 0o600);
     return loadSnapshot(root);
   });
 }
@@ -255,6 +424,7 @@ async function loadSnapshot(root: string): Promise<DeveloperProjectSnapshot> {
   let deploymentStatus: DeveloperProjectSnapshot["deploymentStatus"] = "not_required";
   let deploymentMessage: string | null = null;
   let verifiedDeployment: DeveloperVerifiedDeployment | null = null;
+  let verifiedBundle: DeveloperVerifiedAccessBundle | null = null;
   if (modelPolicy(project) === "app_managed") {
     try {
       const lock = await readOptionalJsonObject(lockPath, "Deployment lock");
@@ -264,7 +434,12 @@ async function loadSnapshot(root: string): Promise<DeveloperProjectSnapshot> {
       } else {
         validateDeploymentLockData(lock, { app: manifest, project });
         deploymentStatus = "ready";
-        verifiedDeployment = verifiedDeploymentFromLock(lock);
+        if (lock.schemaVersion === 2) {
+          verifiedBundle = verifiedBundleFromLock(lock);
+          verifiedDeployment = verifiedBundle.gateway;
+        } else {
+          verifiedDeployment = verifiedDeploymentFromLock(lock);
+        }
       }
     } catch (error) {
       deploymentStatus = "stale";
@@ -280,12 +455,82 @@ async function loadSnapshot(root: string): Promise<DeveloperProjectSnapshot> {
     deploymentStatus,
     deploymentMessage,
     verifiedDeployment,
+    verifiedBundle,
   };
 }
 
 function verifiedDeploymentFromLock(lock: Record<string, unknown>): DeveloperVerifiedDeployment {
   const deployment = lock.deployment as Record<string, unknown>;
   const reference = deployment.reference as Record<string, unknown>;
+  return Object.freeze({
+    target: Object.freeze({
+      accountId: String(reference.accountId),
+      deploymentId: String(reference.deploymentId),
+      workerName: String(reference.workerName),
+      ...(reference.environment === undefined ? {} : { environment: String(reference.environment) }),
+    }),
+    versionId: String(reference.versionId),
+    endpoint: String(reference.endpoint),
+  });
+}
+
+function verifiedBundleFromLock(lock: Record<string, unknown>): DeveloperVerifiedAccessBundle {
+  const bundle = lock.bundle as Record<string, unknown>;
+  const resources = bundle.resources as Record<string, unknown>;
+  const verification = bundle.verification as Record<string, unknown>;
+  const commerce = resources.commerceProjection as Record<string, unknown> | null;
+  return Object.freeze({
+    bundleRevision: String(bundle.bundleRevision),
+    projectionSecretRevision: String(
+      ((bundle.bindings as Record<string, unknown>).entitlementProjection as Record<string, unknown>).revision,
+    ),
+    rollbackTarget: bundle.rollbackTarget === null ? null : Object.freeze({
+      gatewayVersionId: String((bundle.rollbackTarget as Record<string, unknown>).gatewayVersionId),
+      entitlementVersionId: String(
+        (bundle.rollbackTarget as Record<string, unknown>).entitlementVersionId,
+      ),
+    }),
+    gateway: verifiedDeploymentFromReference(resources.gateway as Record<string, unknown>),
+    entitlementPolicy: verifiedDeploymentFromReference(
+      resources.entitlementPolicy as Record<string, unknown>,
+    ),
+    commerce: commerce === null ? null : Object.freeze({
+      providerId: String(commerce.providerId),
+      providerVersion: String(commerce.providerVersion),
+      environment: String(commerce.environment) as "test" | "production",
+      databaseId: String(commerce.databaseId),
+      migrationHash: String(commerce.migrationHash),
+      capabilities: Object.freeze([...(commerce.capabilities as string[])]),
+      webhookVerifiedAtUnixMs: Number(commerce.webhookVerifiedAtUnixMs),
+      portalVerifiedAtUnixMs: Number(commerce.portalVerifiedAtUnixMs),
+    }),
+    testedAtUnixMs: Number(verification.testedAtUnixMs),
+  });
+}
+
+function rollbackTargetFromPreviousLock(
+  previousLock: Record<string, unknown> | null,
+  receipt: DeveloperAccessBundleReceipt,
+): null | { gatewayVersionId: string; entitlementVersionId: string } {
+  if (previousLock === null || previousLock.schemaVersion !== 2) return null;
+  validateDeploymentLockData(previousLock);
+  const previousBundle = previousLock.bundle as Record<string, unknown>;
+  const previousResources = previousBundle.resources as Record<string, unknown>;
+  const previousGateway = previousResources.gateway as Record<string, unknown>;
+  const previousEntitlement = previousResources.entitlementPolicy as Record<string, unknown>;
+  const gateway = accessWorkerReceipt(receipt, "model-gateway");
+  const entitlement = accessWorkerReceipt(receipt, "entitlement-policy");
+  if (
+    gateway.previousVersionId !== previousGateway.versionId
+    || entitlement.previousVersionId !== previousEntitlement.versionId
+  ) return null;
+  return {
+    gatewayVersionId: String(previousGateway.versionId),
+    entitlementVersionId: String(previousEntitlement.versionId),
+  };
+}
+
+function verifiedDeploymentFromReference(reference: Record<string, unknown>): DeveloperVerifiedDeployment {
   return Object.freeze({
     target: Object.freeze({
       accountId: String(reference.accountId),
@@ -473,6 +718,233 @@ function projectWithDeploymentEndpoint(
   };
   validateAgentWeaveProjectData(project);
   return project;
+}
+
+function projectWithAccessBundleEndpoints(
+  source: Record<string, unknown>,
+  receipt: DeveloperAccessBundleReceipt,
+): Record<string, unknown> {
+  if (receipt.outcome !== "succeeded") {
+    throw new Error("Only a fully applied access deployment can update the developer project");
+  }
+  const project = cloneRecord(source);
+  const deployment = isRecord(project.deployment) && isRecord(project.deployment.cloudflare)
+    ? project.deployment.cloudflare
+    : null;
+  const entitlementDeployment = deployment && isRecord(deployment.entitlement)
+    ? deployment.entitlement
+    : null;
+  const gatewayResource = accessWorkerReceipt(receipt, "model-gateway");
+  const entitlementResource = accessWorkerReceipt(receipt, "entitlement-policy");
+  if (
+    project.schemaVersion !== 2
+    || !deployment
+    || !entitlementDeployment
+    || entitlementDeployment.mode !== "managed_worker"
+    || deployment.accountId !== gatewayResource.target.accountId
+    || deployment.accountId !== entitlementResource.target.accountId
+    || deployment.gatewayWorkerName !== gatewayResource.target.workerName
+    || entitlementDeployment.workerName !== entitlementResource.target.workerName
+    || deployment.environment !== gatewayResource.target.environment
+    || deployment.environment !== entitlementResource.target.environment
+    || gatewayResource.target.deploymentId !== entitlementResource.target.deploymentId
+  ) {
+    throw new Error("Access deployment receipt does not match the developer project targets");
+  }
+  const modelAccess = isRecord(project.modelAccess) ? project.modelAccess : null;
+  const profile = modelAccess && isRecord(modelAccess.profile) ? modelAccess.profile : null;
+  const providers = projectProviders(project);
+  const entitlement = requiredProviderSelection(providers, "entitlement");
+  if (modelAccess?.configurationPolicy !== "app_managed" || !profile) {
+    throw new Error("Access deployment receipt requires app-managed model access");
+  }
+  project.modelAccess = {
+    ...modelAccess,
+    profile: { ...profile, baseUrl: runtimeGatewayBaseUrl(gatewayResource.endpoint) },
+  };
+  project.providers = {
+    ...providers,
+    entitlement: {
+      ...entitlement,
+      publicConfig: {
+        ...(entitlement.publicConfig as Record<string, unknown>),
+        baseUrl: entitlementResource.endpoint.replace(/\/$/, ""),
+      },
+    },
+  };
+  validateAgentWeaveProjectData(project);
+  return project;
+}
+
+function accessWorkerReceipt(
+  receipt: DeveloperAccessBundleReceipt,
+  resourceId: "model-gateway" | "entitlement-policy",
+): DeveloperAccessBundleReceipt["resources"][string] & {
+  endpoint: string;
+  versionId: string;
+} {
+  const resource = receipt.resources[resourceId];
+  if (
+    !resource
+    || !["applied", "already_converged"].includes(resource.status)
+    || !resource.versionId
+    || !resource.endpoint
+  ) {
+    throw new Error(`Access deployment ${resourceId} receipt is incomplete`);
+  }
+  return { ...resource, endpoint: resource.endpoint, versionId: resource.versionId };
+}
+
+function validateAccessBundleTestReceipt(
+  project: Record<string, unknown>,
+  bundle: DeveloperAccessBundleReceipt,
+  test: DeveloperAccessBundleTestReceipt,
+): void {
+  const gateway = accessWorkerReceipt(bundle, "model-gateway");
+  const entitlement = accessWorkerReceipt(bundle, "entitlement-policy");
+  validateGatewayTestReceipt(gatewayReceipt(bundle, gateway), test.gateway);
+  validateGatewayTestReceipt(gatewayReceipt(bundle, entitlement), test.entitlementPolicy);
+  if (!Number.isSafeInteger(test.testedAtUnixMs) || test.testedAtUnixMs <= 0) {
+    throw new Error("Access bundle verification time is invalid");
+  }
+  const commerce = projectProviders(project).commerce;
+  if ((commerce !== null) !== (test.commerce !== null)) {
+    throw new Error("Commerce verification does not match the selected provider");
+  }
+  if (test.commerce) {
+    const requiredCapabilities = [
+      "checkout_session_v1",
+      "customer_portal_v1",
+      "product_discovery_v1",
+      "signed_webhook_v1",
+      "subscription_reconciliation_v1",
+      "test_environment_v1",
+    ];
+    if (
+      !test.commerce.databaseId
+      || !/^(?:sha256:)?[a-f0-9]{64}$/.test(test.commerce.migrationHash)
+      || !test.commerce.webhookVerifiedAtUnixMs
+      || !test.commerce.portalVerifiedAtUnixMs
+      || requiredCapabilities.some((capability) => !test.commerce?.capabilities.includes(capability))
+    ) {
+      throw new Error("Commerce webhook and customer portal must both be verified");
+    }
+  }
+}
+
+function validateLifecycleTestTarget(
+  test: DeveloperGatewayTestReceipt,
+  reference: Record<string, unknown>,
+): void {
+  if (
+    test.remoteVersion !== reference.versionId
+    || test.target.accountId !== reference.accountId
+    || test.target.deploymentId !== reference.deploymentId
+    || test.target.workerName !== reference.workerName
+    || test.target.environment !== reference.environment
+    || !test.protocolVersion
+    || !Number.isSafeInteger(test.testedAtUnixMs)
+    || test.testedAtUnixMs <= 0
+  ) {
+    throw new Error("Access lifecycle verification does not match the locked Worker version");
+  }
+}
+
+function validateLifecycleCommerce(
+  project: Record<string, unknown>,
+  test: DeveloperAccessBundleTestReceipt,
+): void {
+  const selected = projectProviders(project).commerce !== null;
+  if (selected !== (test.commerce !== null)) {
+    throw new Error("Access lifecycle Commerce verification does not match the project");
+  }
+  if (test.commerce && (
+    !test.commerce.webhookVerifiedAtUnixMs
+    || !test.commerce.portalVerifiedAtUnixMs
+    || !test.commerce.capabilities.includes("customer_portal_v1")
+    || !test.commerce.capabilities.includes("signed_webhook_v1")
+  )) {
+    throw new Error("Commerce webhook and customer portal must remain verified");
+  }
+}
+
+function lifecycleRevision(mutation: DeveloperAccessBundleMutationReceipt): string {
+  return createHash("sha256")
+    .update(`agentweave-access-lifecycle-v1\0${mutation.operationId}\0${mutation.completedAtUnixMs}`)
+    .digest("hex");
+}
+
+function gatewayReceipt(
+  bundle: DeveloperAccessBundleReceipt,
+  resource: ReturnType<typeof accessWorkerReceipt>,
+): DeveloperGatewayDeploymentReceipt {
+  return {
+    providerId: bundle.providerId,
+    providerVersion: bundle.providerVersion,
+    target: resource.target,
+    outcome: resource.status === "already_converged" ? "already_converged" : "applied",
+    previousVersionId: resource.previousVersionId,
+    versionId: resource.versionId,
+    endpoint: resource.endpoint,
+    operationId: bundle.operationId,
+    completedAtUnixMs: bundle.completedAtUnixMs,
+  };
+}
+
+function projectProviders(project: Record<string, unknown>): Record<string, unknown> {
+  if (!isRecord(project.providers)) throw new Error("Developer project providers are unavailable");
+  return project.providers;
+}
+
+function requiredProviderSelection(
+  providers: Record<string, unknown>,
+  kind: "gateway" | "entitlement",
+): Record<string, unknown> {
+  const provider = providers[kind];
+  if (!isRecord(provider) || !isRecord(provider.publicConfig)) {
+    throw new Error(`Developer project ${kind} provider is unavailable`);
+  }
+  return provider;
+}
+
+function lockedProvider(provider: Record<string, unknown>) {
+  return {
+    id: String(provider.id),
+    version: String(provider.version),
+    publicConfigHash: computeProviderPublicConfigHash(provider),
+  };
+}
+
+function lockedAccessReference(
+  resource: ReturnType<typeof accessWorkerReceipt>,
+  gateway: boolean,
+) {
+  return {
+    accountId: resource.target.accountId,
+    workerName: resource.target.workerName,
+    ...(resource.target.environment === undefined ? {} : { environment: resource.target.environment }),
+    versionId: resource.versionId,
+    deploymentId: resource.target.deploymentId,
+    endpoint: gateway ? runtimeGatewayBaseUrl(resource.endpoint) : resource.endpoint.replace(/\/$/, ""),
+  };
+}
+
+function commerceEnvironment(provider: Record<string, unknown>): "test" | "production" {
+  const config = provider.publicConfig as Record<string, unknown>;
+  if (config.environment !== "test" && config.environment !== "production") {
+    throw new Error("Commerce provider environment is invalid");
+  }
+  return config.environment;
+}
+
+function digestHash(value: string): string {
+  if (/^sha256:[a-f0-9]{64}$/.test(value)) return value;
+  if (!/^[a-f0-9]{64}$/.test(value)) throw new Error("Deployment digest is invalid");
+  return `sha256:${value}`;
+}
+
+function validateExpectedRevision(value: string): void {
+  if (!REVISION_PATTERN.test(value)) throw new Error("Developer project revision is invalid");
 }
 
 function runtimeGatewayBaseUrl(endpoint: string): string {

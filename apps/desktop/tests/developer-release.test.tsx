@@ -537,6 +537,61 @@ describe("developer release workspace", () => {
     expect(screen.getByText("example-gateway")).toBeInTheDocument();
   });
 
+  it("restores Creem verification guidance from an existing verified access bundle", async () => {
+    const snapshot = managedCommerceSnapshot();
+    installReleaseBridge(snapshot, {
+      controlStatus: controlStatus("ready", "0123456789abcdef0123456789abcdef"),
+    });
+    window.history.replaceState(null, "", "/#developer/access/setup");
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", {
+      name: "Complete the Creem Test path",
+    })).toBeInTheDocument();
+    expect(screen.getByRole("link", {
+      name: "Open Subscription & billing",
+    })).toHaveAttribute("href", "#settings");
+    expect(screen.getByText(
+      "https://example-entitlements.workers.dev/agentweave/commerce/v1/webhooks/creem",
+    )).toBeInTheDocument();
+  });
+
+  it("shows the safe resource message for a partial access bundle inspection", async () => {
+    const snapshot = managedCommerceSnapshot();
+    const accountId = "0123456789abcdef0123456789abcdef";
+    installReleaseBridge(snapshot, {
+      accessRequest: async (operation) => {
+        if (operation === "status") return controlStatus("ready", accountId);
+        if (operation === "access.inspect") return {
+          schemaVersion: 1,
+          bundleId: "access-production",
+          outcome: "partial",
+          resources: {
+            "model-gateway": {
+              resourceId: "model-gateway",
+              observation: null,
+              errorCode: "remote_state_uncertain_after_timeout",
+              safeMessage: "The Gateway response timed out; inspect Cloudflare before retrying.",
+            },
+          },
+          inspectedAtUnixMs: 1_800_000_000_000,
+        };
+        throw new Error(`Unexpected operation: ${operation}`);
+      },
+    });
+    window.history.replaceState(null, "", "/#developer/access/setup");
+    const user = userEvent.setup();
+
+    render(<App />);
+    await user.click(await screen.findByRole("button", { name: "Inspect drift" }));
+
+    expect(await screen.findByText(
+      "The Gateway response timed out; inspect Cloudflare before retrying.",
+    )).toBeInTheDocument();
+    expect(screen.getByText("partial")).toBeInTheDocument();
+  });
+
   it("renders the release navigation and model decision in Simplified Chinese", async () => {
     window.localStorage.setItem("agentweave.localization.locale.v1", "zh-CN");
     installReleaseBridge(userConfigurableSnapshot());
@@ -677,6 +732,94 @@ function managedSnapshot(
   };
 }
 
+function managedCommerceSnapshot(): DeveloperProjectSnapshot {
+  const accountId = "0123456789abcdef0123456789abcdef";
+  const project = {
+    schemaVersion: 2,
+    providers: {
+      identity: { id: "agentweave.identity.oidc", version: "0.1.0", publicConfig: {} },
+      entitlement: {
+        id: "agentweave.entitlements.cloudflare_policy",
+        version: "0.1.0",
+        publicConfig: {},
+      },
+      commerce: { id: "agentweave.commerce.creem", version: "0.1.0", publicConfig: {} },
+      gateway: {
+        id: "cloudflare-workers",
+        version: "0.1.0",
+        publicConfig: { upstreamBaseUrl: "https://api.openai.com/v1" },
+      },
+    },
+    modelAccess: {
+      configurationPolicy: "app_managed",
+      profile: {
+        providerId: "cloudflare-gateway",
+        endpointType: "responses",
+        baseUrl: "https://example-gateway.workers.dev/v1",
+        modelName: "approved-model",
+        authentication: "user_identity",
+        headers: {},
+      },
+    },
+    deployment: {
+      provider: "cloudflare",
+      cloudflare: {
+        accountId,
+        gatewayWorkerName: "example-gateway",
+        environment: "production",
+        entitlement: {
+          mode: "managed_worker",
+          workerName: "example-entitlements",
+          policy: {
+            sourceMode: "commerce_provider",
+            tenantLimits: { maxRequests: 0, maxUnits: 0 },
+            productPlans: [{
+              id: "pro",
+              productId: "prod_pro",
+              displayName: "Pro",
+              enabled: true,
+              allowedModels: ["approved-model"],
+              limits: { maxRequests: 0, maxUnits: 0, maxConcurrency: 0 },
+            }],
+          },
+        },
+      },
+    },
+  };
+  return {
+    ...userConfigurableSnapshot(),
+    project,
+    deploymentStatus: "ready",
+    deploymentMessage: null,
+    verifiedBundle: {
+      bundleRevision: `sha256:${"d".repeat(64)}`,
+      projectionSecretRevision: "revision-1",
+      rollbackTarget: null,
+      gateway: {
+        target: { accountId, deploymentId: "production", workerName: "example-gateway" },
+        versionId: "gateway-version",
+        endpoint: "https://example-gateway.workers.dev/v1",
+      },
+      entitlementPolicy: {
+        target: { accountId, deploymentId: "production", workerName: "example-entitlements" },
+        versionId: "entitlement-version",
+        endpoint: "https://example-entitlements.workers.dev",
+      },
+      commerce: {
+        providerId: "agentweave.commerce.creem",
+        providerVersion: "0.1.0",
+        environment: "test",
+        databaseId: "database-1",
+        migrationHash: `sha256:${"e".repeat(64)}`,
+        capabilities: ["customer_portal_v1", "signed_webhook_v1"],
+        webhookVerifiedAtUnixMs: 1_800_000_000_000,
+        portalVerifiedAtUnixMs: 0,
+      },
+      testedAtUnixMs: 1_800_000_000_000,
+    },
+  } as DeveloperProjectSnapshot;
+}
+
 function providerDescriptors(): DeveloperProviderDescriptor[] {
   const gatewayFields = [
     { ...field("upstreamBaseUrl", "Upstream model URL"), field_type: "https_url" as const },
@@ -718,6 +861,26 @@ function providerDescriptors(): DeveloperProviderDescriptor[] {
           rotation_supported: true,
         }],
       },
+    },
+    {
+      ...descriptor(
+        "entitlement",
+        "agentweave.entitlements.cloudflare_policy",
+        "Cloudflare Entitlement Policy",
+        [],
+      ),
+      capabilities: ["gateway_policy_projection_v2"],
+    },
+    {
+      ...descriptor("commerce", "agentweave.commerce.creem", "Creem Subscriptions", []),
+      capabilities: [
+        "checkout_session_v1",
+        "customer_portal_v1",
+        "product_discovery_v1",
+        "signed_webhook_v1",
+        "subscription_reconciliation_v1",
+        "test_environment_v1",
+      ],
     },
     {
       ...descriptor("gateway_deployment", "cloudflare-workers", "Cloudflare Workers", gatewayFields),

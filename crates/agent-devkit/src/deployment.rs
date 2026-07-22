@@ -449,6 +449,7 @@ pub enum PlanOperationKind {
     ConfigureBindings,
     ConfigureSecret,
     ConfigureRoute,
+    ConfigureScheduledTrigger,
     EnablePublicEndpoint,
     ActivateVersion,
     Verify,
@@ -467,6 +468,10 @@ pub struct PlanOperation {
 pub struct PlanHash(String);
 
 impl PlanHash {
+    pub(crate) fn from_sha256(value: String) -> Self {
+        Self(value)
+    }
+
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -884,6 +889,19 @@ pub trait GatewayDeploymentProvider: Send + Sync {
         target: &DeploymentTarget,
         now_unix_ms: u64,
     ) -> DevkitResult<ObservedDeploymentState>;
+
+    /// Resolves the provider-owned public endpoint without creating or mutating resources.
+    async fn resolve_public_endpoint(
+        &self,
+        _authorization: &DeveloperAuthorization,
+        _target: &DeploymentTarget,
+        _now_unix_ms: u64,
+    ) -> DevkitResult<String> {
+        Err(DevkitError::new(
+            DevkitErrorCode::Unsupported,
+            "deployment provider cannot resolve a public endpoint before apply",
+        ))
+    }
 
     async fn test(
         &self,

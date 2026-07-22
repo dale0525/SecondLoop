@@ -1,0 +1,53 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { localizedPath, type Locale } from "../lib/i18n";
+
+interface Props {
+  locale: Locale;
+  currentPath: string;
+  title: string;
+  description: string;
+  eyebrow: string;
+  updated: string;
+}
+
+const { locale, currentPath, title, description, eyebrow, updated } = Astro.props;
+const links = locale === "zh"
+  ? [
+      { label: "OAuth 帮助", href: localizedPath(locale, "/oauth-help/") },
+      { label: "隐私政策", href: localizedPath(locale, "/privacy/") },
+      { label: "服务条款", href: localizedPath(locale, "/terms/") },
+    ]
+  : [
+      { label: "OAuth help", href: localizedPath(locale, "/oauth-help/") },
+      { label: "Privacy policy", href: localizedPath(locale, "/privacy/") },
+      { label: "Terms of service", href: localizedPath(locale, "/terms/") },
+    ];
+---
+
+<BaseLayout locale={locale} title={`${title} · AgentWeave`} description={description} currentPath={currentPath}>
+  <section class="legal-hero">
+    <div class="legal-hero__rule" aria-hidden="true"></div>
+    <div>
+      <p class="eyebrow">{eyebrow}</p>
+      <h1>{title}</h1>
+      <p class="legal-hero__description">{description}</p>
+      <p class="legal-hero__updated">{locale === "zh" ? "生效日期" : "Effective"} · {updated}</p>
+    </div>
+  </section>
+  <div class="legal-shell">
+    <aside class="legal-index">
+      <p>{locale === "zh" ? "信任中心" : "Trust center"}</p>
+      <nav aria-label={locale === "zh" ? "法律页面" : "Legal pages"}>
+        {links.map((link) => <a href={link.href} aria-current={currentPath === link.href ? "page" : undefined}>{link.label}</a>)}
+      </nav>
+      <div class="legal-index__note">
+        <span aria-hidden="true"></span>
+        {locale === "zh" ? "无追踪器 · 无广告 Cookie" : "No trackers · No ad cookies"}
+      </div>
+    </aside>
+    <article class="prose">
+      <slot />
+    </article>
+  </div>
+</BaseLayout>

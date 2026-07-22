@@ -23,6 +23,8 @@ use url::Url;
 use crate::developer_control_plane_deployment::DeploymentReferenceInput;
 
 const HTTP_ENTITLEMENT_ID: &str = entitlement_providers::HTTP_ENTITLEMENT_PROVIDER_ID;
+const MANAGED_ENTITLEMENT_ID: &str =
+    entitlement_providers::CLOUDFLARE_POLICY_ENTITLEMENT_PROVIDER_ID;
 const PROJECTION_SECRET_BINDING: &str = "ENTITLEMENT_PROJECTION_SECRET";
 const UPSTREAM_SECRET_BINDING: &str = "UPSTREAM_API_KEY";
 const BUDGET_PERIOD_END: i64 = 4_102_444_800;
@@ -42,6 +44,8 @@ pub(crate) struct GatewayProjectPlanInput {
 pub(crate) struct GatewayProjectProviders {
     pub identity: AgentAppProviderBinding,
     pub entitlement: AgentAppProviderBinding,
+    #[serde(default)]
+    pub commerce: Option<AgentAppProviderBinding>,
     pub gateway: AgentAppProviderBinding,
 }
 
@@ -56,9 +60,24 @@ pub(crate) struct GatewayProjectDeployment {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct GatewayCloudflareTarget {
     pub account_id: String,
-    pub worker_name: String,
+    #[serde(default)]
+    pub worker_name: Option<String>,
+    #[serde(default)]
+    pub gateway_worker_name: Option<String>,
+    #[serde(default)]
+    pub entitlement: Option<GatewayManagedEntitlementTarget>,
     #[serde(default)]
     pub environment: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct GatewayManagedEntitlementTarget {
+    pub mode: String,
+    #[serde(default)]
+    pub worker_name: Option<String>,
+    #[serde(default)]
+    pub policy: Option<Value>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -66,7 +85,10 @@ pub(crate) struct GatewayProjectProjection {
     pub target: DeploymentReferenceInput,
     pub gateway_config: Value,
     pub entitlement_bootstrap: Value,
+    pub entitlement_config: Option<Value>,
     pub secret_bindings: BTreeMap<String, String>,
+    pub managed_entitlement: bool,
+    pub entitlement_worker_name: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize)]
@@ -126,7 +148,7 @@ pub(crate) async fn project_gateway_plan(
     let verifier = project_identity_verifier(&input.providers.identity, http).await?;
     let entitlement_descriptor = entitlement_providers::entitlement_provider_descriptors()
         .into_iter()
-        .find(|descriptor| descriptor.provider_id == HTTP_ENTITLEMENT_ID)
+        .find(|descriptor| descriptor.provider_id == input.providers.entitlement.id.as_str())
         .ok_or_else(|| DevkitError::new(DevkitErrorCode::Internal, "provider is unavailable"))?;
     ensure_provider(&input.providers.entitlement, &entitlement_descriptor)?;
 
@@ -135,13 +157,36 @@ pub(crate) async fn project_gateway_plan(
             DevkitError::invalid_configuration("Cloudflare gateway configuration is invalid")
         })?;
     validate_gateway_config(&gateway)?;
-    let entitlement: HttpEntitlementGatewayConfig = serde_json::from_value(
-        input.providers.entitlement.public_config.clone(),
-    )
-    .map_err(|_| {
-        DevkitError::invalid_configuration("entitlement projection configuration is invalid")
-    })?;
-    let projection_url = entitlement_projection_url(&entitlement)?;
+    let managed_entitlement = input.providers.entitlement.id.as_str() == MANAGED_ENTITLEMENT_ID;
+    let (projection_url, projection_timeout, projection_response_bytes, projection_schema) =
+        if managed_entitlement {
+            (
+                "https://pending.invalid/agentweave/entitlements/projection".into(),
+                default_entitlement_timeout(),
+                default_entitlement_response_bytes(),
+                2,
+            )
+        } else if input.providers.entitlement.id.as_str() == HTTP_ENTITLEMENT_ID {
+            let entitlement: HttpEntitlementGatewayConfig = serde_json::from_value(
+                input.providers.entitlement.public_config.clone(),
+            )
+            .map_err(|_| {
+                DevkitError::invalid_configuration(
+                    "entitlement projection configuration is invalid",
+                )
+            })?;
+            (
+                entitlement_projection_url(&entitlement)?,
+                entitlement.timeout_milliseconds,
+                entitlement.max_response_bytes,
+                1,
+            )
+        } else {
+            return Err(DevkitError::new(
+                DevkitErrorCode::Unsupported,
+                "selected entitlement provider cannot project gateway policy",
+            ));
+        };
     let profile = input.model_access.profile.as_ref().ok_or_else(|| {
         DevkitError::invalid_configuration("app-managed model profile is missing")
     })?;
@@ -159,22 +204,62 @@ pub(crate) async fn project_gateway_plan(
             "gateway environment is unsupported",
         ));
     }
+    let gateway_worker_name = input
+        .deployment
+        .cloudflare
+        .gateway_worker_name
+        .clone()
+        .or_else(|| input.deployment.cloudflare.worker_name.clone())
+        .ok_or_else(|| DevkitError::invalid_configuration("gateway Worker name is missing"))?;
+    let entitlement_worker_name = input
+        .deployment
+        .cloudflare
+        .entitlement
+        .as_ref()
+        .filter(|value| value.mode == "managed_worker")
+        .and_then(|value| value.worker_name.clone());
+    if input
+        .deployment
+        .cloudflare
+        .entitlement
+        .as_ref()
+        .is_some_and(|value| value.mode == "managed_worker" && value.policy.is_none())
+    {
+        return Err(DevkitError::invalid_configuration(
+            "managed entitlement policy configuration is missing",
+        ));
+    }
+    if managed_entitlement != entitlement_worker_name.is_some() {
+        return Err(DevkitError::invalid_configuration(
+            "managed entitlement provider and Worker target must be selected together",
+        ));
+    }
     let deployment_id = deployment_id(
         &input.app_id,
         &input.deployment.cloudflare.account_id,
-        &input.deployment.cloudflare.worker_name,
+        &gateway_worker_name,
         &environment,
     );
     let target = DeploymentReferenceInput {
-        account_id: input.deployment.cloudflare.account_id,
+        account_id: input.deployment.cloudflare.account_id.clone(),
         deployment_id: deployment_id.clone(),
-        worker_name: input.deployment.cloudflare.worker_name,
+        worker_name: gateway_worker_name,
         environment: Some(environment.clone()),
     };
     let (route_path, upstream_path, token_field, wire_protocol, allowed_tools) =
         route_projection(profile.endpoint_type);
     let (secret_header, secret_prefix) =
         upstream_secret_projection(gateway.upstream_authentication);
+    let entitlement_config = if managed_entitlement {
+        Some(project_entitlement_worker_config(
+            &input,
+            &verifier,
+            &deployment_id,
+            &environment,
+        )?)
+    } else {
+        None
+    };
     let gateway_config = json!({
         "schemaVersion": 1,
         "environment": environment,
@@ -184,11 +269,12 @@ pub(crate) async fn project_gateway_plan(
         "entitlements": {
             "mode": "signed_http",
             "projection": {
-                "sourceId": HTTP_ENTITLEMENT_ID,
+                "schemaVersion": projection_schema,
+                "sourceId": if managed_entitlement { MANAGED_ENTITLEMENT_ID } else { HTTP_ENTITLEMENT_ID },
                 "url": projection_url,
                 "secretBinding": PROJECTION_SECRET_BINDING,
-                "timeoutMilliseconds": entitlement.timeout_milliseconds,
-                "maxResponseBytes": entitlement.max_response_bytes,
+                "timeoutMilliseconds": projection_timeout,
+                "maxResponseBytes": projection_response_bytes,
                 "refreshBeforeSeconds": 30,
                 "maxClockSkewSeconds": 300
             }
@@ -256,16 +342,26 @@ pub(crate) async fn project_gateway_plan(
         target,
         gateway_config,
         entitlement_bootstrap,
-        secret_bindings: BTreeMap::from([
-            (
-                "entitlement.serviceCredential".into(),
-                PROJECTION_SECRET_BINDING.into(),
-            ),
-            (
+        entitlement_config,
+        secret_bindings: if managed_entitlement {
+            BTreeMap::from([(
                 "gateway.upstreamApiKey".into(),
                 UPSTREAM_SECRET_BINDING.into(),
-            ),
-        ]),
+            )])
+        } else {
+            BTreeMap::from([
+                (
+                    "entitlement.serviceCredential".into(),
+                    PROJECTION_SECRET_BINDING.into(),
+                ),
+                (
+                    "gateway.upstreamApiKey".into(),
+                    UPSTREAM_SECRET_BINDING.into(),
+                ),
+            ])
+        },
+        managed_entitlement,
+        entitlement_worker_name,
     })
 }
 
@@ -320,6 +416,88 @@ async fn project_identity_verifier(
         DevkitErrorCode::Unsupported,
         "selected identity provider is unavailable or incompatible",
     ))
+}
+
+fn project_entitlement_worker_config(
+    input: &GatewayProjectPlanInput,
+    verifier: &Value,
+    deployment_id: &str,
+    environment: &str,
+) -> DevkitResult<Value> {
+    let policy = input
+        .deployment
+        .cloudflare
+        .entitlement
+        .as_ref()
+        .and_then(|entitlement| entitlement.policy.clone())
+        .ok_or_else(|| {
+            DevkitError::invalid_configuration("managed entitlement policy is missing")
+        })?;
+    let source_mode = policy
+        .get("sourceMode")
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            DevkitError::invalid_configuration("managed entitlement policy source is missing")
+        })?;
+    let commerce = match source_mode {
+        "uniform_bounded" => {
+            if input.providers.commerce.is_some() {
+                return Err(DevkitError::invalid_configuration(
+                    "uniform entitlement policy cannot select a Commerce provider",
+                ));
+            }
+            None
+        }
+        "commerce_provider" => {
+            let selected = input.providers.commerce.as_ref().ok_or_else(|| {
+                DevkitError::invalid_configuration(
+                    "Commerce entitlement policy requires a Commerce provider",
+                )
+            })?;
+            ensure_provider(selected, &commerce_creem::creem_provider_descriptor())?;
+            let public = selected.public_config.as_object().ok_or_else(|| {
+                DevkitError::invalid_configuration("Commerce public configuration is invalid")
+            })?;
+            let environment = public
+                .get("environment")
+                .and_then(Value::as_str)
+                .filter(|value| matches!(*value, "test" | "production"))
+                .ok_or_else(|| {
+                    DevkitError::invalid_configuration("Commerce environment is invalid")
+                })?;
+            let success_url = public
+                .get("successUrl")
+                .and_then(Value::as_str)
+                .ok_or_else(|| {
+                    DevkitError::invalid_configuration("Commerce success URL is missing")
+                })?;
+            normalized_https_url(success_url, "Commerce success URL")?;
+            Some(json!({
+                "providerId": commerce_creem::CREEM_PROVIDER_ID,
+                "environment": environment,
+                "successUrl": success_url,
+            }))
+        }
+        _ => {
+            return Err(DevkitError::invalid_configuration(
+                "managed entitlement policy source is unsupported",
+            ));
+        }
+    };
+    let mut config = json!({
+        "schemaVersion": 1,
+        "environment": environment,
+        "appId": input.app_id,
+        "deploymentId": deployment_id,
+        "configurationId": input.project_revision,
+        "auth": {"mode": "required", "providers": [verifier]},
+        "policy": policy,
+        "bindings": {"commerce": "COMMERCE"},
+    });
+    if let Some(commerce) = commerce {
+        config["commerce"] = commerce;
+    }
+    Ok(config)
 }
 
 fn validate_project_identity(input: &GatewayProjectPlanInput) -> DevkitResult<()> {

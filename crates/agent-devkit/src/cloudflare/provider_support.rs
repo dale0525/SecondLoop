@@ -1,4 +1,6 @@
-use super::d1::{D1_BINDING_NAME, PreparedD1Resources};
+use super::commerce_d1::COMMERCE_D1_BINDING_NAME;
+use super::d1::D1_BINDING_NAME;
+use super::managed_worker::{ManagedWorkerRole, PreparedWorkerResources};
 use super::provider::{
     CAPABILITY_D1_READ, CAPABILITY_D1_WRITE, CAPABILITY_WORKERS_SCRIPTS_READ,
     CAPABILITY_WORKERS_SCRIPTS_WRITE,
@@ -179,6 +181,13 @@ pub(super) fn parse_deployment_facts(value: &Value) -> ParsedDeploymentFacts {
         "d1_database_id",
         "d1_database_name",
         "d1_migration_hash",
+        "worker_role",
+        "worker_url",
+        "entitlement_url",
+        "entitlement_health_url",
+        "commerce_webhook_url",
+        "commerce_enabled",
+        "reconciliation_schedule",
     ] {
         if let Some(value) = annotations.get(key) {
             public_facts.insert(key.into(), value.clone());
@@ -349,33 +358,60 @@ where
     }
 }
 
-pub(super) fn resources_in_sync(observed: &ObservedDeploymentState) -> bool {
-    let expected_hash = super::d1::migration_hash();
-    let annotated_id = observed
-        .resource_facts
-        .get("d1_database_id")
-        .and_then(Value::as_str);
-    let actual_id = observed
-        .resource_facts
-        .get("observed_d1_database_id")
-        .and_then(Value::as_str);
-    let annotated_hash = observed
-        .resource_facts
-        .get("d1_migration_hash")
-        .and_then(Value::as_str);
-    annotated_id.is_some()
-        && annotated_id == actual_id
-        && annotated_hash == Some(expected_hash.as_str())
-        && observed
-            .resource_facts
-            .get("observed_d1_migration_status")
-            .and_then(Value::as_str)
-            == Some("in_sync")
-        && observed
-            .resource_facts
-            .get("observed_workers_dev_in_sync")
-            .and_then(Value::as_bool)
-            == Some(true)
+pub(super) async fn ensure_reconciliation_schedule<T, R>(
+    rest: &CloudflareRestClient<T, R>,
+    authorization: &DeveloperAuthorization,
+    target: &DeploymentTarget,
+) -> DevkitResult<()>
+where
+    T: CloudflareTransport,
+    R: SensitiveInputResolver,
+{
+    if inspect_reconciliation_schedule(rest, authorization, target).await? {
+        return Ok(());
+    }
+    rest.execute_json(
+        Some(authorization),
+        CloudflareHttpMethod::Post,
+        &worker_script_path(target, "schedules"),
+        Some(&json!({"cron": "0 */6 * * *"})),
+    )
+    .await?;
+    if inspect_reconciliation_schedule(rest, authorization, target).await? {
+        Ok(())
+    } else {
+        Err(DevkitError::new(
+            DevkitErrorCode::VerificationFailed,
+            "Cloudflare reconciliation schedule did not converge",
+        ))
+    }
+}
+
+pub(super) async fn inspect_reconciliation_schedule<T, R>(
+    rest: &CloudflareRestClient<T, R>,
+    authorization: &DeveloperAuthorization,
+    target: &DeploymentTarget,
+) -> DevkitResult<bool>
+where
+    T: CloudflareTransport,
+    R: SensitiveInputResolver,
+{
+    let value = rest
+        .get_json(
+            Some(authorization),
+            &worker_script_path(target, "schedules"),
+        )
+        .await?
+        .value;
+    let schedules = value.as_array().ok_or_else(|| {
+        DevkitError::new(
+            DevkitErrorCode::RemoteProtocol,
+            "Cloudflare Worker schedules have an invalid shape",
+        )
+    })?;
+    Ok(schedules
+        .iter()
+        .any(|schedule| schedule.get("cron").and_then(Value::as_str) == Some("0 */6 * * *")))
 }
 
 pub(super) fn destroy_d1_database_id(plan: &DestroyPlan) -> DevkitResult<Option<&str>> {
@@ -450,8 +486,8 @@ where
 
 pub(super) fn worker_multipart(
     plan: &DeploymentPlan,
-    resources: &PreparedD1Resources,
-    gateway_url: &str,
+    resources: &PreparedWorkerResources,
+    worker_url: &str,
     create: bool,
 ) -> DevkitResult<(Vec<u8>, String)> {
     let boundary = format!("agentweave-{}", plan.control().operation_id.simple());
@@ -463,46 +499,91 @@ pub(super) fn worker_multipart(
         .iter()
         .map(|(name, secret)| (name.clone(), Value::String(secret.revision.clone())))
         .collect::<serde_json::Map<_, _>>();
-    let gateway_config = plan
+    let (main_module, configuration_binding, configuration_key) = match resources.role {
+        ManagedWorkerRole::Gateway => ("gateway.mjs", "GATEWAY_CONFIG_JSON", "gateway_config"),
+        ManagedWorkerRole::EntitlementPolicy => (
+            "entitlement.mjs",
+            "ENTITLEMENT_CONFIG_JSON",
+            "entitlement_config",
+        ),
+    };
+    let configuration = plan
         .desired()
         .public_configuration()
-        .get("gateway_config")
-        .ok_or_else(|| DevkitError::invalid_configuration("gateway configuration is missing"))?;
-    let gateway_config = serde_json::to_string(gateway_config).map_err(|_| {
-        DevkitError::invalid_configuration("gateway configuration could not be encoded")
+        .get(configuration_key)
+        .ok_or_else(|| DevkitError::invalid_configuration("Worker configuration is missing"))?;
+    let configuration = serde_json::to_string(configuration).map_err(|_| {
+        DevkitError::invalid_configuration("Worker configuration could not be encoded")
     })?;
-    let rate_limits = rate_limit_bindings(&plan.desired().target().deployment_id);
-    let mut metadata = json!({
-        "main_module": "gateway.mjs",
-        "keep_bindings": ["secret_text"],
-        "bindings": [
-            {"type": "plain_text", "name": "GATEWAY_CONFIG_JSON", "text": gateway_config},
-            {"type": "d1", "name": D1_BINDING_NAME, "database_id": resources.database.id},
-            {"type": "durable_object_namespace", "name": "CONCURRENCY", "class_name": "ConcurrencyLimiter"},
-            {"type": "ratelimit", "name": "GATEWAY_EDGE_RATE_LIMITER", "namespace_id": rate_limits[0], "simple": {"limit": 120, "period": 60}},
-            {"type": "ratelimit", "name": "GATEWAY_DEPLOYMENT_RATE_LIMITER", "namespace_id": rate_limits[1], "simple": {"limit": 1000, "period": 60}},
-            {"type": "ratelimit", "name": "GATEWAY_TENANT_RATE_LIMITER", "namespace_id": rate_limits[2], "simple": {"limit": 300, "period": 60}},
-            {"type": "ratelimit", "name": "GATEWAY_RATE_LIMITER", "namespace_id": rate_limits[3], "simple": {"limit": 60, "period": 60}},
-            {"type": "ratelimit", "name": "GATEWAY_DEVICE_RATE_LIMITER", "namespace_id": rate_limits[4], "simple": {"limit": 30, "period": 60}},
-            {"type": "version_metadata", "name": "CF_VERSION_METADATA"}
-        ],
-        "annotations": {
-            "agentweave_desired_hash": plan.desired().state_hash(),
-            "agentweave_artifact_hash": plan.desired().artifact().sha256(),
-            "agentweave_template_version": plan.desired().template_version(),
-            "agentweave_operation_id": plan.control().operation_id.to_string(),
-            "agentweave_idempotency_key_hash": idempotency_key_hash,
-            "agentweave_secret_revisions": secret_revisions,
-            "gateway_url": gateway_url,
-            "gateway_health_url": format!("{gateway_url}/.well-known/agentweave/gateway-health"),
-            "gateway_protocol_version": "2",
-            "deployment_id": plan.desired().target().deployment_id.clone(),
-            "d1_database_id": resources.database.id,
-            "d1_database_name": resources.database.name,
-            "d1_migration_hash": resources.migration_hash,
-        }
+    let mut bindings = vec![
+        json!({"type": "plain_text", "name": configuration_binding, "text": configuration}),
+        json!({"type": "version_metadata", "name": "CF_VERSION_METADATA"}),
+    ];
+    if let Some(database) = &resources.database {
+        bindings.push(json!({
+            "type": "d1",
+            "name": match resources.role {
+                ManagedWorkerRole::Gateway => D1_BINDING_NAME,
+                ManagedWorkerRole::EntitlementPolicy => COMMERCE_D1_BINDING_NAME,
+            },
+            "database_id": database.id,
+        }));
+    }
+    if resources.role == ManagedWorkerRole::Gateway {
+        let rate_limits = rate_limit_bindings(&plan.desired().target().deployment_id);
+        bindings.extend([
+            json!({"type": "durable_object_namespace", "name": "CONCURRENCY", "class_name": "ConcurrencyLimiter"}),
+            json!({"type": "ratelimit", "name": "GATEWAY_EDGE_RATE_LIMITER", "namespace_id": rate_limits[0], "simple": {"limit": 120, "period": 60}}),
+            json!({"type": "ratelimit", "name": "GATEWAY_DEPLOYMENT_RATE_LIMITER", "namespace_id": rate_limits[1], "simple": {"limit": 1000, "period": 60}}),
+            json!({"type": "ratelimit", "name": "GATEWAY_TENANT_RATE_LIMITER", "namespace_id": rate_limits[2], "simple": {"limit": 300, "period": 60}}),
+            json!({"type": "ratelimit", "name": "GATEWAY_RATE_LIMITER", "namespace_id": rate_limits[3], "simple": {"limit": 60, "period": 60}}),
+            json!({"type": "ratelimit", "name": "GATEWAY_DEVICE_RATE_LIMITER", "namespace_id": rate_limits[4], "simple": {"limit": 30, "period": 60}}),
+        ]);
+    }
+    let mut annotations = json!({
+        "agentweave_desired_hash": plan.desired().state_hash(),
+        "agentweave_artifact_hash": plan.desired().artifact().sha256(),
+        "agentweave_template_version": plan.desired().template_version(),
+        "agentweave_operation_id": plan.control().operation_id.to_string(),
+        "agentweave_idempotency_key_hash": idempotency_key_hash,
+        "agentweave_secret_revisions": secret_revisions,
+        "worker_role": resources.role.as_str(),
+        "worker_url": worker_url,
+        "deployment_id": plan.desired().target().deployment_id.clone(),
+        "commerce_enabled": resources.commerce_enabled,
     });
-    if create {
+    if let (Some(database), Some(migration_hash)) = (&resources.database, &resources.migration_hash)
+    {
+        annotations["d1_database_id"] = json!(database.id);
+        annotations["d1_database_name"] = json!(database.name);
+        annotations["d1_migration_hash"] = json!(migration_hash);
+    }
+    match resources.role {
+        ManagedWorkerRole::Gateway => {
+            annotations["gateway_url"] = json!(worker_url);
+            annotations["gateway_health_url"] = json!(format!(
+                "{worker_url}/.well-known/agentweave/gateway-health"
+            ));
+            annotations["gateway_protocol_version"] = json!("2");
+        }
+        ManagedWorkerRole::EntitlementPolicy => {
+            annotations["entitlement_url"] = json!(worker_url);
+            annotations["entitlement_health_url"] = json!(format!("{worker_url}/healthz"));
+            annotations["commerce_webhook_url"] = json!(format!(
+                "{worker_url}/agentweave/commerce/v1/webhooks/creem"
+            ));
+            if resources.commerce_enabled {
+                annotations["reconciliation_schedule"] = json!("0 */6 * * *");
+            }
+        }
+    }
+    let mut metadata = json!({
+        "main_module": main_module,
+        "keep_bindings": ["secret_text"],
+        "bindings": bindings,
+        "annotations": annotations,
+    });
+    if create && resources.role == ManagedWorkerRole::Gateway {
         metadata["migrations"] = json!({
             "new_tag": "v1",
             "new_sqlite_classes": ["ConcurrencyLimiter"]
@@ -521,7 +602,10 @@ pub(super) fn worker_multipart(
     body.extend_from_slice(&metadata);
     body.extend_from_slice(format!("\r\n--{boundary}\r\n").as_bytes());
     body.extend_from_slice(
-        b"Content-Disposition: form-data; name=\"gateway.mjs\"; filename=\"gateway.mjs\"\r\n",
+        format!(
+            "Content-Disposition: form-data; name=\"{main_module}\"; filename=\"{main_module}\"\r\n"
+        )
+        .as_bytes(),
     );
     body.extend_from_slice(
         format!(

@@ -4,6 +4,8 @@ members = [
   "crates/model-gateway",
   "crates/agent-runtime",
   "crates/agent-devkit",
+  "crates/commerce-runtime",
+  "crates/commerce-creem",
   "crates/entitlement-providers",
   "crates/identity-firebase",
   "crates/identity-oidc",
@@ -31,6 +33,7 @@ cron = "0.15"
 futures = "0.3"
 fs2 = "0.4"
 hex = "0.4"
+hmac = "0.12"
 icu_casemap = { version = "2.1.1", features = ["compiled_data"] }
 reqwest = { version = "0.12", features = ["json", "stream"] }
 lettre = { version = "0.11", default-features = false, features = ["builder", "hostname", "pool", "smtp-transport", "tokio1-native-tls"] }

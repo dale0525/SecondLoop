@@ -216,7 +216,9 @@ INSERT INTO gateway_reservations (
 SELECT
   ?1, ?2, ?3, ?4, ?5, ?6, ?7,
   entitlement.period_start, deployment.period_start, tenant_budget.period_start,
-  ?8, ?9, entitlement.max_concurrency, 'reserved', NULL, 0, 0,
+  ?8, ?9,
+  CASE WHEN entitlement.max_concurrency_unlimited = 1 THEN ?18 ELSE entitlement.max_concurrency END,
+  'reserved', NULL, 0, 0,
   ?10, ?11, NULL, NULL, ?12, ?13, ?14, ?15
 FROM gateway_entitlements AS entitlement
 JOIN gateway_deployment_budgets AS deployment
@@ -265,12 +267,18 @@ WHERE entitlement.deployment_id = ?2
       AND model_policy.period_start <= ?10 AND model_policy.period_end > ?10
       AND model_policy.policy_expires_at > ?10
   ))
-  AND entitlement.used_requests + entitlement.reserved_requests + 1 <= entitlement.max_requests
-  AND entitlement.used_units + entitlement.reserved_units + ?9 <= entitlement.max_units
-  AND deployment.used_requests + deployment.reserved_requests + 1 <= deployment.max_requests
-  AND deployment.used_units + deployment.reserved_units + ?9 <= deployment.max_units
-  AND tenant_budget.used_requests + tenant_budget.reserved_requests + 1 <= tenant_budget.max_requests
-  AND tenant_budget.used_units + tenant_budget.reserved_units + ?9 <= tenant_budget.max_units
+  AND (entitlement.max_requests_unlimited = 1
+    OR entitlement.used_requests + entitlement.reserved_requests + 1 <= entitlement.max_requests)
+  AND (entitlement.max_units_unlimited = 1
+    OR entitlement.used_units + entitlement.reserved_units + ?9 <= entitlement.max_units)
+  AND (deployment.max_requests_unlimited = 1
+    OR deployment.used_requests + deployment.reserved_requests + 1 <= deployment.max_requests)
+  AND (deployment.max_units_unlimited = 1
+    OR deployment.used_units + deployment.reserved_units + ?9 <= deployment.max_units)
+  AND (tenant_budget.max_requests_unlimited = 1
+    OR tenant_budget.used_requests + tenant_budget.reserved_requests + 1 <= tenant_budget.max_requests)
+  AND (tenant_budget.max_units_unlimited = 1
+    OR tenant_budget.used_units + tenant_budget.reserved_units + ?9 <= tenant_budget.max_units)
   AND NOT EXISTS (
     SELECT 1 FROM gateway_idempotency_tombstones AS tombstone
     WHERE tombstone.provider_id = ?3 AND tombstone.issuer = ?4
@@ -364,8 +372,8 @@ SELECT
   (SELECT COUNT(*) FROM gateway_deployment_budgets
     WHERE deployment_id = ?1 AND status = 'active'
       AND period_start <= ?7 AND period_end > ?7
-      AND used_requests + reserved_requests + 1 <= max_requests
-      AND used_units + reserved_units + ?8 <= max_units) AS deployment_available,
+      AND (max_requests_unlimited = 1 OR used_requests + reserved_requests + 1 <= max_requests)
+      AND (max_units_unlimited = 1 OR used_units + reserved_units + ?8 <= max_units)) AS deployment_available,
   (SELECT COUNT(*) FROM gateway_tenant_budgets
     WHERE deployment_id = ?1 AND provider_id = ?2 AND issuer = ?3 AND tenant = ?4
       AND period_start <= ?7 AND period_end > ?7
@@ -374,8 +382,8 @@ SELECT
     WHERE deployment_id = ?1 AND provider_id = ?2 AND issuer = ?3 AND tenant = ?4
       AND status = 'active' AND period_start <= ?7 AND period_end > ?7
       AND policy_source = ?10 AND policy_expires_at > ?7
-      AND used_requests + reserved_requests + 1 <= max_requests
-      AND used_units + reserved_units + ?8 <= max_units) AS tenant_available,
+      AND (max_requests_unlimited = 1 OR used_requests + reserved_requests + 1 <= max_requests)
+      AND (max_units_unlimited = 1 OR used_units + reserved_units + ?8 <= max_units)) AS tenant_available,
   (SELECT COUNT(*) FROM gateway_entitlements
     WHERE deployment_id = ?1 AND provider_id = ?2 AND issuer = ?3
       AND tenant = ?4 AND subject = ?5
@@ -386,8 +394,8 @@ SELECT
       AND tenant = ?4 AND subject = ?5 AND status = 'active'
       AND period_start <= ?7 AND period_end > ?7
       AND policy_source = ?10 AND policy_expires_at > ?7
-      AND used_requests + reserved_requests + 1 <= max_requests
-      AND used_units + reserved_units + ?8 <= max_units) AS entitlement_available,
+      AND (max_requests_unlimited = 1 OR used_requests + reserved_requests + 1 <= max_requests)
+      AND (max_units_unlimited = 1 OR used_units + reserved_units + ?8 <= max_units)) AS entitlement_available,
   CASE WHEN ?10 = 'static' THEN 1 ELSE (
     SELECT COUNT(*) FROM gateway_entitlement_models
     WHERE deployment_id = ?1 AND provider_id = ?2 AND issuer = ?3
@@ -401,8 +409,8 @@ SELECT
   COUNT(*) AS row_count,
   SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS active_count,
   SUM(CASE WHEN status = 'active'
-    AND used_requests + reserved_requests < max_requests
-    AND used_units + reserved_units < max_units THEN 1 ELSE 0 END) AS available_count
+    AND (max_requests_unlimited = 1 OR used_requests + reserved_requests < max_requests)
+    AND (max_units_unlimited = 1 OR used_units + reserved_units < max_units) THEN 1 ELSE 0 END) AS available_count
 FROM gateway_deployment_budgets
 WHERE deployment_id = ?1 AND period_start <= ?2 AND period_end > ?2`;
 
@@ -680,6 +688,7 @@ export class D1EntitlementStore {
           idempotencyExpiresAt,
           legacyIdempotencyHash,
           this.policySource,
+          1000,
         ),
         this.database.prepare(APPLY_ENTITLEMENT_RESERVATION).bind(
           this.deploymentId,

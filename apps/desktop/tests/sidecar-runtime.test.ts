@@ -124,19 +124,22 @@ describe("desktop sidecar runtime resolution", () => {
     })).toMatchObject({ mode: "unavailable", reason: "missing-executable" });
   });
 
-  it("injects only the fixed development gateway artifact and strips developer APIs when packaged", () => {
+  it("injects only the fixed development access artifacts and strips developer APIs when packaged", () => {
     const developmentExecutable = "/repo/target/debug/agent-server";
     const gatewayArtifact = "/repo/.tool/cloudflare-gateway/gateway.mjs";
+    const entitlementArtifact = "/repo/.tool/cloudflare-entitlement/entitlement.mjs";
     const development = resolveDesktopSidecar({
       ...baseOptions,
       env: { AGENTWEAVE_DEV_API: "1" },
       isExecutable: (candidate) => candidate === developmentExecutable,
-      isRegularFile: (candidate) => candidate === gatewayArtifact,
+      isRegularFile: (candidate) => [gatewayArtifact, entitlementArtifact].includes(candidate),
     });
     if (development.mode !== "managed") throw new Error("Expected managed resolution");
     expect(development.env).toMatchObject({
       AGENTWEAVE_CLOUDFLARE_GATEWAY_ARTIFACT: gatewayArtifact,
       AGENTWEAVE_CLOUDFLARE_GATEWAY_TEMPLATE_VERSION: "0.3.0",
+      AGENTWEAVE_CLOUDFLARE_ENTITLEMENT_ARTIFACT: entitlementArtifact,
+      AGENTWEAVE_CLOUDFLARE_ENTITLEMENT_TEMPLATE_VERSION: "0.1.0",
       AGENTWEAVE_DEV_API: "1",
     });
 
@@ -144,6 +147,7 @@ describe("desktop sidecar runtime resolution", () => {
       ...baseOptions,
       env: {
         AGENTWEAVE_CLOUDFLARE_GATEWAY_ARTIFACT: "/untrusted/gateway.mjs",
+        AGENTWEAVE_CLOUDFLARE_ENTITLEMENT_ARTIFACT: "/untrusted/entitlement.mjs",
         AGENTWEAVE_DEV_API: "1",
       },
       isExecutable: (candidate) => candidate === "/app/resources/sidecar/agent-server",
@@ -153,5 +157,6 @@ describe("desktop sidecar runtime resolution", () => {
     if (packaged.mode !== "managed") throw new Error("Expected managed resolution");
     expect(packaged.env).not.toHaveProperty("AGENTWEAVE_DEV_API");
     expect(packaged.env).not.toHaveProperty("AGENTWEAVE_CLOUDFLARE_GATEWAY_ARTIFACT");
+    expect(packaged.env).not.toHaveProperty("AGENTWEAVE_CLOUDFLARE_ENTITLEMENT_ARTIFACT");
   });
 });

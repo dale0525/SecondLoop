@@ -1,5 +1,8 @@
 use crate::api::AppState;
 use crate::developer_control_plane::DeveloperControlPlane;
+use crate::developer_control_plane_bundle::{
+    AccessBundlePlanInput, AccessBundleTestInput, ExpectedResourceVersion,
+};
 use crate::developer_control_plane_deployment::{
     DeploymentPlanInput, DeploymentReferenceInput, DeploymentSecretInput,
 };
@@ -60,6 +63,9 @@ pub(crate) fn routes() -> Router<Arc<AppState>> {
             get(list_firebase_projects).post(configure_firebase_project),
         )
         .route("/dev/control/gateway/plan", post(plan_deployment))
+        .route("/dev/control/access/plan", post(plan_access_bundle))
+        .route("/dev/control/access/apply", post(apply_access_bundle))
+        .route("/dev/control/access/test", post(test_access_bundle))
         .route("/dev/control/gateway/apply", post(apply_deployment))
         .route("/dev/control/gateway/inspect", post(inspect_deployment))
         .route("/dev/control/gateway/test", post(test_deployment))
@@ -67,6 +73,7 @@ pub(crate) fn routes() -> Router<Arc<AppState>> {
         .route("/dev/control/gateway/rollback", post(rollback))
         .route("/dev/control/gateway/destroy/plan", post(plan_destroy))
         .route("/dev/control/gateway/destroy/apply", post(apply_destroy))
+        .merge(crate::developer_control_plane_bundle_lifecycle_api::routes())
 }
 
 #[derive(Debug, Serialize)]
@@ -75,6 +82,7 @@ struct DeveloperControlStatus {
     authorization: crate::developer_control_plane_oauth::DeveloperAuthorizationStatus,
     firebase_authorization: crate::developer_firebase::FirebaseAuthorizationStatus,
     gateway_template: Option<GatewayTemplateStatus>,
+    entitlement_template: Option<GatewayTemplateStatus>,
     sensitive_bindings: BTreeMap<String, String>,
 }
 
@@ -98,6 +106,12 @@ async fn status(
                 version: template.version().into(),
                 sha256: template.sha256().into(),
             }),
+        entitlement_template: control.entitlement_template().map(|template| {
+            GatewayTemplateStatus {
+                version: template.version().into(),
+                sha256: template.sha256().into(),
+            }
+        }),
         sensitive_bindings: control.sensitive_binding_revisions().await?,
     }))
 }
@@ -300,6 +314,189 @@ struct SecretInputRequest {
     revision: String,
     #[serde(default)]
     value: Option<SensitiveText>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PlanAccessBundleRequest {
+    project: GatewayProjectPlanInput,
+    sensitive_inputs: BTreeMap<String, SecretInputRequest>,
+    #[serde(default)]
+    idempotency_key: Option<String>,
+    #[serde(default)]
+    expected_resources: BTreeMap<String, ExpectedResourceVersion>,
+}
+
+impl std::fmt::Debug for PlanAccessBundleRequest {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("PlanAccessBundleRequest")
+            .field(
+                "sensitive_input_names",
+                &self.sensitive_inputs.keys().collect::<Vec<_>>(),
+            )
+            .finish_non_exhaustive()
+    }
+}
+
+async fn plan_access_bundle(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<PlanAccessBundleRequest>,
+) -> Result<
+    Json<crate::developer_control_plane_bundle::AccessBundlePlanSummary>,
+    ControlPlaneApiError,
+> {
+    for provider in [
+        Some(&request.project.providers.identity),
+        Some(&request.project.providers.entitlement),
+        request.project.providers.commerce.as_ref(),
+        Some(&request.project.providers.gateway),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        bounded_json(&provider.public_config, "provider public configuration")?;
+    }
+    let http = identity_oidc::ReqwestOidcHttpClient::new().map_err(|_| {
+        ControlPlaneApiError::new(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "identity_discovery_unavailable",
+            "Identity discovery is unavailable",
+            None,
+            false,
+        )
+    })?;
+    let projection = project_gateway_plan(request.project, &http).await?;
+    if !projection.managed_entitlement {
+        return Err(invalid_request(
+            "access bundle planning requires the managed entitlement provider",
+        ));
+    }
+    let entitlement_config = projection
+        .entitlement_config
+        .clone()
+        .ok_or_else(|| invalid_request("managed entitlement configuration is missing"))?;
+    let commerce_enabled = entitlement_config
+        .get("policy")
+        .and_then(Value::as_object)
+        .and_then(|policy| policy.get("sourceMode"))
+        .and_then(Value::as_str)
+        == Some("commerce_provider");
+    let mut slot_bindings = projection.secret_bindings.clone();
+    if commerce_enabled {
+        slot_bindings.extend([
+            ("commerce.apiKey".into(), "CREEM_API_KEY".into()),
+            (
+                "commerce.webhookSecret".into(),
+                "CREEM_WEBHOOK_SECRET".into(),
+            ),
+        ]);
+    }
+    if request.sensitive_inputs.len() != slot_bindings.len()
+        || request
+            .sensitive_inputs
+            .keys()
+            .any(|slot| !slot_bindings.contains_key(slot))
+    {
+        return Err(invalid_request(
+            "access bundle sensitive inputs do not match the selected providers",
+        ));
+    }
+    let mut secrets = BTreeMap::new();
+    for (slot, secret) in request.sensitive_inputs {
+        let binding_name = slot_bindings
+            .get(&slot)
+            .ok_or_else(|| invalid_request("access bundle sensitive input slot is unavailable"))?;
+        if secrets
+            .insert(
+                binding_name.clone(),
+                DeploymentSecretInput {
+                    revision: secret.revision,
+                    value: secret.value.map(SensitiveText::into_bytes).transpose()?,
+                },
+            )
+            .is_some()
+        {
+            return Err(invalid_request(
+                "access bundle sensitive inputs resolve to duplicate bindings",
+            ));
+        }
+    }
+    let entitlement_worker_name = projection
+        .entitlement_worker_name
+        .ok_or_else(|| invalid_request("managed entitlement Worker name is missing"))?;
+    Ok(Json(
+        control_plane(&state)?
+            .plan_access_bundle(AccessBundlePlanInput {
+                account_id: projection.target.account_id,
+                deployment_id: projection.target.deployment_id,
+                environment: projection.target.environment,
+                gateway_worker_name: projection.target.worker_name,
+                entitlement_worker_name,
+                gateway_config: projection.gateway_config,
+                entitlement_bootstrap: projection.entitlement_bootstrap,
+                entitlement_config,
+                secrets,
+                idempotency_key: request.idempotency_key,
+                expected_resources: request.expected_resources,
+            })
+            .await?,
+    ))
+}
+
+async fn apply_access_bundle(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<PlanHashRequest>,
+) -> Result<
+    Json<crate::developer_control_plane_bundle::AccessBundleApplyReceipt>,
+    ControlPlaneApiError,
+> {
+    validate_plan_hash(&request.plan_hash)?;
+    Ok(Json(
+        control_plane(&state)?
+            .apply_access_bundle(&request.plan_hash)
+            .await?,
+    ))
+}
+
+async fn test_access_bundle(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<AccessBundleTestInput>,
+) -> Result<
+    Json<crate::developer_control_plane_bundle::AccessBundleTestReceipt>,
+    ControlPlaneApiError,
+> {
+    let identity = state
+        .identity_runtime()
+        .ok_or_else(|| {
+            ControlPlaneApiError::new(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "identity_not_configured",
+                "The selected identity plugin must be configured before access verification",
+                None,
+                false,
+            )
+        })?
+        .gateway_test_assertion()
+        .await
+        .map_err(|_| {
+            ControlPlaneApiError::new(
+                StatusCode::UNAUTHORIZED,
+                "identity_authorization_required",
+                "Sign in with the selected identity plugin before access verification",
+                None,
+                false,
+            )
+        })?;
+    Ok(Json(
+        control_plane(&state)?
+            .test_access_bundle(
+                request,
+                "authorization",
+                identity.expose_secret().as_bytes().to_vec(),
+            )
+            .await?,
+    ))
 }
 
 async fn plan_deployment(
@@ -663,7 +860,7 @@ struct ControlPlaneErrorBody {
 }
 
 impl ControlPlaneApiError {
-    fn new(
+    pub(super) fn new(
         status: StatusCode,
         code: &str,
         message: &str,

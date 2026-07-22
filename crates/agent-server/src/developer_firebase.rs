@@ -1,6 +1,7 @@
 use crate::developer_control_plane::{DeveloperControlPlane, now_unix_ms};
 use crate::developer_firebase_models::*;
 pub(crate) use crate::developer_firebase_oauth::FirebaseOAuthDefaults;
+use crate::developer_firebase_pagination::{checked_next_page_token, paginated_url};
 use agent_devkit::{
     DeveloperAuthorization, DevkitError, DevkitErrorCode, DevkitResult, SensitiveInputHandle,
     SensitiveInputResolver, SensitiveInputStore, SensitiveValue,
@@ -959,41 +960,6 @@ impl DeveloperControlPlane {
             validate_oauth_value(secret)?;
         }
         Ok(values)
-    }
-}
-
-fn paginated_url(
-    base_url: &str,
-    fixed_query: &[(&str, &str)],
-    page_token: Option<&str>,
-) -> DevkitResult<String> {
-    let mut url = Url::parse(base_url).map_err(|_| internal())?;
-    {
-        let mut query = url.query_pairs_mut();
-        for (name, value) in fixed_query {
-            query.append_pair(name, value);
-        }
-        if let Some(token) = page_token {
-            query.append_pair("pageToken", token);
-        }
-    }
-    Ok(url.into())
-}
-
-fn checked_next_page_token(
-    token: Option<String>,
-    seen: &mut BTreeSet<String>,
-) -> DevkitResult<Option<String>> {
-    match token {
-        Some(token)
-            if token.is_empty()
-                || token.len() > 4096
-                || token.chars().any(char::is_control)
-                || !seen.insert(token.clone()) =>
-        {
-            Err(remote_protocol())
-        }
-        value => Ok(value),
     }
 }
 

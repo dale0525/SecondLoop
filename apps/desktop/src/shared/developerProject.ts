@@ -16,6 +16,28 @@ export type DeveloperVerifiedDeployment = Readonly<{
   endpoint: string;
 }>;
 
+export type DeveloperVerifiedAccessBundle = Readonly<{
+  bundleRevision: string;
+  projectionSecretRevision: string;
+  rollbackTarget: null | Readonly<{
+    gatewayVersionId: string;
+    entitlementVersionId: string;
+  }>;
+  gateway: DeveloperVerifiedDeployment;
+  entitlementPolicy: DeveloperVerifiedDeployment;
+  commerce: null | Readonly<{
+    providerId: string;
+    providerVersion: string;
+    environment: "test" | "production";
+    databaseId: string;
+    migrationHash: string;
+    capabilities: ReadonlyArray<string>;
+    webhookVerifiedAtUnixMs: number;
+    portalVerifiedAtUnixMs: number;
+  }>;
+  testedAtUnixMs: number;
+}>;
+
 export type DeveloperProjectSnapshot = Readonly<{
   appRoot: string;
   revision: string;
@@ -25,6 +47,7 @@ export type DeveloperProjectSnapshot = Readonly<{
   deploymentStatus: DeveloperDeploymentStatus;
   deploymentMessage: string | null;
   verifiedDeployment?: DeveloperVerifiedDeployment | null;
+  verifiedBundle?: DeveloperVerifiedAccessBundle | null;
 }>;
 
 export type DeveloperProjectSaveRequest = Readonly<{

@@ -6,12 +6,14 @@
 pub mod authorization;
 pub mod cloudflare;
 pub mod deployment;
+pub mod deployment_bundle;
 pub mod descriptor;
 pub mod error;
 pub mod sensitive;
 
 pub use authorization::*;
 pub use deployment::*;
+pub use deployment_bundle::*;
 pub use descriptor::*;
 pub use error::*;
 pub use sensitive::*;

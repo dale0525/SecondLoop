@@ -16,8 +16,10 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import type { DeveloperProjectSnapshot } from "../../../shared/developerProject";
+import type { DeveloperAccessBundlePlan } from "../../../shared/developerAccess";
 import {
   applyGateway,
+  applyAccessBundle,
   cancelCloudflareConnection,
   cancelFirebaseConnection,
   configureFirebaseProject,
@@ -29,10 +31,14 @@ import {
   listFirebaseProjects,
   loadDeveloperControlStatus,
   planGateway,
+  planAccessBundle,
   saveDeveloperProject,
   selectCloudflareAccount,
   verifyGateway,
+  verifyAccessBundle,
   type CloudflareAccount,
+  type AccessBundleDestroyUpdate,
+  type AccessBundleMutationUpdate,
   type DeveloperControlStatus,
   type GatewayDestroyUpdate,
   type GatewayMutationUpdate,
@@ -53,6 +59,8 @@ import { useHostBootstrap } from "../../hostBootstrap";
 import { useI18n } from "../../i18n/I18nProvider";
 import { useIdentitySession } from "../../identitySession";
 import { DeveloperConfigurationStep } from "./DeveloperConfigurationStep";
+import { DeveloperAccessBundleOperations } from "./DeveloperAccessBundleOperations";
+import { DeveloperCommerceVerificationGuide } from "./DeveloperCommerceVerificationGuide";
 import { DeveloperConnectionStep } from "./DeveloperConnectionStep";
 import { DeveloperDeploymentOperations } from "./DeveloperDeploymentOperations";
 import { DeveloperFirebaseIdentitySetup } from "./DeveloperFirebaseIdentitySetup";
@@ -98,9 +106,14 @@ export function DeveloperAccessSetup({
   const [customOauth, setCustomOauth] = useState(false);
   const [customClientId, setCustomClientId] = useState("");
   const [customScopeCatalog, setCustomScopeCatalog] = useState("");
-  const [plan, setPlan] = useState<GatewayPlan | null>(null);
+  const [plan, setPlan] = useState<GatewayPlan | DeveloperAccessBundlePlan | null>(null);
   const [deploymentApplied, setDeploymentApplied] = useState(
-    Boolean(initialControlStatus?.pendingDeployment),
+    Boolean(
+      initialControlStatus?.pendingDeployment
+      || initialControlStatus?.pendingAccessBundle
+      || snapshot.verifiedDeployment
+      || snapshot.verifiedBundle,
+    ),
   );
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -111,7 +124,10 @@ export function DeveloperAccessSetup({
 
   const identityProviders = providers.filter((item) => item.kind === "identity");
   const entitlementProviders = providers.filter((item) => item.kind === "entitlement"
-    && item.capabilities.includes("gateway_policy_projection_v1"));
+    && item.capabilities.some((capability) => [
+      "gateway_policy_projection_v1", "gateway_policy_projection_v2",
+    ].includes(capability)));
+  const commerceProviders = providers.filter((item) => item.kind === "commerce");
   const gatewayProviders = providers.filter((item) => item.kind === "gateway_deployment");
   const identityDescriptor = providerBySelection(providers, draft.providers.identity);
   const entitlementDescriptor = providerBySelection(providers, draft.providers.entitlement);
@@ -134,6 +150,14 @@ export function DeveloperAccessSetup({
         endpoint: controlStatus.pendingDeployment.deployment.endpoint,
       }
     : workingSnapshot.verifiedDeployment ?? null;
+  const managedAccess = draft.deployment.cloudflare.entitlement.mode === "managed_worker";
+  const commerceEnvironment = draft.providers.commerce?.publicConfig.environment === "production"
+    ? "production"
+    : "test";
+  const managedEntitlementEndpoint = controlStatus?.pendingAccessBundle?.bundle
+    .resources["entitlement-policy"]?.endpoint
+    ?? workingSnapshot.verifiedBundle?.entitlementPolicy.endpoint
+    ?? null;
 
   const updateControlStatus = useCallback((status: DeveloperControlStatus) => {
     setControlStatus(status);
@@ -167,8 +191,8 @@ export function DeveloperAccessSetup({
   }, [snapshot]);
 
   useEffect(() => {
-    if (controlStatus?.pendingDeployment) setDeploymentApplied(true);
-  }, [controlStatus?.pendingDeployment]);
+    if (controlStatus?.pendingDeployment || controlStatus?.pendingAccessBundle) setDeploymentApplied(true);
+  }, [controlStatus?.pendingAccessBundle, controlStatus?.pendingDeployment]);
 
   useEffect(() => {
     const accountId = controlStatus?.authorization.accountId;
@@ -360,6 +384,7 @@ export function DeveloperAccessSetup({
     setWorkingSnapshot(latest);
     onProjectSaved(latest);
     const sensitiveInputs = makeSensitiveInputs(
+      draft,
       configuredSlots,
       controlStatus?.sensitiveBindings ?? {},
       secretValues,
@@ -369,13 +394,17 @@ export function DeveloperAccessSetup({
     setSecretRevisions(Object.fromEntries(
       Object.entries(sensitiveInputs).map(([slot, input]) => [slot, input.revision]),
     ));
-    setPlan(await planGateway({ project: latest, sensitiveInputs }));
+    setPlan(managedAccess
+      ? await planAccessBundle({ project: latest, sensitiveInputs })
+      : await planGateway({ project: latest, sensitiveInputs }));
     await refreshControl();
   });
 
   const apply = () => run("apply", async () => {
     if (!plan) throw new Error(t("developer.release.errorPlanRequired"));
-    const result = await applyGateway(plan.planHash);
+    const result = managedAccess
+      ? await applyAccessBundle(plan.planHash)
+      : await applyGateway(plan.planHash);
     setWorkingSnapshot(result.project);
     setDraft(result.project.project as ManagedProjectDraft);
     onProjectSaved(result.project);
@@ -385,7 +414,7 @@ export function DeveloperAccessSetup({
   });
 
   const verify = () => run("verify", async () => {
-    const result = await verifyGateway();
+    const result = managedAccess ? await verifyAccessBundle() : await verifyGateway();
     setWorkingSnapshot(result.project);
     setDraft(result.project.project as ManagedProjectDraft);
     onProjectSaved(result.project);
@@ -403,6 +432,25 @@ export function DeveloperAccessSetup({
   };
 
   const acceptDestroyedDeployment = async (result: GatewayDestroyUpdate) => {
+    setWorkingSnapshot(result.project);
+    setDraft(result.project.project as ManagedProjectDraft);
+    onProjectSaved(result.project);
+    setPlan(null);
+    setDeploymentApplied(false);
+    setCompleted(false);
+    await refreshControl();
+  };
+
+  const acceptAccessBundleMutation = async (result: AccessBundleMutationUpdate) => {
+    setWorkingSnapshot(result.project);
+    setDraft(result.project.project as ManagedProjectDraft);
+    onProjectSaved(result.project);
+    setDeploymentApplied(true);
+    setCompleted(result.project.deploymentStatus === "ready");
+    await refreshControl();
+  };
+
+  const acceptDestroyedAccessBundle = async (result: AccessBundleDestroyUpdate) => {
     setWorkingSnapshot(result.project);
     setDraft(result.project.project as ManagedProjectDraft);
     onProjectSaved(result.project);
@@ -479,6 +527,7 @@ export function DeveloperAccessSetup({
         ) : null}
         {step === 2 && identityDescriptor && entitlementDescriptor && gatewayDescriptor ? (
           <DeveloperConfigurationStep
+            commerceProviders={commerceProviders}
             configuredSlots={configuredSlots}
             draft={draft}
             entitlementDescriptor={entitlementDescriptor}
@@ -504,12 +553,14 @@ export function DeveloperAccessSetup({
               />
             ) : undefined}
             onDraft={mutateDraft}
+            onProductsConnected={async () => { await refreshControl(); }}
             onSecret={(slot, value) => {
               setSecretValues((current) => ({ ...current, [slot]: value }));
               setSecretRevisions((current) => ({ ...current, [slot]: newRevision() }));
               setPlan(null);
             }}
             secretValues={secretValues}
+            productionUnlocked={workingSnapshot.verifiedBundle?.commerce?.environment === "test"}
           />
         ) : null}
         {step === 3 ? (
@@ -531,16 +582,33 @@ export function DeveloperAccessSetup({
               plan={plan}
               snapshot={workingSnapshot}
             />
-            <DeveloperDeploymentOperations
-              authorizationReady={authorizationReady}
-              deployment={lifecycleDeployment}
-              onDestroyed={acceptDestroyedDeployment}
-              onDisconnected={async () => {
-                const status = await refreshControl();
-                setDeploymentApplied(Boolean(status.pendingDeployment));
-              }}
-              onMutation={acceptLifecycleMutation}
-            />
+            {managedAccess && draft.providers.commerce && deploymentApplied ? (
+              <DeveloperCommerceVerificationGuide
+                entitlementEndpoint={managedEntitlementEndpoint}
+                environment={commerceEnvironment}
+                portalVerifiedAtUnixMs={workingSnapshot.verifiedBundle?.commerce?.portalVerifiedAtUnixMs ?? null}
+                webhookVerifiedAtUnixMs={workingSnapshot.verifiedBundle?.commerce?.webhookVerifiedAtUnixMs ?? null}
+              />
+            ) : null}
+            {!managedAccess ? (
+              <DeveloperDeploymentOperations
+                authorizationReady={authorizationReady}
+                deployment={lifecycleDeployment}
+                onDestroyed={acceptDestroyedDeployment}
+                onDisconnected={async () => {
+                  const status = await refreshControl();
+                  setDeploymentApplied(Boolean(status.pendingDeployment));
+                }}
+                onMutation={acceptLifecycleMutation}
+              />
+            ) : (
+              <DeveloperAccessBundleOperations
+                authorizationReady={authorizationReady}
+                onDestroyed={acceptDestroyedAccessBundle}
+                onMutation={acceptAccessBundleMutation}
+                snapshot={workingSnapshot}
+              />
+            )}
           </>
         ) : null}
 
@@ -616,7 +684,7 @@ function DeployStep({
   onSave: () => void;
   onSignIn: () => void;
   onVerify: () => void;
-  plan: GatewayPlan | null;
+  plan: GatewayPlan | DeveloperAccessBundlePlan | null;
   snapshot: DeveloperProjectSnapshot;
 }) {
   const { t } = useI18n();
@@ -633,13 +701,11 @@ function DeployStep({
       <div className="release-operation-list">
         <OperationRow action={<Button disabled={busy !== null || issues.length > 0} onClick={onSave} variant="soft">{busy === "save" ? <Spinner /> : null}{t("developer.release.saveProject")}</Button>} done={issues.length === 0} title={t("developer.release.operationSave")} />
         <OperationRow action={identityState === "signed_in" ? <Badge color="green">{t("identity.signedIn")}</Badge> : identityMethod === "password" ? <Badge color="orange">{t("developer.release.useLoginForm")}</Badge> : <Button disabled={busy !== null || !bootstrapReady} onClick={onSignIn} variant="soft">{busy === "identity" ? <Spinner /> : null}{t("developer.release.signInTestUser")}</Button>} done={identityState === "signed_in"} title={t("developer.release.operationIdentity")} />
-        <OperationRow action={plan ? <Badge color="blue">{plan.operations.length} {t("developer.release.operations")}</Badge> : <Button disabled={busy !== null || !authorizationReady || issues.length > 0} onClick={onPlan}>{busy === "plan" ? <Spinner /> : null}{t("developer.release.createPlan")}</Button>} done={plan !== null || applied || completed} title={t("developer.release.operationPlan")} />
+        <OperationRow action={plan ? <Badge color="blue">{planOperationCount(plan)} {t("developer.release.operations")}</Badge> : <Button disabled={busy !== null || !authorizationReady || issues.length > 0} onClick={onPlan}>{busy === "plan" ? <Spinner /> : null}{t("developer.release.createPlan")}</Button>} done={plan !== null || applied || completed} title={t("developer.release.operationPlan")} />
         <OperationRow action={applied || completed ? <Badge color="green">{t("developer.release.deployed")}</Badge> : <Button disabled={busy !== null || !plan} onClick={onApply}>{busy === "apply" ? <Spinner /> : null}{t("developer.release.deployGateway")}</Button>} done={applied || completed} title={t("developer.release.operationDeploy")} />
         <OperationRow action={completed ? <Badge color="green">{t("developer.release.verified")}</Badge> : <Button disabled={busy !== null || !applied || identityState !== "signed_in"} onClick={onVerify}>{busy === "verify" ? <Spinner /> : null}{t("developer.release.verifyGateway")}</Button>} done={completed} title={t("developer.release.operationVerify")} />
       </div>
-      {plan ? (
-        <div className="release-plan-preview"><div><strong>{t("developer.release.planPreview")}</strong><Badge color={plan.drift.status === "in_sync" ? "green" : "orange"}>{plan.drift.status.replaceAll("_", " ")}</Badge></div><ul>{plan.operations.map((operation, index) => <li key={`${operation.kind}-${operation.resource}-${index}`}><span>{operation.kind.replaceAll("_", " ")}</span><code>{operation.resource}</code>{operation.destructive ? <Badge color="red">{t("developer.release.destructive")}</Badge> : null}</li>)}</ul></div>
-      ) : null}
+      {plan ? <DeploymentPlanPreview plan={plan} /> : null}
       {completed ? <Callout.Root color="green"><ShieldCheck aria-hidden="true" /><Callout.Text>{t("developer.release.verificationComplete")}</Callout.Text></Callout.Root> : null}
     </section>
   );
@@ -647,6 +713,46 @@ function DeployStep({
 
 function OperationRow({ title, done, action }: { title: string; done: boolean; action: ReactNode }) {
   return <div className="release-operation-row"><span className={done ? "is-done" : ""}>{done ? <Check aria-hidden="true" size={15} /> : null}</span><strong>{title}</strong><div>{action}</div></div>;
+}
+
+function planOperationCount(plan: GatewayPlan | DeveloperAccessBundlePlan): number {
+  return "resources" in plan
+    ? plan.resources.reduce((count, resource) => count + Math.max(1, resource.operations.length), 0)
+    : plan.operations.length;
+}
+
+function DeploymentPlanPreview({
+  plan,
+}: {
+  plan: GatewayPlan | DeveloperAccessBundlePlan;
+}): JSX.Element {
+  const { t } = useI18n();
+  if (!("resources" in plan)) {
+    return (
+      <div className="release-plan-preview">
+        <div><strong>{t("developer.release.planPreview")}</strong><Badge color={plan.drift.status === "in_sync" ? "green" : "orange"}>{plan.drift.status.replaceAll("_", " ")}</Badge></div>
+        <ul>{plan.operations.map((operation, index) => <li key={`${operation.kind}-${operation.resource}-${index}`}><span>{operation.kind.replaceAll("_", " ")}</span><code>{operation.resource}</code>{operation.destructive ? <Badge color="red">{t("developer.release.destructive")}</Badge> : null}</li>)}</ul>
+      </div>
+    );
+  }
+  return (
+    <div className="release-plan-preview release-bundle-plan">
+      <div><strong>{t("developer.release.accessResourcePlan")}</strong><Badge color="blue">{plan.resources.length} {t("developer.release.resources")}</Badge></div>
+      <ol className="release-resource-timeline">
+        {plan.resources.map((resource) => (
+          <li key={resource.resourceId}>
+            <span aria-hidden="true" />
+            <div>
+              <strong>{resource.purpose.replaceAll("_", " ")}</strong>
+              <code>{resource.target.workerName}</code>
+              {resource.dependencies.length > 0 ? <small>{t("developer.release.dependsOn", { value: resource.dependencies.join(", ") })}</small> : null}
+            </div>
+            <Badge color={resource.operations.some((operation) => operation.destructive) ? "red" : "gray"}>{resource.kind.replaceAll("_", " ")}</Badge>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
 }
 
 function ReleaseSummary({ draft, snapshot, controlStatus, issues }: {
@@ -685,7 +791,7 @@ function initialStep(
   snapshot: DeveloperProjectSnapshot,
   status: DeveloperControlStatus | null,
 ): number {
-  if (snapshot.deploymentStatus === "ready" || status?.pendingDeployment) return 3;
+  if (snapshot.deploymentStatus === "ready" || status?.pendingDeployment || status?.pendingAccessBundle) return 3;
   if (status?.authorization.phase === "ready") return 2;
   return 1;
 }
@@ -704,7 +810,7 @@ function stepReady(
     && providerBySelection(providers, draft.providers.entitlement) !== null
     && providerBySelection(providers, draft.providers.gateway) !== null;
   if (step === 2) return validateManagedDraft(draft, providers).length === 0
-    && ["gateway.upstreamApiKey", "entitlement.serviceCredential"]
+    && requiredSensitiveSlots(draft)
       .every((slot) => configured.has(slot) || Boolean(values[slot]?.trim()));
   return true;
 }
@@ -713,20 +819,34 @@ function logicalConfiguredSlots(bindings: Readonly<Record<string, string>>): Rea
   const slots = new Set(Object.keys(bindings));
   if (bindings.UPSTREAM_API_KEY) slots.add("gateway.upstreamApiKey");
   if (bindings.ENTITLEMENT_PROJECTION_SECRET) slots.add("entitlement.serviceCredential");
+  if (bindings.CREEM_API_KEY) slots.add("commerce.apiKey");
+  if (bindings.CREEM_WEBHOOK_SECRET) slots.add("commerce.webhookSecret");
+  return slots;
+}
+
+function requiredSensitiveSlots(draft: ManagedProjectDraft): string[] {
+  const slots = ["gateway.upstreamApiKey"];
+  const entitlement = draft.deployment.cloudflare.entitlement;
+  if (entitlement.mode === "external_service") slots.push("entitlement.serviceCredential");
+  if (draft.providers.commerce) slots.push("commerce.apiKey", "commerce.webhookSecret");
   return slots;
 }
 
 function makeSensitiveInputs(
+  draft: ManagedProjectDraft,
   configured: ReadonlySet<string>,
   bindings: Readonly<Record<string, string>>,
   values: Readonly<Record<string, string>>,
   revisions: Readonly<Record<string, string>>,
   missingMessage: string,
 ): Record<string, SensitivePlanInput> {
-  const physicalRevision = (slot: string) => slot === "gateway.upstreamApiKey"
-    ? bindings[slot] ?? bindings.UPSTREAM_API_KEY
-    : bindings[slot] ?? bindings.ENTITLEMENT_PROJECTION_SECRET;
-  return Object.fromEntries(["gateway.upstreamApiKey", "entitlement.serviceCredential"].map((slot) => {
+  const physicalRevision = (slot: string) => bindings[slot] ?? ({
+    "gateway.upstreamApiKey": bindings.UPSTREAM_API_KEY,
+    "entitlement.serviceCredential": bindings.ENTITLEMENT_PROJECTION_SECRET,
+    "commerce.apiKey": bindings.CREEM_API_KEY,
+    "commerce.webhookSecret": bindings.CREEM_WEBHOOK_SECRET,
+  } as Record<string, string | undefined>)[slot];
+  return Object.fromEntries(requiredSensitiveSlots(draft).map((slot) => {
     const value = values[slot]?.trim();
     const revision = value ? revisions[slot] ?? newRevision() : physicalRevision(slot);
     if (!revision || (!value && !configured.has(slot))) throw new Error(missingMessage);
@@ -760,8 +880,10 @@ function emptyControlStatus(): DeveloperControlStatus {
       publicOauthClientAvailable: false,
     },
     gatewayTemplate: null,
+    entitlementTemplate: null,
     sensitiveBindings: {},
     pendingDeployment: null,
+    pendingAccessBundle: null,
   };
 }
 

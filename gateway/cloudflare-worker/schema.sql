@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS gateway_schema_metadata (
 );
 
 INSERT INTO gateway_schema_metadata (key, value, updated_at)
-VALUES ('schema_version', '3', unixepoch())
+VALUES ('schema_version', '4', unixepoch())
 ON CONFLICT(key) DO NOTHING;
 
 INSERT INTO gateway_schema_metadata (key, value, updated_at)
@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS gateway_deployment_budgets (
   period_end INTEGER NOT NULL CHECK (period_end > period_start),
   max_requests INTEGER NOT NULL CHECK (max_requests >= 0),
   max_units INTEGER NOT NULL CHECK (max_units >= 0),
+  max_requests_unlimited INTEGER NOT NULL DEFAULT 0 CHECK (max_requests_unlimited IN (0, 1)),
+  max_units_unlimited INTEGER NOT NULL DEFAULT 0 CHECK (max_units_unlimited IN (0, 1)),
   used_requests INTEGER NOT NULL DEFAULT 0 CHECK (used_requests >= 0),
   used_units INTEGER NOT NULL DEFAULT 0 CHECK (used_units >= 0),
   reserved_requests INTEGER NOT NULL DEFAULT 0 CHECK (reserved_requests >= 0),
@@ -39,6 +41,8 @@ CREATE TABLE IF NOT EXISTS gateway_tenant_budgets (
   period_end INTEGER NOT NULL CHECK (period_end > period_start),
   max_requests INTEGER NOT NULL CHECK (max_requests >= 0),
   max_units INTEGER NOT NULL CHECK (max_units >= 0),
+  max_requests_unlimited INTEGER NOT NULL DEFAULT 0 CHECK (max_requests_unlimited IN (0, 1)),
+  max_units_unlimited INTEGER NOT NULL DEFAULT 0 CHECK (max_units_unlimited IN (0, 1)),
   used_requests INTEGER NOT NULL DEFAULT 0 CHECK (used_requests >= 0),
   used_units INTEGER NOT NULL DEFAULT 0 CHECK (used_units >= 0),
   reserved_requests INTEGER NOT NULL DEFAULT 0 CHECK (reserved_requests >= 0),
@@ -64,6 +68,9 @@ CREATE TABLE IF NOT EXISTS gateway_entitlements (
   max_requests INTEGER NOT NULL CHECK (max_requests >= 0),
   max_units INTEGER NOT NULL CHECK (max_units >= 0),
   max_concurrency INTEGER NOT NULL CHECK (max_concurrency > 0 AND max_concurrency <= 1000),
+  max_requests_unlimited INTEGER NOT NULL DEFAULT 0 CHECK (max_requests_unlimited IN (0, 1)),
+  max_units_unlimited INTEGER NOT NULL DEFAULT 0 CHECK (max_units_unlimited IN (0, 1)),
+  max_concurrency_unlimited INTEGER NOT NULL DEFAULT 0 CHECK (max_concurrency_unlimited IN (0, 1)),
   used_requests INTEGER NOT NULL DEFAULT 0 CHECK (used_requests >= 0),
   used_units INTEGER NOT NULL DEFAULT 0 CHECK (used_units >= 0),
   reserved_requests INTEGER NOT NULL DEFAULT 0 CHECK (reserved_requests >= 0),

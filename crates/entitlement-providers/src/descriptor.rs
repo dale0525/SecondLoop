@@ -5,6 +5,8 @@ use std::collections::BTreeSet;
 pub const ENTITLEMENT_PROVIDER_DESCRIPTOR_SCHEMA_VERSION: u32 = 1;
 pub const STATIC_ENTITLEMENT_PROVIDER_ID: &str = "agentweave.entitlements.static";
 pub const HTTP_ENTITLEMENT_PROVIDER_ID: &str = "agentweave.entitlements.http";
+pub const CLOUDFLARE_POLICY_ENTITLEMENT_PROVIDER_ID: &str =
+    "agentweave.entitlements.cloudflare_policy";
 pub const STRIPE_PROJECTION_PROVIDER_ID: &str = "agentweave.entitlements.stripe_projection";
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]

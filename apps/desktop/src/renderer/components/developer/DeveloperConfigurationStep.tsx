@@ -17,29 +17,36 @@ import {
 } from "../../developerProjectModel";
 import { useI18n } from "../../i18n/I18nProvider";
 import { ProviderSchemaForm, SensitiveSchemaFields } from "./ProviderSchemaForm";
+import { DeveloperCommerceConfiguration } from "./DeveloperCommerceConfiguration";
 
 const OPENAI_BASE_URL = "https://api.openai.com";
 
 export function DeveloperConfigurationStep({
   configuredSlots,
+  commerceProviders,
   draft,
   entitlementDescriptor,
   gatewayDescriptor,
   identityDescriptor,
   identitySetup,
   onDraft,
+  onProductsConnected,
   onSecret,
   secretValues,
+  productionUnlocked,
 }: {
   configuredSlots: ReadonlySet<string>;
+  commerceProviders: readonly DeveloperProviderDescriptor[];
   draft: ManagedProjectDraft;
   entitlementDescriptor: DeveloperProviderDescriptor;
   gatewayDescriptor: DeveloperProviderDescriptor;
   identityDescriptor: DeveloperProviderDescriptor;
   identitySetup?: ReactNode;
   onDraft: (draft: ManagedProjectDraft) => void;
+  onProductsConnected: () => Promise<void>;
   onSecret: (slot: string, value: string) => void;
   secretValues: Readonly<Record<string, string>>;
+  productionUnlocked: boolean;
 }): JSX.Element {
   const { t } = useI18n();
   const modelPreset = detectModelPreset(draft);
@@ -235,6 +242,16 @@ export function DeveloperConfigurationStep({
         </details>
       </section>
 
+      <DeveloperCommerceConfiguration
+        commerceProviders={commerceProviders}
+        draft={draft}
+        onDraft={onDraft}
+        onProductsConnected={onProductsConnected}
+        onSecret={onSecret}
+        productionUnlocked={productionUnlocked}
+        secretValues={secretValues}
+      />
+
       <section className="release-config-section" aria-labelledby="release-entitlement-title">
         <SectionHeading
           description={t("developer.release.entitlementServiceHint")}
@@ -242,17 +259,25 @@ export function DeveloperConfigurationStep({
           title={t("developer.release.entitlementService")}
           titleId="release-entitlement-title"
         />
-        <ProviderSchemaForm
-          descriptor={entitlementDescriptor}
-          onChange={updateEntitlement}
-          selection={draft.providers.entitlement}
-        />
-        <ProviderSchemaForm
-          advanced
-          descriptor={entitlementDescriptor}
-          onChange={updateEntitlement}
-          selection={draft.providers.entitlement}
-        />
+        {draft.deployment.cloudflare.entitlement.mode === "managed_worker" ? (
+          <div className="release-managed-entitlement">
+            <div><strong>{t("developer.release.managedEntitlementWorker")}</strong><code>{draft.deployment.cloudflare.entitlement.workerName}</code></div>
+            <Badge color="green" variant="soft">{t("developer.release.endpointAutomatic")}</Badge>
+            <Text as="p" color="gray" size="2">{t("developer.release.managedEntitlementHint")}</Text>
+          </div>
+        ) : <>
+          <ProviderSchemaForm
+            descriptor={entitlementDescriptor}
+            onChange={updateEntitlement}
+            selection={draft.providers.entitlement}
+          />
+          <ProviderSchemaForm
+            advanced
+            descriptor={entitlementDescriptor}
+            onChange={updateEntitlement}
+            selection={draft.providers.entitlement}
+          />
+        </>}
       </section>
 
       <section className="release-config-section release-secret-section" aria-labelledby="release-secrets-title">
@@ -276,15 +301,28 @@ export function DeveloperConfigurationStep({
             onChange={onSecret}
             values={secretValues}
           />
-          <SensitiveSchemaFields
-            configured={configuredSlots}
-            fields={entitlementDescriptor.configuration_schema.sensitive_fields.map((field) => ({
-              ...field,
-              id: `entitlement.${field.id}`,
-            }))}
-            onChange={onSecret}
-            values={secretValues}
-          />
+          {draft.deployment.cloudflare.entitlement.mode === "external_service" ? (
+            <SensitiveSchemaFields
+              configured={configuredSlots}
+              fields={entitlementDescriptor.configuration_schema.sensitive_fields.map((field) => ({
+                ...field,
+                id: `entitlement.${field.id}`,
+              }))}
+              onChange={onSecret}
+              values={secretValues}
+            />
+          ) : null}
+          {draft.providers.commerce ? (
+            <SensitiveSchemaFields
+              configured={configuredSlots}
+              fields={(commerceProviders.find((provider) => provider.provider_id === draft.providers.commerce?.id)
+                ?.configuration_schema.sensitive_fields ?? [])
+                .filter((field) => field.id !== "subjectBindingSecret")
+                .map((field) => ({ ...field, id: `commerce.${field.id}` }))}
+              onChange={onSecret}
+              values={secretValues}
+            />
+          ) : null}
         </div>
       </section>
     </section>

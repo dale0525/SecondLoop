@@ -10,6 +10,7 @@ use url::Url;
 pub enum ProviderKind {
     Identity,
     Entitlement,
+    Commerce,
     GatewayDeployment,
 }
 

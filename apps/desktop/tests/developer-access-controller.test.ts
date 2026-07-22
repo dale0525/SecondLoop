@@ -5,9 +5,19 @@ import { createServer } from "node:net";
 import { describe, expect, it, vi } from "vitest";
 
 import { registerDeveloperAccessController } from "../src/main/developerAccessController";
+import { DEVELOPER_ACCESS_OPERATIONS } from "../src/main/developerAccessControllerDefinitions";
 import { DEVELOPER_ACCESS_REQUEST_CHANNEL } from "../src/shared/developerAccess";
 
 describe("developer access controller", () => {
+  it("admits the managed access deployment and Creem discovery operations", () => {
+    expect([...DEVELOPER_ACCESS_OPERATIONS]).toEqual(expect.arrayContaining([
+      "access.plan",
+      "access.apply",
+      "access.test",
+      "commerce.creem.products",
+    ]));
+  });
+
   it("keeps the Cloudflare authorization URL and callback credentials in Main", async () => {
     const port = await freePort();
     const redirectUri = `http://127.0.0.1:${port}/agentweave/cloudflare/callback`;

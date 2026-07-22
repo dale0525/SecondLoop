@@ -504,7 +504,7 @@ impl DeveloperControlPlane {
         })
     }
 
-    fn target(
+    pub(super) fn target(
         &self,
         account_id: String,
         deployment_id: String,
@@ -577,7 +577,7 @@ impl DeveloperControlPlane {
     }
 }
 
-fn ensure_account(
+pub(super) fn ensure_account(
     authorization: &agent_devkit::DeveloperAuthorization,
     account_id: &str,
 ) -> DevkitResult<()> {
@@ -590,7 +590,7 @@ fn ensure_account(
     Ok(())
 }
 
-fn reference_from_target(
+pub(super) fn reference_from_target(
     target: &DeploymentTarget,
     environment: Option<String>,
 ) -> DeploymentReferenceInput {
@@ -602,7 +602,7 @@ fn reference_from_target(
     }
 }
 
-fn observation_from_provider(
+pub(super) fn observation_from_provider(
     observed: ObservedDeploymentState,
     reference: DeploymentReferenceInput,
 ) -> DeploymentObservation {
@@ -628,7 +628,7 @@ fn observation_from_provider(
     }
 }
 
-fn public_fact_string(observed: &ObservedDeploymentState, key: &str) -> Option<String> {
+pub(super) fn public_fact_string(observed: &ObservedDeploymentState, key: &str) -> Option<String> {
     observed
         .resource_facts
         .get(key)
@@ -653,7 +653,7 @@ fn deployment_idempotency_key() -> String {
     format!("agentweave-deployment-{}", Uuid::new_v4())
 }
 
-fn validate_environment(environment: Option<&str>) -> DevkitResult<()> {
+pub(super) fn validate_environment(environment: Option<&str>) -> DevkitResult<()> {
     if environment.is_some_and(|value| {
         value.is_empty()
             || value.len() > 32
@@ -670,7 +670,7 @@ fn validate_environment(environment: Option<&str>) -> DevkitResult<()> {
     Ok(())
 }
 
-fn validate_gateway_configuration(
+pub(super) fn validate_gateway_configuration(
     configuration: &Value,
     target: &DeploymentTarget,
     environment: Option<&str>,

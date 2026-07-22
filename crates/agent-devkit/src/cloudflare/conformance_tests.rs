@@ -649,12 +649,14 @@ async fn planning_performs_reads_only_and_produces_an_integrity_hash() {
     );
     assert!(serde_json::from_str::<SensitiveInputHandle>("\"\"").is_err());
 
-    let resources = super::d1::PreparedD1Resources {
-        database: super::d1::D1Database {
+    let resources = super::managed_worker::PreparedWorkerResources {
+        role: super::managed_worker::ManagedWorkerRole::Gateway,
+        database: Some(super::d1::D1Database {
             id: "d1-database-1".into(),
             name: "example-gateway-entitlements".into(),
-        },
-        migration_hash: super::d1::migration_hash(),
+        }),
+        migration_hash: Some(super::d1::migration_hash()),
+        commerce_enabled: false,
     };
     let (multipart, _) = super::provider_support::worker_multipart(
         &plan,
@@ -679,6 +681,7 @@ async fn timed_out_write_is_inspected_and_never_blindly_retried() {
         d1_missing(),
         d1_missing(),
         d1_created(),
+        d1_query_success(),
         d1_query_success(),
         d1_query_success(),
         d1_query_success(),
