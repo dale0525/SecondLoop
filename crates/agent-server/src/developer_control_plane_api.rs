@@ -3,12 +3,15 @@ use crate::developer_control_plane::DeveloperControlPlane;
 use crate::developer_control_plane_bundle::{
     AccessBundlePlanInput, AccessBundleTestInput, ExpectedResourceVersion,
 };
+use crate::developer_control_plane_commerce_bootstrap::CommerceWebhookBootstrapInput;
 use crate::developer_control_plane_deployment::{
     DeploymentPlanInput, DeploymentReferenceInput, DeploymentSecretInput,
 };
 use crate::developer_control_plane_oauth::CloudflareOAuthClientSelection;
 use crate::developer_firebase::FirebaseOAuthClientSelection;
-use crate::developer_gateway_projection::{GatewayProjectPlanInput, project_gateway_plan};
+use crate::developer_gateway_projection::{
+    GatewayProjectPlanInput, project_commerce_webhook_bootstrap, project_gateway_plan,
+};
 use agent_devkit::{DevkitError, DevkitErrorCode, RemoteMutationRisk};
 use axum::response::{IntoResponse, Response};
 use axum::{
@@ -66,6 +69,10 @@ pub(crate) fn routes() -> Router<Arc<AppState>> {
         .route("/dev/control/access/plan", post(plan_access_bundle))
         .route("/dev/control/access/apply", post(apply_access_bundle))
         .route("/dev/control/access/test", post(test_access_bundle))
+        .route(
+            "/dev/control/commerce/creem/bootstrap",
+            post(bootstrap_commerce_webhook),
+        )
         .route("/dev/control/gateway/apply", post(apply_deployment))
         .route("/dev/control/gateway/inspect", post(inspect_deployment))
         .route("/dev/control/gateway/test", post(test_deployment))
@@ -325,6 +332,43 @@ struct PlanAccessBundleRequest {
     idempotency_key: Option<String>,
     #[serde(default)]
     expected_resources: BTreeMap<String, ExpectedResourceVersion>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct BootstrapCommerceWebhookRequest {
+    project: GatewayProjectPlanInput,
+    #[serde(default)]
+    idempotency_key: Option<String>,
+}
+
+async fn bootstrap_commerce_webhook(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<BootstrapCommerceWebhookRequest>,
+) -> Result<
+    Json<crate::developer_control_plane_commerce_bootstrap::CommerceWebhookBootstrapReceipt>,
+    ControlPlaneApiError,
+> {
+    for provider in [
+        Some(&request.project.providers.entitlement),
+        request.project.providers.commerce.as_ref(),
+        Some(&request.project.providers.gateway),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        bounded_json(&provider.public_config, "provider public configuration")?;
+    }
+    let projection = project_commerce_webhook_bootstrap(&request.project)?;
+    Ok(Json(
+        control_plane(&state)?
+            .bootstrap_commerce_webhook(CommerceWebhookBootstrapInput {
+                target: projection.target,
+                entitlement_config: projection.entitlement_config,
+                idempotency_key: request.idempotency_key,
+            })
+            .await?,
+    ))
 }
 
 impl std::fmt::Debug for PlanAccessBundleRequest {

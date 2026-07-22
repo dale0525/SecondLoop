@@ -56,24 +56,6 @@ export type DeveloperControlStatus = Readonly<{
   pendingAccessBundle: DeveloperPendingAccessBundle | null;
 }>;
 
-export type CreemProduct = Readonly<{
-  id: string;
-  name: string;
-  description: string;
-  environment: "test" | "production";
-  priceMinor: number;
-  currency: string;
-  billingType: string;
-  billingPeriod: string;
-  active: boolean;
-}>;
-
-export type CreemProductDiscovery = Readonly<{
-  environment: "test" | "production";
-  configuredRevision: string;
-  products: readonly CreemProduct[];
-}>;
-
 export type CloudflareAccount = Readonly<{
   accountId: string;
   displayName: string | null;
@@ -266,22 +248,6 @@ export async function applyGateway(planHash: string): Promise<DeveloperDeploymen
 
 export async function verifyGateway(): Promise<DeveloperGatewayTestProjectUpdate> {
   return parseTestUpdate(await request("gateway.test"));
-}
-
-export async function discoverCreemProducts(input: {
-  environment: "test" | "production";
-  apiKey: string;
-}): Promise<CreemProductDiscovery> {
-  return parseCreemProducts(await request("commerce.creem.products", {
-    environment: input.environment,
-    apiKey: input.apiKey,
-    revision: `ui-${crypto.randomUUID()}`,
-  }));
-}
-
-export async function openCreemWebhookDashboard(): Promise<void> {
-  const response = record(await request("commerce.creem.dashboard"));
-  if (response.opened !== true) throw new Error("Creem Dashboard could not be opened");
 }
 
 export async function planAccessBundle(input: {
@@ -484,32 +450,6 @@ function parseControlStatus(value: unknown): DeveloperControlStatus {
           bundle: parseAccessBundleReceipt(record(root.pendingAccessBundle).bundle),
           projectRevision: text(record(root.pendingAccessBundle).projectRevision),
         }),
-  });
-}
-
-function parseCreemProducts(value: unknown): CreemProductDiscovery {
-  const receipt = record(value);
-  if (!Array.isArray(receipt.products)
-    || (receipt.environment !== "test" && receipt.environment !== "production")) {
-    throw new Error("Creem product response is invalid");
-  }
-  return Object.freeze({
-    environment: receipt.environment,
-    configuredRevision: text(receipt.configuredRevision),
-    products: Object.freeze(receipt.products.map((candidate) => {
-      const product = record(candidate);
-      return Object.freeze({
-        id: text(product.id),
-        name: text(product.name),
-        description: typeof product.description === "string" ? product.description : "",
-        environment: product.environment as "test" | "production",
-        priceMinor: integer(product.priceMinor),
-        currency: text(product.currency),
-        billingType: text(product.billingType),
-        billingPeriod: text(product.billingPeriod),
-        active: boolean(product.active),
-      });
-    })),
   });
 }
 

@@ -20,6 +20,7 @@ mod developer_control_plane_bundle;
 mod developer_control_plane_bundle_destroy;
 mod developer_control_plane_bundle_lifecycle;
 mod developer_control_plane_bundle_lifecycle_api;
+mod developer_control_plane_commerce_bootstrap;
 mod developer_control_plane_deployment;
 mod developer_control_plane_oauth;
 mod developer_firebase;

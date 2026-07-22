@@ -1,4 +1,4 @@
-import { Badge, Callout, RadioCards, Select, Text, TextField } from "@radix-ui/themes";
+import { Badge, RadioCards, Select, Text, TextField } from "@radix-ui/themes";
 import {
   Database,
   KeyRound,
@@ -18,11 +18,16 @@ import {
 import { useI18n } from "../../i18n/I18nProvider";
 import { ProviderSchemaForm, SensitiveSchemaFields } from "./ProviderSchemaForm";
 import { DeveloperCommerceConfiguration } from "./DeveloperCommerceConfiguration";
+import type {
+  CreemWebhookBootstrapStatus,
+  CreemWebhookEndpoint,
+} from "./useCreemWebhookBootstrap";
 
 const OPENAI_BASE_URL = "https://api.openai.com";
 
 export function DeveloperConfigurationStep({
   configuredSlots,
+  commerceBootstrap,
   commerceProviders,
   draft,
   entitlementDescriptor,
@@ -36,6 +41,12 @@ export function DeveloperConfigurationStep({
   productionUnlocked,
 }: {
   configuredSlots: ReadonlySet<string>;
+  commerceBootstrap: Readonly<{
+    error: string | null;
+    receipt: CreemWebhookEndpoint | null;
+    retry: () => void;
+    status: CreemWebhookBootstrapStatus;
+  }>;
   commerceProviders: readonly DeveloperProviderDescriptor[];
   draft: ManagedProjectDraft;
   entitlementDescriptor: DeveloperProviderDescriptor;
@@ -225,6 +236,18 @@ export function DeveloperConfigurationStep({
           </label>
         </div>
 
+        <div className="release-inline-sensitive-fields">
+          <SensitiveSchemaFields
+            configured={configuredSlots}
+            fields={gatewayDescriptor.configuration_schema.sensitive_fields.map((field) => ({
+              ...field,
+              id: `gateway.${field.id}`,
+            }))}
+            onChange={onSecret}
+            values={secretValues}
+          />
+        </div>
+
         <details className="release-advanced">
           <summary>{t("developer.release.gatewaySafetyDefaults")}</summary>
           <ProviderSchemaForm
@@ -243,7 +266,9 @@ export function DeveloperConfigurationStep({
       </section>
 
       <DeveloperCommerceConfiguration
+        bootstrap={commerceBootstrap}
         commerceProviders={commerceProviders}
+        configuredSlots={configuredSlots}
         draft={draft}
         onDraft={onDraft}
         onProductsConnected={onProductsConnected}
@@ -277,31 +302,7 @@ export function DeveloperConfigurationStep({
             onChange={updateEntitlement}
             selection={draft.providers.entitlement}
           />
-        </>}
-      </section>
-
-      <section className="release-config-section release-secret-section" aria-labelledby="release-secrets-title">
-        <SectionHeading
-          description={t("developer.release.secretsHint")}
-          icon={<ShieldCheck aria-hidden="true" size={19} />}
-          title={t("developer.release.secrets")}
-          titleId="release-secrets-title"
-        />
-        <Callout.Root color="gray" size="1">
-          <KeyRound aria-hidden="true" />
-          <Callout.Text>{t("developer.release.secretManualReason")}</Callout.Text>
-        </Callout.Root>
-        <div className="release-secret-grid">
-          <SensitiveSchemaFields
-            configured={configuredSlots}
-            fields={gatewayDescriptor.configuration_schema.sensitive_fields.map((field) => ({
-              ...field,
-              id: `gateway.${field.id}`,
-            }))}
-            onChange={onSecret}
-            values={secretValues}
-          />
-          {draft.deployment.cloudflare.entitlement.mode === "external_service" ? (
+          <div className="release-inline-sensitive-fields">
             <SensitiveSchemaFields
               configured={configuredSlots}
               fields={entitlementDescriptor.configuration_schema.sensitive_fields.map((field) => ({
@@ -311,19 +312,8 @@ export function DeveloperConfigurationStep({
               onChange={onSecret}
               values={secretValues}
             />
-          ) : null}
-          {draft.providers.commerce ? (
-            <SensitiveSchemaFields
-              configured={configuredSlots}
-              fields={(commerceProviders.find((provider) => provider.provider_id === draft.providers.commerce?.id)
-                ?.configuration_schema.sensitive_fields ?? [])
-                .filter((field) => field.id !== "subjectBindingSecret")
-                .map((field) => ({ ...field, id: `commerce.${field.id}` }))}
-              onChange={onSecret}
-              values={secretValues}
-            />
-          ) : null}
-        </div>
+          </div>
+        </>}
       </section>
     </section>
   );

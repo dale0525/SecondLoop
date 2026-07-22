@@ -187,6 +187,7 @@ pub(super) fn parse_deployment_facts(value: &Value) -> ParsedDeploymentFacts {
         "entitlement_health_url",
         "commerce_webhook_url",
         "commerce_enabled",
+        "commerce_bootstrap",
         "reconciliation_schedule",
     ] {
         if let Some(value) = annotations.get(key) {
@@ -551,6 +552,11 @@ pub(super) fn worker_multipart(
         "worker_url": worker_url,
         "deployment_id": plan.desired().target().deployment_id.clone(),
         "commerce_enabled": resources.commerce_enabled,
+        "commerce_bootstrap": plan.desired().public_configuration()
+            .get("entitlement_config")
+            .and_then(|value| value.get("setup"))
+            .and_then(|value| value.get("mode"))
+            .and_then(Value::as_str) == Some("commerce_webhook"),
     });
     if let (Some(database), Some(migration_hash)) = (&resources.database, &resources.migration_hash)
     {
