@@ -1,0 +1,20 @@
+---
+interface Props {
+  size?: number;
+}
+
+const { size = 34 } = Astro.props;
+---
+
+<svg
+  class="brand-mark"
+  width={size}
+  height={size}
+  viewBox="0 0 32 32"
+  role="img"
+  aria-label="AgentWeave"
+>
+  <rect width="32" height="32" rx="5" fill="currentColor"></rect>
+  <rect x="5" y="5" width="22" height="22" rx="3" fill="none" stroke="var(--teal)" stroke-width="2"></rect>
+  <path d="M10 19h12M10 13h7" stroke="var(--peach)" stroke-width="2" stroke-linecap="round"></path>
+</svg>

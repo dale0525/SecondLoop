@@ -301,6 +301,7 @@ function validateEntitlements(raw, environment) {
   }
   const projection = object(value.projection, "entitlements.projection");
   onlyKeys(projection, [
+    "schemaVersion",
     "sourceId",
     "url",
     "secretBinding",
@@ -317,6 +318,12 @@ function validateEntitlements(raw, environment) {
     mode,
     policySource: sourceId,
     projection: Object.freeze({
+      schemaVersion: integer(
+        projection.schemaVersion ?? 1,
+        "entitlements.projection.schemaVersion",
+        1,
+        2,
+      ),
       sourceId,
       url: exactUrl(projection.url, "entitlements.projection.url", environment),
       secretBinding: bindingName(

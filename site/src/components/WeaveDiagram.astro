@@ -1,0 +1,26 @@
+---
+interface Props {
+  locale: "en" | "zh";
+}
+
+const { locale } = Astro.props;
+const labels = locale === "zh"
+  ? { app: "你的 Agent App", prompts: "Prompt", skills: "Skills", runtime: "Runtime", hosts: "Hosts", policy: "Policy", providers: "Providers" }
+  : { app: "Your Agent App", prompts: "Prompts", skills: "Skills", runtime: "Runtime", hosts: "Hosts", policy: "Policy", providers: "Providers" };
+---
+
+<div class="weave-diagram" role="img" aria-label={locale === "zh" ? "AgentWeave 架构关系图" : "AgentWeave architecture map"}>
+  <div class="weave-diagram__grid" aria-hidden="true"></div>
+  <span class="weave-thread weave-thread--a" aria-hidden="true"></span>
+  <span class="weave-thread weave-thread--b" aria-hidden="true"></span>
+  <span class="weave-thread weave-thread--c" aria-hidden="true"></span>
+  <div class="weave-node weave-node--app"><small>01</small><strong>{labels.app}</strong></div>
+  <div class="weave-node weave-node--prompts"><small>02</small><span>{labels.prompts}</span></div>
+  <div class="weave-node weave-node--skills"><small>03</small><span>{labels.skills}</span></div>
+  <div class="weave-node weave-node--runtime"><small>CORE</small><strong>{labels.runtime}</strong></div>
+  <div class="weave-node weave-node--hosts"><small>04</small><span>{labels.hosts}</span></div>
+  <div class="weave-node weave-node--policy"><small>05</small><span>{labels.policy}</span></div>
+  <div class="weave-node weave-node--providers"><small>06</small><span>{labels.providers}</span></div>
+  <span class="weave-pulse weave-pulse--one" aria-hidden="true"></span>
+  <span class="weave-pulse weave-pulse--two" aria-hidden="true"></span>
+</div>

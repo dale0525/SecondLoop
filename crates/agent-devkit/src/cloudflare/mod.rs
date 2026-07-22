@@ -5,8 +5,10 @@
 
 mod accounts;
 mod client;
+mod commerce_d1;
 mod configuration;
 mod d1;
+mod managed_worker;
 mod oauth;
 mod provider;
 mod provider_support;

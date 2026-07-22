@@ -1,5 +1,6 @@
 use crate::{
-    GATEWAY_POLICY_PROJECTION_CAPABILITY, HTTP_ENTITLEMENT_PROVIDER_ID,
+    CLOUDFLARE_POLICY_ENTITLEMENT_PROVIDER_ID, GATEWAY_POLICY_PROJECTION_CAPABILITY,
+    GATEWAY_POLICY_PROJECTION_V2_CAPABILITY, HTTP_ENTITLEMENT_PROVIDER_ID,
     STATIC_ENTITLEMENT_PROVIDER_ID, STRIPE_PROJECTION_PROVIDER_ID,
 };
 use agent_devkit::{
@@ -12,7 +13,38 @@ use std::collections::BTreeSet;
 use url::Url;
 
 pub fn entitlement_provider_descriptors() -> Vec<ProviderDescriptor> {
-    vec![static_descriptor(), http_descriptor(), stripe_descriptor()]
+    vec![
+        static_descriptor(),
+        http_descriptor(),
+        cloudflare_policy_descriptor(),
+        stripe_descriptor(),
+    ]
+}
+
+fn cloudflare_policy_descriptor() -> ProviderDescriptor {
+    let mut descriptor = base_descriptor(
+        CLOUDFLARE_POLICY_ENTITLEMENT_PROVIDER_ID,
+        "Cloudflare managed entitlement policy",
+        "Projects signed entitlement policy from a separately deployed managed Worker.",
+    );
+    descriptor.capabilities = BTreeSet::from([
+        "remote".into(),
+        GATEWAY_POLICY_PROJECTION_CAPABILITY.into(),
+        GATEWAY_POLICY_PROJECTION_V2_CAPABILITY.into(),
+    ]);
+    descriptor.configuration_schema.public_fields = vec![ConfigFieldDescriptor {
+        field_type: ConfigFieldType::HttpsUrl,
+        required: true,
+        ..string_field(
+            "baseUrl",
+            "Managed policy URL",
+            "Automatically resolved from the verified Cloudflare entitlement Worker.",
+        )
+    }];
+    descriptor.configuration_schema.sensitive_fields = Vec::new();
+    descriptor.risk_notice = "The managed policy Worker fails closed. Its signing secret is generated and stored only by the trusted Host and Cloudflare Workers."
+        .into();
+    descriptor
 }
 
 fn base_descriptor(provider_id: &str, display_name: &str, description: &str) -> ProviderDescriptor {
@@ -192,7 +224,7 @@ mod tests {
     fn all_entitlement_plugins_use_the_common_descriptor_contract() {
         let descriptors = entitlement_provider_descriptors();
 
-        assert_eq!(descriptors.len(), 3);
+        assert_eq!(descriptors.len(), 4);
         for descriptor in descriptors {
             descriptor.validate().unwrap();
             assert_eq!(descriptor.kind, ProviderKind::Entitlement);

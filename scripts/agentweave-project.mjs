@@ -7,8 +7,8 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 
-export const AGENTWEAVE_PROJECT_SCHEMA_VERSION = 1;
-export const DEPLOYMENT_LOCK_SCHEMA_VERSION = 1;
+export const AGENTWEAVE_PROJECT_SCHEMA_VERSION = 2;
+export const DEPLOYMENT_LOCK_SCHEMA_VERSION = 2;
 export const RUNTIME_PROVIDER_MANIFEST_SCHEMA_VERSION = 2;
 export const AGENTWEAVE_PROJECT_FILE = "agentweave-project.json";
 export const DEPLOYMENT_LOCK_RELATIVE_PATH = ".agentweave/deployment.lock";
@@ -97,6 +97,13 @@ function requireSchemaVersion(value, supported, label) {
   requireInteger(value, label);
   if (value > supported) fail(`${label} ${value} is newer than supported version ${supported}`);
   if (value !== supported) fail(`${label} ${value} is unsupported; expected ${supported}`);
+}
+
+function requireCompatibleSchemaVersion(value, supported, label) {
+  requireInteger(value, label);
+  if (value > supported) fail(`${label} ${value} is newer than supported version ${supported}`);
+  if (value < 1) fail(`${label} ${value} is unsupported`);
+  return value;
 }
 
 function requireSemver(value, label) {
@@ -367,26 +374,142 @@ export function runtimeProviderProjection(app, label = "agent app manifest") {
   return cloneJson(validateRuntimeProviderProjection(app, label));
 }
 
-function validateCloudflareDesiredState(value, label) {
+function validatePlanLimits(value, label) {
+  const limits = requireObject(value, label);
+  requireOnlyKeys(limits, ["maxRequests", "maxUnits", "maxConcurrency"], label);
+  requireFields(limits, ["maxRequests", "maxUnits", "maxConcurrency"], label);
+  for (const field of ["maxRequests", "maxUnits", "maxConcurrency"]) {
+    requireInteger(limits[field], `${label}.${field}`);
+    if (limits[field] < 0 || !Number.isSafeInteger(limits[field])) {
+      fail(`${label}.${field} must be a non-negative safe integer; 0 means plan-level unlimited`);
+    }
+    if (field === "maxConcurrency" && limits[field] > 1000) {
+      fail(`${label}.${field} must not exceed the gateway system ceiling`);
+    }
+  }
+}
+
+function validatePolicyPlan(value, label, { productRequired }) {
+  const plan = requireObject(value, label);
+  const keys = ["id", "displayName", "enabled", "allowedModels", "limits"];
+  if (productRequired) keys.push("productId");
+  requireOnlyKeys(plan, keys, label);
+  requireFields(plan, productRequired ? keys : ["id", "displayName", "allowedModels", "limits"], label);
+  requirePluginId(plan.id, `${label}.id`);
+  requireString(plan.displayName, `${label}.displayName`, { maxBytes: 256 });
+  if (plan.enabled !== undefined && typeof plan.enabled !== "boolean") {
+    fail(`${label}.enabled must be a boolean`);
+  }
+  if (productRequired) {
+    requireString(plan.productId, `${label}.productId`, { maxBytes: 256 });
+    if (!/^prod_[A-Za-z0-9_]+$/.test(plan.productId)) fail(`${label}.productId is invalid`);
+  }
+  if (!Array.isArray(plan.allowedModels) || plan.allowedModels.length === 0 || plan.allowedModels.length > 128) {
+    fail(`${label}.allowedModels must be a non-empty bounded array`);
+  }
+  plan.allowedModels.forEach((model, index) => {
+    requireString(model, `${label}.allowedModels[${index}]`, { maxBytes: 256 });
+  });
+  if (new Set(plan.allowedModels).size !== plan.allowedModels.length) {
+    fail(`${label}.allowedModels must not contain duplicates`);
+  }
+  validatePlanLimits(plan.limits, `${label}.limits`);
+}
+
+function validateManagedEntitlement(value, label) {
+  const entitlement = requireObject(value, label);
+  requireOnlyKeys(entitlement, ["mode", "workerName", "policy"], label);
+  requireFields(entitlement, ["mode"], label);
+  if (!["managed_worker", "external_service"].includes(entitlement.mode)) {
+    fail(`${label}.mode is unsupported`);
+  }
+  if (entitlement.mode === "external_service") {
+    if (entitlement.workerName !== undefined || entitlement.policy !== undefined) {
+      fail(`${label} external_service mode cannot declare managed Worker state`);
+    }
+    return entitlement;
+  }
+  requireFields(entitlement, ["workerName", "policy"], label);
+  requireString(entitlement.workerName, `${label}.workerName`, { maxBytes: 63 });
+  if (!WORKER_NAME_PATTERN.test(entitlement.workerName)) {
+    fail(`${label}.workerName must be a lowercase Worker name`);
+  }
+  const policy = requireObject(entitlement.policy, `${label}.policy`);
+  requireOnlyKeys(policy, ["sourceMode", "tenantLimits", "uniformPlan", "productPlans"], `${label}.policy`);
+  requireFields(policy, ["sourceMode", "tenantLimits"], `${label}.policy`);
+  if (!["uniform_bounded", "commerce_provider"].includes(policy.sourceMode)) {
+    fail(`${label}.policy.sourceMode is unsupported`);
+  }
+  const tenantLimits = requireObject(policy.tenantLimits, `${label}.policy.tenantLimits`);
+  requireOnlyKeys(tenantLimits, ["maxRequests", "maxUnits"], `${label}.policy.tenantLimits`);
+  requireFields(tenantLimits, ["maxRequests", "maxUnits"], `${label}.policy.tenantLimits`);
+  for (const field of ["maxRequests", "maxUnits"]) {
+    requireInteger(tenantLimits[field], `${label}.policy.tenantLimits.${field}`);
+    if (tenantLimits[field] < 0 || !Number.isSafeInteger(tenantLimits[field])) {
+      fail(`${label}.policy.tenantLimits.${field} must be a non-negative safe integer`);
+    }
+  }
+  if (policy.sourceMode === "uniform_bounded") {
+    if (policy.productPlans !== undefined) fail(`${label}.policy.productPlans requires commerce_provider`);
+    validatePolicyPlan(policy.uniformPlan, `${label}.policy.uniformPlan`, { productRequired: false });
+  } else {
+    if (policy.uniformPlan !== undefined) fail(`${label}.policy.uniformPlan requires uniform_bounded`);
+    if (!Array.isArray(policy.productPlans) || policy.productPlans.length === 0 || policy.productPlans.length > 256) {
+      fail(`${label}.policy.productPlans must contain configured subscription products`);
+    }
+    policy.productPlans.forEach((plan, index) => {
+      validatePolicyPlan(plan, `${label}.policy.productPlans[${index}]`, { productRequired: true });
+    });
+    const enabled = policy.productPlans.filter((plan) => plan.enabled !== false);
+    if (enabled.length === 0) fail(`${label}.policy.productPlans must enable at least one product`);
+    if (new Set(policy.productPlans.map((plan) => plan.productId)).size !== policy.productPlans.length
+      || new Set(policy.productPlans.map((plan) => plan.id)).size !== policy.productPlans.length) {
+      fail(`${label}.policy.productPlans must use unique product and plan identifiers`);
+    }
+  }
+  return entitlement;
+}
+
+function validateCloudflareDesiredState(value, label, schemaVersion = AGENTWEAVE_PROJECT_SCHEMA_VERSION) {
   const deployment = requireObject(value, label);
   requireOnlyKeys(deployment, ["provider", "cloudflare"], label);
   requireFields(deployment, ["provider", "cloudflare"], label);
   if (deployment.provider !== "cloudflare") fail(`${label}.provider must be 'cloudflare'`);
   const cloudflare = requireObject(deployment.cloudflare, `${label}.cloudflare`);
-  requireOnlyKeys(cloudflare, ["accountId", "workerName", "environment"], `${label}.cloudflare`);
-  requireFields(cloudflare, ["accountId", "workerName"], `${label}.cloudflare`);
+  const workerField = schemaVersion === 1 ? "workerName" : "gatewayWorkerName";
+  requireOnlyKeys(
+    cloudflare,
+    schemaVersion === 1
+      ? ["accountId", "workerName", "environment"]
+      : ["accountId", "gatewayWorkerName", "environment", "entitlement"],
+    `${label}.cloudflare`,
+  );
+  requireFields(
+    cloudflare,
+    schemaVersion === 1 ? ["accountId", "workerName"] : ["accountId", "gatewayWorkerName", "entitlement"],
+    `${label}.cloudflare`,
+  );
   requireString(cloudflare.accountId, `${label}.cloudflare.accountId`, { maxBytes: 32 });
   if (!/^[0-9a-fA-F]{32}$/.test(cloudflare.accountId)) {
     fail(`${label}.cloudflare.accountId must be a 32-character Cloudflare account ID`);
   }
-  requireString(cloudflare.workerName, `${label}.cloudflare.workerName`, { maxBytes: 63 });
-  if (!WORKER_NAME_PATTERN.test(cloudflare.workerName)) {
-    fail(`${label}.cloudflare.workerName must be a lowercase Worker name`);
+  requireString(cloudflare[workerField], `${label}.cloudflare.${workerField}`, { maxBytes: 63 });
+  if (!WORKER_NAME_PATTERN.test(cloudflare[workerField])) {
+    fail(`${label}.cloudflare.${workerField} must be a lowercase Worker name`);
   }
   if (cloudflare.environment !== undefined) {
     requireString(cloudflare.environment, `${label}.cloudflare.environment`, { maxBytes: 32 });
     if (!ENVIRONMENT_PATTERN.test(cloudflare.environment)) {
       fail(`${label}.cloudflare.environment must be a lowercase environment name`);
+    }
+  }
+  if (schemaVersion === 2) {
+    validateManagedEntitlement(cloudflare.entitlement, `${label}.cloudflare.entitlement`);
+    if (
+      cloudflare.entitlement.mode === "managed_worker"
+      && cloudflare.entitlement.workerName === cloudflare.gatewayWorkerName
+    ) {
+      fail(`${label}.cloudflare entitlement and gateway Worker names must differ`);
     }
   }
   return deployment;
@@ -409,22 +532,39 @@ export function validateAgentWeaveProjectData(project, label = AGENTWEAVE_PROJEC
   const document = requireObject(project, label);
   requireOnlyKeys(document, ["schemaVersion", "providers", "modelAccess", "deployment"], label);
   requireFields(document, ["schemaVersion", "providers", "modelAccess", "deployment"], label);
-  requireSchemaVersion(document.schemaVersion, AGENTWEAVE_PROJECT_SCHEMA_VERSION, `${label}.schemaVersion`);
+  const schemaVersion = requireCompatibleSchemaVersion(
+    document.schemaVersion,
+    AGENTWEAVE_PROJECT_SCHEMA_VERSION,
+    `${label}.schemaVersion`,
+  );
   rejectNonPublicConfig(document, label);
   const providers = requireObject(document.providers, `${label}.providers`);
-  requireOnlyKeys(providers, ["identity", "entitlement", "gateway"], `${label}.providers`);
-  requireFields(providers, ["identity", "entitlement", "gateway"], `${label}.providers`);
-  for (const kind of ["identity", "entitlement", "gateway"]) {
+  const providerKinds = schemaVersion === 1
+    ? ["identity", "entitlement", "gateway"]
+    : ["identity", "entitlement", "commerce", "gateway"];
+  requireOnlyKeys(providers, providerKinds, `${label}.providers`);
+  requireFields(providers, providerKinds, `${label}.providers`);
+  for (const kind of providerKinds) {
     validateOptionalProviderSelection(providers[kind], `${label}.providers.${kind}`);
   }
   validateModelAccess(document.modelAccess, `${label}.modelAccess`);
-  if (document.deployment !== null) validateCloudflareDesiredState(document.deployment, `${label}.deployment`);
+  if (document.deployment !== null) {
+    validateCloudflareDesiredState(document.deployment, `${label}.deployment`, schemaVersion);
+  }
   if (document.modelAccess.configurationPolicy === "user_configurable") {
     if (providers.gateway !== null || document.deployment !== null) {
       fail(`${label} must not select a gateway or deployment in user_configurable mode`);
     }
   } else if (providers.gateway === null || document.deployment === null) {
     fail(`${label} must select a gateway and deployment in app_managed mode`);
+  }
+  if (schemaVersion === 2 && document.deployment !== null) {
+    const entitlement = document.deployment.cloudflare.entitlement;
+    const commerceMode = entitlement.mode === "managed_worker"
+      && entitlement.policy.sourceMode === "commerce_provider";
+    if (commerceMode !== (providers.commerce !== null)) {
+      fail(`${label}.providers.commerce must match the managed entitlement policy source`);
+    }
   }
   const projection = {
     modelAccess: document.modelAccess,
@@ -499,6 +639,7 @@ function validateCloudflareReference(value, label) {
       },
     },
     `${label} desired reference`,
+    1,
   );
   requireString(reference.versionId, `${label}.versionId`, { maxBytes: 128 });
   requireString(reference.deploymentId, `${label}.deploymentId`, { maxBytes: 128 });
@@ -506,9 +647,249 @@ function validateCloudflareReference(value, label) {
   return reference;
 }
 
+function validateLockedProvider(value, label) {
+  const provider = requireObject(value, label);
+  requireOnlyKeys(provider, ["id", "version", "publicConfigHash"], label);
+  requireFields(provider, ["id", "version", "publicConfigHash"], label);
+  requirePluginId(provider.id, `${label}.id`);
+  requireSemver(provider.version, `${label}.version`);
+  requireHash(provider.publicConfigHash, `${label}.publicConfigHash`);
+  return provider;
+}
+
+function validateCommerceProjection(value, label) {
+  if (value === null) return null;
+  const projection = requireObject(value, label);
+  requireOnlyKeys(
+    projection,
+    [
+      "providerId", "providerVersion", "environment", "databaseId", "migrationHash",
+      "capabilities", "portalVerifiedAtUnixMs", "webhookVerifiedAtUnixMs",
+    ],
+    label,
+  );
+  requireFields(
+    projection,
+    [
+      "providerId", "providerVersion", "environment", "databaseId", "migrationHash",
+      "capabilities", "portalVerifiedAtUnixMs", "webhookVerifiedAtUnixMs",
+    ],
+    label,
+  );
+  requirePluginId(projection.providerId, `${label}.providerId`);
+  requireSemver(projection.providerVersion, `${label}.providerVersion`);
+  if (!["test", "production"].includes(projection.environment)) {
+    fail(`${label}.environment is unsupported`);
+  }
+  requireString(projection.databaseId, `${label}.databaseId`, { maxBytes: 128 });
+  requireHash(projection.migrationHash, `${label}.migrationHash`);
+  if (!Array.isArray(projection.capabilities) || projection.capabilities.length === 0) {
+    fail(`${label}.capabilities must be a non-empty array`);
+  }
+  projection.capabilities.forEach((capability, index) => {
+    requirePluginId(capability, `${label}.capabilities[${index}]`);
+  });
+  const required = [
+    "checkout_session_v1",
+    "customer_portal_v1",
+    "product_discovery_v1",
+    "signed_webhook_v1",
+    "subscription_reconciliation_v1",
+    "test_environment_v1",
+  ];
+  for (const capability of required) {
+    if (!projection.capabilities.includes(capability)) {
+      fail(`${label}.capabilities is missing ${capability}`);
+    }
+  }
+  for (const field of ["portalVerifiedAtUnixMs", "webhookVerifiedAtUnixMs"]) {
+    requireInteger(projection[field], `${label}.${field}`);
+    if (projection[field] <= 0) fail(`${label}.${field} must record a successful verification`);
+  }
+  return projection;
+}
+
+function validateDeploymentBundleLockV2(document, { project, app }, label) {
+  requireOnlyKeys(
+    document,
+    ["schemaVersion", "desiredHash", "runtimeProjectionHash", "providers", "bundle"],
+    label,
+  );
+  requireFields(
+    document,
+    ["schemaVersion", "desiredHash", "runtimeProjectionHash", "providers", "bundle"],
+    label,
+  );
+  rejectNonPublicConfig(document, label);
+  requireHash(document.desiredHash, `${label}.desiredHash`);
+  requireHash(document.runtimeProjectionHash, `${label}.runtimeProjectionHash`);
+  const providers = requireObject(document.providers, `${label}.providers`);
+  requireOnlyKeys(providers, ["gateway", "entitlement", "commerce"], `${label}.providers`);
+  requireFields(providers, ["gateway", "entitlement", "commerce"], `${label}.providers`);
+  const gateway = validateLockedProvider(providers.gateway, `${label}.providers.gateway`);
+  const entitlement = validateLockedProvider(
+    providers.entitlement,
+    `${label}.providers.entitlement`,
+  );
+  const commerce = providers.commerce === null
+    ? null
+    : validateLockedProvider(providers.commerce, `${label}.providers.commerce`);
+  const bundle = requireObject(document.bundle, `${label}.bundle`);
+  requireOnlyKeys(bundle, ["provider", "bundleRevision", "rollbackTarget", "bindings", "resources", "verification"], `${label}.bundle`);
+  requireFields(bundle, ["provider", "bundleRevision", "rollbackTarget", "bindings", "resources", "verification"], `${label}.bundle`);
+  if (bundle.provider !== "cloudflare") fail(`${label}.bundle.provider must be 'cloudflare'`);
+  requireHash(bundle.bundleRevision, `${label}.bundle.bundleRevision`);
+  if (bundle.rollbackTarget !== null) {
+    const rollbackTarget = requireObject(bundle.rollbackTarget, `${label}.bundle.rollbackTarget`);
+    requireOnlyKeys(
+      rollbackTarget,
+      ["gatewayVersionId", "entitlementVersionId"],
+      `${label}.bundle.rollbackTarget`,
+    );
+    requireFields(
+      rollbackTarget,
+      ["gatewayVersionId", "entitlementVersionId"],
+      `${label}.bundle.rollbackTarget`,
+    );
+    requireString(rollbackTarget.gatewayVersionId, `${label}.bundle.rollbackTarget.gatewayVersionId`, { maxBytes: 256 });
+    requireString(rollbackTarget.entitlementVersionId, `${label}.bundle.rollbackTarget.entitlementVersionId`, { maxBytes: 256 });
+  }
+  const bindings = requireObject(bundle.bindings, `${label}.bundle.bindings`);
+  requireOnlyKeys(bindings, ["entitlementProjection"], `${label}.bundle.bindings`);
+  requireFields(bindings, ["entitlementProjection"], `${label}.bundle.bindings`);
+  const projectionBinding = requireObject(
+    bindings.entitlementProjection,
+    `${label}.bundle.bindings.entitlementProjection`,
+  );
+  requireOnlyKeys(
+    projectionBinding,
+    ["configured", "revision"],
+    `${label}.bundle.bindings.entitlementProjection`,
+  );
+  requireFields(
+    projectionBinding,
+    ["configured", "revision"],
+    `${label}.bundle.bindings.entitlementProjection`,
+  );
+  if (projectionBinding.configured !== true) {
+    fail(`${label}.bundle.bindings.entitlementProjection must be configured`);
+  }
+  requireString(
+    projectionBinding.revision,
+    `${label}.bundle.bindings.entitlementProjection.revision`,
+    { maxBytes: 256 },
+  );
+  const resources = requireObject(bundle.resources, `${label}.bundle.resources`);
+  requireOnlyKeys(resources, ["gateway", "entitlementPolicy", "commerceProjection"], `${label}.bundle.resources`);
+  requireFields(resources, ["gateway", "entitlementPolicy", "commerceProjection"], `${label}.bundle.resources`);
+  const gatewayReference = validateCloudflareReference(
+    resources.gateway,
+    `${label}.bundle.resources.gateway`,
+  );
+  const entitlementReference = validateCloudflareReference(
+    resources.entitlementPolicy,
+    `${label}.bundle.resources.entitlementPolicy`,
+  );
+  const commerceProjection = validateCommerceProjection(
+    resources.commerceProjection,
+    `${label}.bundle.resources.commerceProjection`,
+  );
+  if (
+    gatewayReference.accountId !== entitlementReference.accountId
+    || gatewayReference.deploymentId !== entitlementReference.deploymentId
+    || gatewayReference.workerName === entitlementReference.workerName
+  ) {
+    fail(`${label}.bundle Worker references do not form one access deployment`);
+  }
+  const verification = requireObject(bundle.verification, `${label}.bundle.verification`);
+  requireOnlyKeys(
+    verification,
+    ["protocolVersion", "testedAtUnixMs", "hostCapabilities", "userEntrypoints"],
+    `${label}.bundle.verification`,
+  );
+  requireFields(
+    verification,
+    ["protocolVersion", "testedAtUnixMs", "hostCapabilities", "userEntrypoints"],
+    `${label}.bundle.verification`,
+  );
+  requireString(verification.protocolVersion, `${label}.bundle.verification.protocolVersion`, { maxBytes: 32 });
+  requireInteger(verification.testedAtUnixMs, `${label}.bundle.verification.testedAtUnixMs`);
+  if (verification.testedAtUnixMs <= 0) fail(`${label}.bundle.verification must be complete`);
+  for (const field of ["hostCapabilities", "userEntrypoints"]) {
+    if (!Array.isArray(verification[field]) || verification[field].length > 32) {
+      fail(`${label}.bundle.verification.${field} must be a bounded array`);
+    }
+    verification[field].forEach((entry, index) => {
+      requirePluginId(entry, `${label}.bundle.verification.${field}[${index}]`);
+    });
+  }
+  if (commerceProjection !== null) {
+    for (const capability of ["commerce_checkout_v1", "commerce_customer_portal_v1"]) {
+      if (!verification.hostCapabilities.includes(capability)) {
+        fail(`${label}.bundle.verification.hostCapabilities is missing ${capability}`);
+      }
+    }
+    if (!verification.userEntrypoints.includes("settings.billing")) {
+      fail(`${label}.bundle.verification.userEntrypoints is missing settings.billing`);
+    }
+  }
+  if (project !== undefined) {
+    const desired = validateAgentWeaveProjectData(project);
+    if (desired.schemaVersion !== 2 || desired.providers.gateway === null || desired.deployment === null) {
+      fail(`${label} v2 requires an app-managed project schemaVersion 2 desired state`);
+    }
+    if (document.desiredHash !== hashPublicValue(desired)) fail(`${label}.desiredHash is stale`);
+    for (const [locked, selected, field] of [
+      [gateway, desired.providers.gateway, "gateway"],
+      [entitlement, desired.providers.entitlement, "entitlement"],
+      [commerce, desired.providers.commerce, "commerce"],
+    ]) {
+      if ((locked === null) !== (selected === null)) fail(`${label}.providers.${field} selection is stale`);
+      if (locked !== null && (
+        locked.id !== selected.id
+        || locked.version !== selected.version
+        || locked.publicConfigHash !== hashPublicValue(selected.publicConfig)
+      )) {
+        fail(`${label}.providers.${field} does not match agentweave-project.json`);
+      }
+    }
+    const desiredCloudflare = desired.deployment.cloudflare;
+    if (
+      gatewayReference.accountId !== desiredCloudflare.accountId
+      || gatewayReference.workerName !== desiredCloudflare.gatewayWorkerName
+      || gatewayReference.environment !== desiredCloudflare.environment
+      || entitlementReference.workerName !== desiredCloudflare.entitlement.workerName
+    ) {
+      fail(`${label}.bundle references do not match desired Cloudflare resources`);
+    }
+    if ((commerceProjection !== null) !== (desired.providers.commerce !== null)) {
+      fail(`${label}.bundle Commerce projection does not match desired policy source`);
+    }
+  }
+  if (app !== undefined) {
+    const projection = runtimeProviderProjection(app);
+    if (document.runtimeProjectionHash !== hashPublicValue(projection)) {
+      fail(`${label}.runtimeProjectionHash is stale`);
+    }
+    if (app.schemaVersion === 2 && app.modelAccess?.profile?.baseUrl !== gatewayReference.endpoint) {
+      fail(`${label}.bundle gateway endpoint does not match agent-app.json model baseUrl`);
+    }
+  }
+  if (project !== undefined && app !== undefined) validateProjectMatchesRuntime(project, app);
+  return document;
+}
+
 export function validateDeploymentLockData(lock, { project, app } = {}) {
   const label = DEPLOYMENT_LOCK_RELATIVE_PATH;
   const document = requireObject(lock, label);
+  const schemaVersion = requireCompatibleSchemaVersion(
+    document.schemaVersion,
+    DEPLOYMENT_LOCK_SCHEMA_VERSION,
+    `${label}.schemaVersion`,
+  );
+  if (schemaVersion === 2) {
+    return validateDeploymentBundleLockV2(document, { project, app }, label);
+  }
   requireOnlyKeys(
     document,
     ["schemaVersion", "desiredHash", "runtimeProjectionHash", "gateway", "deployment"],
@@ -519,7 +900,6 @@ export function validateDeploymentLockData(lock, { project, app } = {}) {
     ["schemaVersion", "desiredHash", "runtimeProjectionHash", "gateway", "deployment"],
     label,
   );
-  requireSchemaVersion(document.schemaVersion, DEPLOYMENT_LOCK_SCHEMA_VERSION, `${label}.schemaVersion`);
   rejectNonPublicConfig(document, label);
   requireHash(document.desiredHash, `${label}.desiredHash`);
   requireHash(document.runtimeProjectionHash, `${label}.runtimeProjectionHash`);

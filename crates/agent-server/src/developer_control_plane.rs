@@ -3,8 +3,8 @@ use agent_devkit::cloudflare::{
     CLOUDFLARE_PROVIDER_ID, CloudflareGatewayProvider, ReqwestCloudflareTransport,
 };
 use agent_devkit::{
-    DeploymentPlan, DestroyPlan, DeveloperAuthorization, DevkitError, DevkitErrorCode,
-    DevkitResult, GatewayDeploymentProvider, MutationControl, OperationLease,
+    DeploymentBundlePlan, DeploymentPlan, DestroyPlan, DeveloperAuthorization, DevkitError,
+    DevkitErrorCode, DevkitResult, GatewayDeploymentProvider, MutationControl, OperationLease,
     ProviderConfiguration, SensitiveInputHandle, SensitiveInputResolver, SensitiveInputStore,
     SensitiveValue,
 };
@@ -47,7 +47,29 @@ pub struct GatewayTemplateArtifact {
 
 impl GatewayTemplateArtifact {
     pub async fn from_environment() -> anyhow::Result<Option<Self>> {
-        let Some(path) = std::env::var_os("AGENTWEAVE_CLOUDFLARE_GATEWAY_ARTIFACT") else {
+        Self::from_environment_variables(
+            "AGENTWEAVE_CLOUDFLARE_GATEWAY_ARTIFACT",
+            "AGENTWEAVE_CLOUDFLARE_GATEWAY_TEMPLATE_VERSION",
+            "0.3.0",
+        )
+        .await
+    }
+
+    pub async fn from_entitlement_environment() -> anyhow::Result<Option<Self>> {
+        Self::from_environment_variables(
+            "AGENTWEAVE_CLOUDFLARE_ENTITLEMENT_ARTIFACT",
+            "AGENTWEAVE_CLOUDFLARE_ENTITLEMENT_TEMPLATE_VERSION",
+            "0.1.0",
+        )
+        .await
+    }
+
+    async fn from_environment_variables(
+        artifact_variable: &str,
+        version_variable: &str,
+        default_version: &str,
+    ) -> anyhow::Result<Option<Self>> {
+        let Some(path) = std::env::var_os(artifact_variable) else {
             return Ok(None);
         };
         let path = PathBuf::from(path);
@@ -65,8 +87,7 @@ impl GatewayTemplateArtifact {
             "Cloudflare gateway artifact size is invalid"
         );
         let bytes = tokio::fs::read(path).await?;
-        let version = std::env::var("AGENTWEAVE_CLOUDFLARE_GATEWAY_TEMPLATE_VERSION")
-            .unwrap_or_else(|_| "0.3.0".into());
+        let version = std::env::var(version_variable).unwrap_or_else(|_| default_version.into());
         Self::new(version, bytes).map(Some)
     }
 
@@ -187,6 +208,7 @@ pub struct DeveloperControlPlane {
     pub(super) app_id: String,
     pub(super) oauth_defaults: CloudflareOAuthDefaults,
     pub(super) gateway_template: Option<GatewayTemplateArtifact>,
+    pub(super) entitlement_template: Option<GatewayTemplateArtifact>,
     pub(super) pending_authorization: Mutex<Option<PendingAuthorization>>,
     pub(super) cached_plans: Mutex<BTreeMap<String, CachedPlan>>,
     pub(super) mutation: Mutex<()>,
@@ -211,7 +233,9 @@ pub(super) struct PendingAuthorization {
 #[derive(Clone)]
 pub(super) enum CachedPlan {
     Deployment(Box<CachedDeploymentPlan>),
+    Bundle(Box<CachedBundlePlan>),
     Destroy(Box<CachedDestroyPlan>),
+    AccessBundleDestroy(Box<CachedAccessBundleDestroyPlan>),
 }
 
 #[derive(Clone)]
@@ -222,8 +246,24 @@ pub(super) struct CachedDeploymentPlan {
 }
 
 #[derive(Clone)]
+pub(super) struct CachedBundlePlan {
+    pub plan: DeploymentBundlePlan,
+    pub environment: Option<String>,
+    pub expires_at_unix_ms: u64,
+}
+
+#[derive(Clone)]
 pub(super) struct CachedDestroyPlan {
     pub plan: DestroyPlan,
+    pub expires_at_unix_ms: u64,
+}
+
+#[derive(Clone)]
+pub(super) struct CachedAccessBundleDestroyPlan {
+    pub gateway: DestroyPlan,
+    pub entitlement: DestroyPlan,
+    pub commerce_confirmation: bool,
+    pub parent_control: MutationControl,
     pub expires_at_unix_ms: u64,
 }
 
@@ -254,7 +294,8 @@ impl DeveloperControlPlane {
             Arc::clone(&sensitive),
         )?);
         let gateway_template = GatewayTemplateArtifact::from_environment().await?;
-        let mut control = Self::new(
+        let entitlement_template = GatewayTemplateArtifact::from_entitlement_environment().await?;
+        let mut control = Self::new_with_templates(
             pool,
             sensitive,
             provider,
@@ -262,6 +303,7 @@ impl DeveloperControlPlane {
             app_id.to_owned(),
             oauth_defaults,
             gateway_template,
+            entitlement_template,
         )
         .await?;
         control.firebase_oauth_defaults =
@@ -269,6 +311,7 @@ impl DeveloperControlPlane {
         Ok(control)
     }
 
+    #[allow(dead_code)]
     pub(crate) async fn new(
         pool: SqlitePool,
         sensitive: Arc<DeveloperSensitiveStore>,
@@ -277,6 +320,30 @@ impl DeveloperControlPlane {
         app_id: String,
         oauth_defaults: CloudflareOAuthDefaults,
         gateway_template: Option<GatewayTemplateArtifact>,
+    ) -> anyhow::Result<Self> {
+        Self::new_with_templates(
+            pool,
+            sensitive,
+            provider,
+            project_key,
+            app_id,
+            oauth_defaults,
+            gateway_template,
+            None,
+        )
+        .await
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) async fn new_with_templates(
+        pool: SqlitePool,
+        sensitive: Arc<DeveloperSensitiveStore>,
+        provider: Arc<dyn GatewayDeploymentProvider>,
+        project_key: String,
+        app_id: String,
+        oauth_defaults: CloudflareOAuthDefaults,
+        gateway_template: Option<GatewayTemplateArtifact>,
+        entitlement_template: Option<GatewayTemplateArtifact>,
     ) -> anyhow::Result<Self> {
         anyhow::ensure!(
             !app_id.trim().is_empty()
@@ -293,6 +360,7 @@ impl DeveloperControlPlane {
             app_id,
             oauth_defaults,
             gateway_template,
+            entitlement_template,
             pending_authorization: Mutex::new(None),
             cached_plans: Mutex::new(BTreeMap::new()),
             mutation: Mutex::new(()),
@@ -310,6 +378,10 @@ impl DeveloperControlPlane {
 
     pub fn gateway_template(&self) -> Option<&GatewayTemplateArtifact> {
         self.gateway_template.as_ref()
+    }
+
+    pub fn entitlement_template(&self) -> Option<&GatewayTemplateArtifact> {
+        self.entitlement_template.as_ref()
     }
 
     pub(super) async fn load_authorization(&self) -> DevkitResult<Option<DeveloperAuthorization>> {
@@ -584,7 +656,9 @@ impl CachedPlan {
     pub(super) fn expires_at_unix_ms(&self) -> u64 {
         match self {
             Self::Deployment(plan) => plan.expires_at_unix_ms,
+            Self::Bundle(plan) => plan.expires_at_unix_ms,
             Self::Destroy(plan) => plan.expires_at_unix_ms,
+            Self::AccessBundleDestroy(plan) => plan.expires_at_unix_ms,
         }
     }
 }

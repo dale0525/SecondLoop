@@ -6,13 +6,17 @@ use std::fmt;
 use zeroize::Zeroizing;
 
 pub const GATEWAY_PROJECTION_SCHEMA_VERSION: u32 = 1;
+pub const GATEWAY_PROJECTION_SCHEMA_VERSION_V2: u32 = 2;
 pub const GATEWAY_POLICY_PROJECTION_CAPABILITY: &str = "gateway_policy_projection_v1";
+pub const GATEWAY_POLICY_PROJECTION_V2_CAPABILITY: &str = "gateway_policy_projection_v2";
 pub const GATEWAY_PROJECTION_PATH: &str = "/agentweave/entitlements/projection";
 pub const GATEWAY_PROJECTION_SIGNATURE_HEADER: &str = "x-agentweave-entitlement-signature";
 pub const GATEWAY_PROJECTION_TIMESTAMP_HEADER: &str = "x-agentweave-entitlement-timestamp";
 pub const GATEWAY_PROJECTION_NONCE_HEADER: &str = "x-agentweave-entitlement-nonce";
 const REQUEST_DOMAIN: &str = "agentweave-entitlement-projection-request-v1";
 const RESPONSE_DOMAIN: &str = "agentweave-entitlement-projection-response-v1";
+const REQUEST_DOMAIN_V2: &str = "agentweave-entitlement-projection-request-v2";
+const RESPONSE_DOMAIN_V2: &str = "agentweave-entitlement-projection-response-v2";
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -69,6 +73,46 @@ pub struct GatewayPolicyProjection {
     pub subject_budget: GatewayProjectionBudget,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(tag = "mode", rename_all = "snake_case", deny_unknown_fields)]
+pub enum GatewayProjectionBudgetLimit {
+    Unlimited,
+    Limited { value: u64 },
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GatewayProjectionBudgetV2 {
+    pub period_start: i64,
+    pub period_end: i64,
+    pub requests: GatewayProjectionBudgetLimit,
+    pub units: GatewayProjectionBudgetLimit,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub concurrency: Option<GatewayProjectionBudgetLimit>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GatewayPolicyProjectionV2 {
+    pub schema_version: u32,
+    pub source_id: String,
+    pub projection_id: String,
+    pub revision: String,
+    pub nonce: String,
+    pub deployment_id: String,
+    pub provider_id: String,
+    pub issuer: String,
+    pub tenant: String,
+    pub subject: String,
+    pub model: String,
+    pub issued_at: i64,
+    pub expires_at: i64,
+    pub decision: GatewayProjectionDecision,
+    pub reason_code: Option<String>,
+    pub tenant_budget: GatewayProjectionBudgetV2,
+    pub subject_budget: GatewayProjectionBudgetV2,
+}
+
 pub struct GatewayProjectionSecret(Zeroizing<Vec<u8>>);
 
 impl GatewayProjectionSecret {
@@ -103,20 +147,46 @@ pub fn verify_gateway_projection_request(
         .map_err(|_| GatewayProjectionProtocolError)?;
     let request: GatewayProjectionRequest =
         serde_json::from_slice(body).map_err(|_| GatewayProjectionProtocolError)?;
-    if request.schema_version != GATEWAY_PROJECTION_SCHEMA_VERSION
-        || request.requested_at != timestamp_value
+    if !matches!(
+        request.schema_version,
+        GATEWAY_PROJECTION_SCHEMA_VERSION | GATEWAY_PROJECTION_SCHEMA_VERSION_V2
+    ) || request.requested_at != timestamp_value
         || request.nonce != nonce
         || !valid_text(nonce, 128)
         || !valid_request(&request)
     {
         return Err(GatewayProjectionProtocolError);
     }
+    let domain = if request.schema_version == GATEWAY_PROJECTION_SCHEMA_VERSION_V2 {
+        REQUEST_DOMAIN_V2
+    } else {
+        REQUEST_DOMAIN
+    };
     verify_signature(
         secret,
-        canonical(REQUEST_DOMAIN, &[timestamp, nonce], body),
+        canonical(domain, &[timestamp, nonce], body),
         signature,
+        if request.schema_version == GATEWAY_PROJECTION_SCHEMA_VERSION_V2 {
+            "v2="
+        } else {
+            "v1="
+        },
     )?;
     Ok(request)
+}
+
+pub fn encode_gateway_projection_response_v2(
+    secret: &GatewayProjectionSecret,
+    request: &GatewayProjectionRequest,
+    projection: &GatewayPolicyProjectionV2,
+) -> Result<(Vec<u8>, String), GatewayProjectionProtocolError> {
+    validate_projection_v2(request, projection)?;
+    let body = serde_json::to_vec(projection).map_err(|_| GatewayProjectionProtocolError)?;
+    let signature = sign(
+        secret,
+        canonical(RESPONSE_DOMAIN_V2, &[request.nonce.as_str()], &body),
+    )?;
+    Ok((body, format!("v2={signature}")))
 }
 
 pub fn encode_gateway_projection_response(
@@ -200,6 +270,64 @@ fn valid_budget(value: &GatewayProjectionBudget, subject: bool) -> bool {
         }
 }
 
+fn validate_projection_v2(
+    request: &GatewayProjectionRequest,
+    projection: &GatewayPolicyProjectionV2,
+) -> Result<(), GatewayProjectionProtocolError> {
+    let binding_matches = request.schema_version == GATEWAY_PROJECTION_SCHEMA_VERSION_V2
+        && projection.schema_version == GATEWAY_PROJECTION_SCHEMA_VERSION_V2
+        && projection.source_id == request.source_id
+        && projection.nonce == request.nonce
+        && projection.deployment_id == request.deployment_id
+        && projection.provider_id == request.provider_id
+        && projection.issuer == request.issuer
+        && projection.tenant == request.tenant
+        && projection.subject == request.subject
+        && projection.model == request.model;
+    let timing_valid = projection.issued_at >= 0
+        && projection.expires_at > projection.issued_at
+        && valid_budget_v2(&projection.tenant_budget, false)
+        && valid_budget_v2(&projection.subject_budget, true)
+        && projection.expires_at <= projection.tenant_budget.period_end
+        && projection.expires_at <= projection.subject_budget.period_end;
+    let decision_valid = match projection.decision {
+        GatewayProjectionDecision::Allow => projection.reason_code.is_none(),
+        GatewayProjectionDecision::Deny => projection
+            .reason_code
+            .as_deref()
+            .is_some_and(|reason| valid_text(reason, 128)),
+    };
+    (binding_matches
+        && timing_valid
+        && decision_valid
+        && valid_text(&projection.projection_id, 256)
+        && valid_text(&projection.revision, 256))
+    .then_some(())
+    .ok_or(GatewayProjectionProtocolError)
+}
+
+fn valid_budget_v2(value: &GatewayProjectionBudgetV2, subject: bool) -> bool {
+    value.period_start >= 0
+        && value.period_end > value.period_start
+        && valid_limit(&value.requests, u64::MAX)
+        && valid_limit(&value.units, u64::MAX)
+        && if subject {
+            value
+                .concurrency
+                .as_ref()
+                .is_some_and(|limit| valid_limit(limit, 1_000))
+        } else {
+            value.concurrency.is_none()
+        }
+}
+
+fn valid_limit(value: &GatewayProjectionBudgetLimit, maximum: u64) -> bool {
+    match value {
+        GatewayProjectionBudgetLimit::Unlimited => true,
+        GatewayProjectionBudgetLimit::Limited { value } => (1..=maximum).contains(value),
+    }
+}
+
 fn valid_text(value: &str, maximum: usize) -> bool {
     !value.is_empty()
         && value.len() <= maximum
@@ -227,9 +355,10 @@ fn verify_signature(
     secret: &GatewayProjectionSecret,
     message: Vec<u8>,
     signature: &str,
+    prefix: &str,
 ) -> Result<(), GatewayProjectionProtocolError> {
     let encoded = signature
-        .strip_prefix("v1=")
+        .strip_prefix(prefix)
         .ok_or(GatewayProjectionProtocolError)?;
     let signature = URL_SAFE_NO_PAD
         .decode(encoded)
@@ -347,5 +476,70 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn v2_represents_unlimited_without_changing_v1_zero_semantics() {
+        let secret = GatewayProjectionSecret::new(vec![5; 32]).unwrap();
+        let mut request = request();
+        request.schema_version = GATEWAY_PROJECTION_SCHEMA_VERSION_V2;
+        let body = serde_json::to_vec(&request).unwrap();
+        let timestamp = request.requested_at.to_string();
+        let signature = format!(
+            "v2={}",
+            sign(
+                &secret,
+                canonical(REQUEST_DOMAIN_V2, &[&timestamp, &request.nonce], &body),
+            )
+            .unwrap()
+        );
+        verify_gateway_projection_request(&secret, &timestamp, &request.nonce, &body, &signature)
+            .unwrap();
+        let budget = GatewayProjectionBudgetV2 {
+            period_start: request.requested_at - 10,
+            period_end: request.requested_at + 3_600,
+            requests: GatewayProjectionBudgetLimit::Unlimited,
+            units: GatewayProjectionBudgetLimit::Limited { value: 100_000 },
+            concurrency: Some(GatewayProjectionBudgetLimit::Unlimited),
+        };
+        let projection = GatewayPolicyProjectionV2 {
+            schema_version: GATEWAY_PROJECTION_SCHEMA_VERSION_V2,
+            source_id: request.source_id.clone(),
+            projection_id: "projection-v2".into(),
+            revision: "revision-v2".into(),
+            nonce: request.nonce.clone(),
+            deployment_id: request.deployment_id.clone(),
+            provider_id: request.provider_id.clone(),
+            issuer: request.issuer.clone(),
+            tenant: request.tenant.clone(),
+            subject: request.subject.clone(),
+            model: request.model.clone(),
+            issued_at: request.requested_at,
+            expires_at: request.requested_at + 60,
+            decision: GatewayProjectionDecision::Allow,
+            reason_code: None,
+            tenant_budget: GatewayProjectionBudgetV2 {
+                concurrency: None,
+                ..budget.clone()
+            },
+            subject_budget: budget,
+        };
+        let (encoded, signature) =
+            encode_gateway_projection_response_v2(&secret, &request, &projection).unwrap();
+        assert!(signature.starts_with("v2="));
+        assert!(
+            std::str::from_utf8(&encoded)
+                .unwrap()
+                .contains("\"mode\":\"unlimited\"")
+        );
+
+        let v1_zero = GatewayProjectionBudget {
+            period_start: 0,
+            period_end: 1,
+            max_requests: 0,
+            max_units: 0,
+            max_concurrency: Some(1),
+        };
+        assert!(valid_budget(&v1_zero, true));
     }
 }

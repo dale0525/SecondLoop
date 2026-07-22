@@ -2,6 +2,7 @@
 
 import type { ApprovalObservationResult } from "../shared/approvalObservation";
 import type { AttachmentMetadata } from "../shared/attachments";
+import type { BillingStatus, CommerceOpenReceipt } from "../shared/commerce";
 import type {
   BackupExportReceipt,
   BackupRestoreReceipt,
@@ -37,6 +38,11 @@ declare global {
         exportBackup(): Promise<BackupExportReceipt | null>;
         restoreBackup(): Promise<BackupRestoreReceipt | null>;
         status(): Promise<DataProtectionStatus>;
+      };
+      commerce?: {
+        checkout(planId: string): Promise<CommerceOpenReceipt>;
+        customerPortal(): Promise<CommerceOpenReceipt>;
+        status(): Promise<BillingStatus>;
       };
       developerProject?: {
         load(): Promise<DeveloperProjectSnapshot>;

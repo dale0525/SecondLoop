@@ -1,6 +1,18 @@
 import type {
+  DeveloperAccessBundleDestroyPlan,
+  DeveloperAccessBundleDestroyReceipt,
+  DeveloperAccessBundleInspectReceipt,
+  DeveloperAccessBundleLifecycleResourceReceipt,
+  DeveloperAccessBundleMutationOutcome,
+  DeveloperAccessBundleMutationReceipt,
+  DeveloperAccessBundlePlan,
+  DeveloperAccessBundleProjectUpdate,
+  DeveloperAccessBundleReceipt,
+  DeveloperAccessBundleTestReceipt,
+  DeveloperAccessBundleVerificationUpdate,
   DeveloperAccessOperation,
   DeveloperDeploymentProjectUpdate,
+  DeveloperPendingAccessBundle,
   DeveloperPendingDeployment,
   DeveloperGatewayTestProjectUpdate,
 } from "../shared/developerAccess";
@@ -38,8 +50,28 @@ export type DeveloperControlStatus = Readonly<{
   }>;
   firebaseAuthorization?: FirebaseAuthorizationStatus;
   gatewayTemplate: Readonly<{ version: string; sha256: string }> | null;
+  entitlementTemplate: Readonly<{ version: string; sha256: string }> | null;
   sensitiveBindings: Readonly<Record<string, string>>;
   pendingDeployment: DeveloperPendingDeployment | null;
+  pendingAccessBundle: DeveloperPendingAccessBundle | null;
+}>;
+
+export type CreemProduct = Readonly<{
+  id: string;
+  name: string;
+  description: string;
+  environment: "test" | "production";
+  priceMinor: number;
+  currency: string;
+  billingType: string;
+  billingPeriod: string;
+  active: boolean;
+}>;
+
+export type CreemProductDiscovery = Readonly<{
+  environment: "test" | "production";
+  configuredRevision: string;
+  products: readonly CreemProduct[];
 }>;
 
 export type CloudflareAccount = Readonly<{
@@ -127,6 +159,16 @@ export type GatewayDestroyUpdate = Readonly<{
   deletedResources: readonly string[];
   operationId: string;
   completedAtUnixMs: number;
+  project: DeveloperProjectSnapshot;
+}>;
+
+export type AccessBundleMutationUpdate = Readonly<{
+  mutation: DeveloperAccessBundleMutationReceipt;
+  project: DeveloperProjectSnapshot;
+}>;
+
+export type AccessBundleDestroyUpdate = Readonly<{
+  destroy: DeveloperAccessBundleDestroyReceipt;
   project: DeveloperProjectSnapshot;
 }>;
 
@@ -224,6 +266,84 @@ export async function applyGateway(planHash: string): Promise<DeveloperDeploymen
 
 export async function verifyGateway(): Promise<DeveloperGatewayTestProjectUpdate> {
   return parseTestUpdate(await request("gateway.test"));
+}
+
+export async function discoverCreemProducts(input: {
+  environment: "test" | "production";
+  apiKey: string;
+}): Promise<CreemProductDiscovery> {
+  return parseCreemProducts(await request("commerce.creem.products", {
+    environment: input.environment,
+    apiKey: input.apiKey,
+    revision: `ui-${crypto.randomUUID()}`,
+  }));
+}
+
+export async function openCreemWebhookDashboard(): Promise<void> {
+  const response = record(await request("commerce.creem.dashboard"));
+  if (response.opened !== true) throw new Error("Creem Dashboard could not be opened");
+}
+
+export async function planAccessBundle(input: {
+  project: DeveloperProjectSnapshot;
+  sensitiveInputs: Record<string, SensitivePlanInput>;
+}): Promise<DeveloperAccessBundlePlan> {
+  return parseAccessPlan(await request("access.plan", {
+    expectedProjectRevision: input.project.revision,
+    sensitiveInputs: input.sensitiveInputs,
+    idempotencyKey: crypto.randomUUID(),
+  }));
+}
+
+export async function applyAccessBundle(
+  planHash: string,
+): Promise<DeveloperAccessBundleProjectUpdate> {
+  const update = record(await request("access.apply", { planHash }));
+  return Object.freeze({
+    bundle: parseAccessBundleReceipt(update.bundle),
+    project: update.project as DeveloperProjectSnapshot,
+  });
+}
+
+export async function verifyAccessBundle(): Promise<DeveloperAccessBundleVerificationUpdate> {
+  const update = record(await request("access.test"));
+  return Object.freeze({
+    test: parseAccessBundleTest(update.test),
+    project: update.project as DeveloperProjectSnapshot,
+  });
+}
+
+export async function inspectAccessBundle(): Promise<DeveloperAccessBundleInspectReceipt> {
+  return parseAccessBundleInspect(await request("access.inspect"));
+}
+
+export async function rotateAccessBundleProjectionSecret(): Promise<AccessBundleMutationUpdate> {
+  return parseAccessBundleMutationUpdate(await request("access.rotate"), true);
+}
+
+export async function rollbackAccessBundle(input: {
+  gatewayVersionId: string;
+  entitlementVersionId: string;
+}): Promise<AccessBundleMutationUpdate> {
+  return parseAccessBundleMutationUpdate(await request("access.rollback", input), false);
+}
+
+export async function planAccessBundleDestroy(): Promise<DeveloperAccessBundleDestroyPlan> {
+  return parseAccessBundleDestroyPlan(await request("access.destroyPlan"));
+}
+
+export async function destroyAccessBundle(
+  planHash: string,
+  confirmCommerceProjectionRebuild: boolean,
+): Promise<AccessBundleDestroyUpdate> {
+  const update = record(await request("access.destroyApply", {
+    planHash,
+    confirmCommerceProjectionRebuild,
+  }));
+  return Object.freeze({
+    destroy: parseAccessBundleDestroyReceipt(update.destroy),
+    project: update.project as DeveloperProjectSnapshot,
+  });
 }
 
 export async function inspectGateway(target: GatewayTarget): Promise<GatewayObservation> {
@@ -340,18 +460,151 @@ function parseControlStatus(value: unknown): DeveloperControlStatus {
       publicOauthClientAvailable: boolean(authorization.publicOauthClientAvailable),
     }),
     ...(firebaseAuthorization ? { firebaseAuthorization } : {}),
-    gatewayTemplate: root.gatewayTemplate === null
+    gatewayTemplate: root.gatewayTemplate == null
       ? null
       : Object.freeze({
           version: text(record(root.gatewayTemplate).version),
           sha256: text(record(root.gatewayTemplate).sha256),
         }),
+    entitlementTemplate: root.entitlementTemplate == null
+      ? null
+      : Object.freeze({
+          version: text(record(root.entitlementTemplate).version),
+          sha256: text(record(root.entitlementTemplate).sha256),
+        }),
     sensitiveBindings: Object.freeze(Object.fromEntries(
       Object.entries(bindings).map(([name, revision]) => [name, text(revision)]),
     )),
-    pendingDeployment: root.pendingDeployment === null
+    pendingDeployment: root.pendingDeployment == null
       ? null
       : parsePendingDeployment(root.pendingDeployment),
+    pendingAccessBundle: root.pendingAccessBundle == null
+      ? null
+      : Object.freeze({
+          bundle: parseAccessBundleReceipt(record(root.pendingAccessBundle).bundle),
+          projectRevision: text(record(root.pendingAccessBundle).projectRevision),
+        }),
+  });
+}
+
+function parseCreemProducts(value: unknown): CreemProductDiscovery {
+  const receipt = record(value);
+  if (!Array.isArray(receipt.products)
+    || (receipt.environment !== "test" && receipt.environment !== "production")) {
+    throw new Error("Creem product response is invalid");
+  }
+  return Object.freeze({
+    environment: receipt.environment,
+    configuredRevision: text(receipt.configuredRevision),
+    products: Object.freeze(receipt.products.map((candidate) => {
+      const product = record(candidate);
+      return Object.freeze({
+        id: text(product.id),
+        name: text(product.name),
+        description: typeof product.description === "string" ? product.description : "",
+        environment: product.environment as "test" | "production",
+        priceMinor: integer(product.priceMinor),
+        currency: text(product.currency),
+        billingType: text(product.billingType),
+        billingPeriod: text(product.billingPeriod),
+        active: boolean(product.active),
+      });
+    })),
+  });
+}
+
+function parseAccessPlan(value: unknown): DeveloperAccessBundlePlan {
+  const plan = record(value);
+  if (!Array.isArray(plan.resources)) throw new Error("Access plan response is invalid");
+  return Object.freeze({
+    schemaVersion: integer(plan.schemaVersion),
+    bundleId: text(plan.bundleId),
+    desiredHash: text(plan.desiredHash),
+    planHash: text(plan.planHash),
+    resources: Object.freeze(plan.resources.map((candidate) => {
+      const resource = record(candidate);
+      const operations = Array.isArray(resource.operations) ? resource.operations : [];
+      const dependencies = Array.isArray(resource.dependencies) ? resource.dependencies : [];
+      return Object.freeze({
+        resourceId: text(resource.resourceId),
+        kind: text(resource.kind),
+        purpose: text(resource.purpose),
+        dependencies: Object.freeze(dependencies.map(text)),
+        ownership: text(resource.ownership) as "exclusive" | "shared",
+        target: parseTarget(resource.target),
+        operations: Object.freeze(operations.map((entry) => {
+          const operation = record(entry);
+          return Object.freeze({
+            kind: text(operation.kind),
+            resource: text(operation.resource),
+            destructive: boolean(operation.destructive),
+          });
+        })),
+        drift: resource.drift ?? null,
+      });
+    })),
+    expiresAtUnixMs: integer(plan.expiresAtUnixMs),
+  });
+}
+
+function parseAccessBundleReceipt(value: unknown): DeveloperAccessBundleReceipt {
+  const receipt = record(value);
+  const resources = record(receipt.resources);
+  return Object.freeze({
+    schemaVersion: integer(receipt.schemaVersion),
+    providerId: text(receipt.providerId),
+    providerVersion: text(receipt.providerVersion),
+    bundleId: text(receipt.bundleId),
+    planHash: text(receipt.planHash),
+    operationId: text(receipt.operationId),
+    outcome: text(receipt.outcome) as DeveloperAccessBundleReceipt["outcome"],
+    resources: Object.freeze(Object.fromEntries(Object.entries(resources).map(([id, candidate]) => {
+      const resource = record(candidate);
+      return [id, Object.freeze({
+        resourceId: text(resource.resourceId),
+        status: text(resource.status) as DeveloperAccessBundleReceipt["resources"][string]["status"],
+        target: parseTarget(resource.target),
+        versionId: nullableText(resource.versionId),
+        previousVersionId: nullableText(resource.previousVersionId),
+        endpoint: nullableText(resource.endpoint),
+        errorCode: nullableText(resource.errorCode),
+        safeMessage: nullableText(resource.safeMessage),
+      })];
+    }))),
+    completedAtUnixMs: integer(receipt.completedAtUnixMs),
+  });
+}
+
+function parseAccessBundleTest(value: unknown): DeveloperAccessBundleTestReceipt {
+  const receipt = record(value);
+  const parseGatewayTest = (candidate: unknown) => {
+    const test = record(candidate);
+    return Object.freeze({
+      target: parseTarget(test.target),
+      protocolVersion: text(test.protocolVersion),
+      remoteVersion: text(test.remoteVersion),
+      testedAtUnixMs: integer(test.testedAtUnixMs),
+    });
+  };
+  const commerce = receipt.commerce === null ? null : (() => {
+    const verification = record(receipt.commerce);
+    if (!Array.isArray(verification.capabilities)) {
+      throw new Error("Commerce verification response is invalid");
+    }
+    return Object.freeze({
+      databaseId: text(verification.databaseId),
+      migrationHash: text(verification.migrationHash),
+      capabilities: Object.freeze(verification.capabilities.map(text)),
+      webhookVerifiedAtUnixMs: nullableInteger(verification.webhookVerifiedAtUnixMs),
+      portalVerifiedAtUnixMs: nullableInteger(verification.portalVerifiedAtUnixMs),
+    });
+  })();
+  return Object.freeze({
+    gateway: parseGatewayTest(receipt.gateway),
+    entitlementPolicy: parseGatewayTest(receipt.entitlementPolicy),
+    commerce,
+    projectionSecretRevision: text(receipt.projectionSecretRevision),
+    testedAtUnixMs: integer(receipt.testedAtUnixMs),
   });
 }
 
@@ -544,6 +797,153 @@ function parseTestUpdate(value: unknown): DeveloperGatewayTestProjectUpdate {
     },
     project: update.project as DeveloperProjectSnapshot,
   };
+}
+
+function parseAccessBundleInspect(value: unknown): DeveloperAccessBundleInspectReceipt {
+  const receipt = record(value);
+  const outcome = text(receipt.outcome);
+  if (!new Set(["ready", "partial", "unavailable"]).has(outcome)) {
+    throw new Error("Access bundle inspection response is invalid");
+  }
+  const resources = record(receipt.resources);
+  return Object.freeze({
+    schemaVersion: integer(receipt.schemaVersion),
+    bundleId: text(receipt.bundleId),
+    outcome: outcome as DeveloperAccessBundleInspectReceipt["outcome"],
+    resources: Object.freeze(Object.fromEntries(Object.entries(resources).map(([id, candidate]) => {
+      const resource = record(candidate);
+      return [id, Object.freeze({
+        resourceId: text(resource.resourceId),
+        observation: resource.observation === null ? null : parseAccessObservation(resource.observation),
+        errorCode: nullableText(resource.errorCode),
+        safeMessage: nullableText(resource.safeMessage),
+      })];
+    }))),
+    inspectedAtUnixMs: integer(receipt.inspectedAtUnixMs),
+  });
+}
+
+function parseAccessObservation(value: unknown) {
+  const observation = record(value);
+  const reachability = text(observation.reachability);
+  if (!new Set(["reachable", "missing", "unauthorized", "unreachable"]).has(reachability)) {
+    throw new Error("Access bundle observation is invalid");
+  }
+  return Object.freeze({
+    target: parseTarget(observation.target),
+    reachability: reachability as "reachable" | "missing" | "unauthorized" | "unreachable",
+    remoteVersion: nullableText(observation.remoteVersion),
+    remoteEtag: nullableText(observation.remoteEtag),
+    observedDesiredHash: nullableText(observation.observedDesiredHash),
+    activeArtifactHash: nullableText(observation.activeArtifactHash),
+    endpoint: nullableText(observation.endpoint),
+    gatewayProtocolVersion: nullableText(observation.gatewayProtocolVersion),
+    d1MigrationStatus: nullableText(observation.d1MigrationStatus),
+    workersDevReady: nullableBoolean(observation.workersDevReady),
+    observedAtUnixMs: integer(observation.observedAtUnixMs),
+  });
+}
+
+function parseAccessBundleMutationUpdate(
+  value: unknown,
+  rotation: boolean,
+): AccessBundleMutationUpdate {
+  const update = record(value);
+  return Object.freeze({
+    mutation: parseAccessBundleMutation(update.mutation, rotation),
+    project: update.project as DeveloperProjectSnapshot,
+  });
+}
+
+function parseAccessBundleMutation(
+  value: unknown,
+  rotation: boolean,
+): DeveloperAccessBundleMutationReceipt {
+  const mutation = record(value);
+  return Object.freeze({
+    schemaVersion: integer(mutation.schemaVersion),
+    operationId: text(mutation.operationId),
+    outcome: parseAccessBundleMutationOutcome(mutation.outcome),
+    ...(rotation ? { configuredRevision: text(mutation.configuredRevision) } : {}),
+    resources: parseAccessLifecycleResources(mutation.resources),
+    verification: mutation.verification === null
+      ? null
+      : parseAccessBundleTest(mutation.verification),
+    completedAtUnixMs: integer(mutation.completedAtUnixMs),
+  });
+}
+
+function parseAccessBundleDestroyPlan(value: unknown): DeveloperAccessBundleDestroyPlan {
+  const plan = record(value);
+  if (!Array.isArray(plan.resources)) throw new Error("Access bundle destroy plan is invalid");
+  return Object.freeze({
+    schemaVersion: integer(plan.schemaVersion),
+    planHash: text(plan.planHash),
+    bundleId: text(plan.bundleId),
+    resources: Object.freeze(plan.resources.map((candidate) => {
+      const resource = record(candidate);
+      if (!Array.isArray(resource.resources)
+        || (resource.ownership !== "exclusive" && resource.ownership !== "shared")) {
+        throw new Error("Access bundle destroy resource is invalid");
+      }
+      return Object.freeze({
+        resourceId: text(resource.resourceId),
+        target: parseTarget(resource.target),
+        resources: Object.freeze(resource.resources.map(text)),
+        ownership: resource.ownership,
+        deleteRequiresConfirmation: boolean(resource.deleteRequiresConfirmation),
+      });
+    })),
+    commerceDataLossRequiresConfirmation: boolean(plan.commerceDataLossRequiresConfirmation),
+    expiresAtUnixMs: integer(plan.expiresAtUnixMs),
+  });
+}
+
+function parseAccessBundleDestroyReceipt(value: unknown): DeveloperAccessBundleDestroyReceipt {
+  const receipt = record(value);
+  return Object.freeze({
+    schemaVersion: integer(receipt.schemaVersion),
+    planHash: text(receipt.planHash),
+    operationId: text(receipt.operationId),
+    outcome: parseAccessBundleMutationOutcome(receipt.outcome),
+    resources: parseAccessLifecycleResources(receipt.resources),
+    completedAtUnixMs: integer(receipt.completedAtUnixMs),
+  });
+}
+
+function parseAccessLifecycleResources(
+  value: unknown,
+): Readonly<Record<string, DeveloperAccessBundleLifecycleResourceReceipt>> {
+  return Object.freeze(Object.fromEntries(Object.entries(record(value)).map(([id, candidate]) => {
+    const resource = record(candidate);
+    const status = text(resource.status);
+    if (!new Set(["applied", "already_converged", "failed", "uncertain", "blocked"])
+      .has(status)) throw new Error("Access bundle lifecycle resource is invalid");
+    return [id, Object.freeze({
+      resourceId: text(resource.resourceId),
+      target: parseTarget(resource.target),
+      status: status as DeveloperAccessBundleLifecycleResourceReceipt["status"],
+      versionId: nullableText(resource.versionId),
+      previousVersionId: nullableText(resource.previousVersionId),
+      configuredRevision: nullableText(resource.configuredRevision),
+      rollbackBoundary: resource.rollbackBoundary,
+      errorCode: nullableText(resource.errorCode),
+      safeMessage: nullableText(resource.safeMessage),
+    })];
+  })));
+}
+
+function parseAccessBundleMutationOutcome(value: unknown): DeveloperAccessBundleMutationOutcome {
+  const outcome = text(value) as DeveloperAccessBundleMutationOutcome;
+  if (!new Set<DeveloperAccessBundleMutationOutcome>([
+    "succeeded",
+    "failed_before_activation",
+    "entitlement_ready_gateway_failed",
+    "verification_failed",
+    "partial",
+    "uncertain_remote_state",
+  ]).has(outcome)) throw new Error("Access bundle lifecycle outcome is invalid");
+  return outcome;
 }
 
 function parseTarget(value: unknown): GatewayTarget {

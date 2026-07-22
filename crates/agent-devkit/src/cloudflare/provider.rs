@@ -1,10 +1,10 @@
 use super::accounts::parse_cloudflare_accounts;
 use super::configuration::parse_cloudflare_configuration;
-use super::d1::{self, PreparedD1Resources};
+use super::managed_worker::{self, ManagedWorkerRole, PreparedWorkerResources};
 use super::provider_support::{
     check_plan_concurrency, delete_worker_script, destroy_d1_database_id, empty_observation,
-    enable_workers_dev, ensure_control_matches, ensure_provider_authorization, find_string,
-    inspect_workers_dev, parse_deployment_facts, parse_secret_bindings, resources_in_sync,
+    enable_workers_dev, ensure_control_matches, ensure_provider_authorization,
+    ensure_reconciliation_schedule, find_string, parse_deployment_facts, parse_secret_bindings,
     validate_cloudflare_segment, worker_multipart, worker_script_path, workers_dev_gateway_url,
 };
 use super::schema::{cloudflare_capability_requirements, cloudflare_gateway_provider_descriptor};
@@ -20,9 +20,8 @@ use crate::{
     DeveloperAuthorization, DevkitError, DevkitErrorCode, DevkitResult, DriftStatus,
     GatewayDeploymentProvider, GatewayTestReceipt, MutationControl, ObservationReachability,
     ObservedDeploymentState, PlanOperation, PlanOperationKind, ProviderAuthorizationPlan,
-    ProviderConfiguration, ProviderDescriptor, RollbackBoundary, RollbackReceipt, RollbackRequest,
-    RollbackResourceScope, SecretRotationReceipt, SecretRotationRequest, SensitiveInputHandle,
-    SensitiveInputStore,
+    ProviderConfiguration, ProviderDescriptor, RollbackReceipt, RollbackRequest,
+    SecretRotationReceipt, SecretRotationRequest, SensitiveInputHandle, SensitiveInputStore,
 };
 use async_trait::async_trait;
 use serde_json::{Value, json};
@@ -173,11 +172,11 @@ where
         &self,
         authorization: &DeveloperAuthorization,
         plan: &DeploymentPlan,
-        resources: &PreparedD1Resources,
-        gateway_url: &str,
+        resources: &PreparedWorkerResources,
+        worker_url: &str,
         create: bool,
     ) -> DevkitResult<Option<String>> {
-        let (body, boundary) = worker_multipart(plan, resources, gateway_url, create)?;
+        let (body, boundary) = worker_multipart(plan, resources, worker_url, create)?;
         let path = if create {
             worker_script_path(plan.desired().target(), "")
         } else {
@@ -273,11 +272,18 @@ where
         previous_remote_version: Option<String>,
         now_unix_ms: u64,
     ) -> DevkitResult<Option<ApplyReceipt>> {
+        let role = managed_worker::role_from_desired(plan.desired())?;
+        let commerce_enabled = managed_worker::validate_desired(plan.desired())?;
         let observed = self
-            .inspect_full(authorization, plan.desired().target(), now_unix_ms)
+            .inspect_full_expected(
+                authorization,
+                plan.desired().target(),
+                now_unix_ms,
+                Some((role, commerce_enabled)),
+            )
             .await?;
         if crate::assess_drift(plan.desired(), &observed).status == DriftStatus::InSync
-            && resources_in_sync(&observed)
+            && managed_worker::resources_in_sync(&observed, role, commerce_enabled)
         {
             return Ok(Some(ApplyReceipt {
                 target: plan.desired().target().clone(),
@@ -305,6 +311,17 @@ where
         target: &DeploymentTarget,
         now_unix_ms: u64,
     ) -> DevkitResult<ObservedDeploymentState> {
+        self.inspect_full_expected(authorization, target, now_unix_ms, None)
+            .await
+    }
+
+    async fn inspect_full_expected(
+        &self,
+        authorization: &DeveloperAuthorization,
+        target: &DeploymentTarget,
+        now_unix_ms: u64,
+        expected: Option<(ManagedWorkerRole, bool)>,
+    ) -> DevkitResult<ObservedDeploymentState> {
         let mut observed = self
             .inspect_inner(authorization, target, now_unix_ms)
             .await?;
@@ -314,37 +331,14 @@ where
         ) {
             return Ok(observed);
         }
-        match d1::inspect_database(&self.rest, authorization, target).await? {
-            Some(database) => {
-                let migration_status =
-                    d1::inspect_migrations(&self.rest, authorization, target, &database).await?;
-                observed
-                    .resource_facts
-                    .insert("observed_d1_database_id".into(), json!(database.id));
-                observed
-                    .resource_facts
-                    .insert("observed_d1_database_name".into(), json!(database.name));
-                observed.resource_facts.insert(
-                    "observed_d1_migration_status".into(),
-                    json!(match migration_status {
-                        d1::D1MigrationStatus::Missing => "missing",
-                        d1::D1MigrationStatus::InSync => "in_sync",
-                        d1::D1MigrationStatus::Drifted => "drifted",
-                    }),
-                );
-            }
-            None => {
-                observed
-                    .resource_facts
-                    .insert("observed_d1_missing".into(), json!(true));
-            }
-        }
-        if observed.reachability == ObservationReachability::Reachable {
-            let in_sync = inspect_workers_dev(&self.rest, authorization, target).await?;
-            observed
-                .resource_facts
-                .insert("observed_workers_dev_in_sync".into(), json!(in_sync));
-        }
+        managed_worker::enrich_observation(
+            &self.rest,
+            authorization,
+            target,
+            &mut observed,
+            expected,
+        )
+        .await?;
         Ok(observed)
     }
 }
@@ -523,7 +517,8 @@ where
     ) -> DevkitResult<DeploymentPlan> {
         ensure_provider_authorization(authorization, desired.target(), false, now_unix_ms)?;
         control.validate(now_unix_ms)?;
-        d1::validate_gateway_public_configuration(&desired)?;
+        let role = managed_worker::role_from_desired(&desired)?;
+        let commerce_enabled = managed_worker::validate_desired(&desired)?;
         if !desired.managed_routes().is_empty() {
             return Err(DevkitError::new(
                 DevkitErrorCode::Unsupported,
@@ -531,7 +526,12 @@ where
             ));
         }
         let observed = self
-            .inspect_full(authorization, desired.target(), now_unix_ms)
+            .inspect_full_expected(
+                authorization,
+                desired.target(),
+                now_unix_ms,
+                Some((role, commerce_enabled)),
+            )
             .await?;
         if observed.reachability == ObservationReachability::Unauthorized {
             return Err(DevkitError::new(
@@ -560,38 +560,50 @@ where
             ));
         }
         let drift = crate::assess_drift(&desired, &observed);
-        let resources_in_sync = resources_in_sync(&observed);
+        let resources_in_sync =
+            managed_worker::resources_in_sync(&observed, role, commerce_enabled);
+        let database_name = managed_worker::database_name(role, commerce_enabled, desired.target());
         let mut operations = Vec::new();
-        if observed
-            .resource_facts
-            .get("observed_d1_missing")
-            .and_then(Value::as_bool)
-            == Some(true)
+        if database_name.is_some()
+            && observed
+                .resource_facts
+                .get("observed_d1_missing")
+                .and_then(Value::as_bool)
+                == Some(true)
         {
             operations.push(PlanOperation {
                 kind: PlanOperationKind::CreateDatabase,
-                resource: d1::database_name(desired.target()),
+                resource: database_name.clone().expect("checked database name"),
                 destructive: false,
             });
         }
         if !resources_in_sync {
-            operations.extend([
-                PlanOperation {
+            if let Some(database_name) = database_name {
+                operations.push(PlanOperation {
                     kind: PlanOperationKind::ApplyDatabaseMigration,
-                    resource: d1::database_name(desired.target()),
+                    resource: database_name,
                     destructive: false,
-                },
-                PlanOperation {
+                });
+            }
+            if role == ManagedWorkerRole::Gateway {
+                operations.push(PlanOperation {
                     kind: PlanOperationKind::SeedEntitlements,
                     resource: desired.target().deployment_id.clone(),
                     destructive: false,
-                },
-                PlanOperation {
-                    kind: PlanOperationKind::ConfigureBindings,
-                    resource: desired.target().resource_name.clone(),
+                });
+            }
+            operations.push(PlanOperation {
+                kind: PlanOperationKind::ConfigureBindings,
+                resource: desired.target().resource_name.clone(),
+                destructive: false,
+            });
+            if role == ManagedWorkerRole::EntitlementPolicy && commerce_enabled {
+                operations.push(PlanOperation {
+                    kind: PlanOperationKind::ConfigureScheduledTrigger,
+                    resource: "commerce-reconciliation".into(),
                     destructive: false,
-                },
-            ]);
+                });
+            }
         }
         match drift.status {
             DriftStatus::InSync => {}
@@ -662,11 +674,18 @@ where
         plan.verify_integrity()?;
         plan.control().validate(now_unix_ms)?;
         ensure_provider_authorization(authorization, plan.desired().target(), true, now_unix_ms)?;
+        let role = managed_worker::role_from_desired(plan.desired())?;
+        let commerce_enabled = managed_worker::validate_desired(plan.desired())?;
         let before = self
-            .inspect_full(authorization, plan.desired().target(), now_unix_ms)
+            .inspect_full_expected(
+                authorization,
+                plan.desired().target(),
+                now_unix_ms,
+                Some((role, commerce_enabled)),
+            )
             .await?;
         if crate::assess_drift(plan.desired(), &before).status == DriftStatus::InSync
-            && resources_in_sync(&before)
+            && managed_worker::resources_in_sync(&before, role, commerce_enabled)
         {
             return Ok(ApplyReceipt {
                 target: plan.desired().target().clone(),
@@ -688,14 +707,15 @@ where
         check_plan_concurrency(plan, &before)?;
         let previous_remote_version = before.remote_version.clone();
         let create = before.reachability == ObservationReachability::Missing;
-        let resources = d1::ensure_resources(&self.rest, authorization, plan.desired()).await?;
-        let gateway_url =
+        let resources =
+            managed_worker::ensure_resources(&self.rest, authorization, plan.desired()).await?;
+        let worker_url =
             workers_dev_gateway_url(&self.rest, authorization, plan.desired().target()).await?;
         if !create {
             self.configure_planned_secrets(authorization, plan).await?;
         }
         let uploaded_version = match self
-            .upload_version(authorization, plan, &resources, &gateway_url, create)
+            .upload_version(authorization, plan, &resources, &worker_url, create)
             .await
         {
             Ok(version) => version,
@@ -735,11 +755,20 @@ where
             .await?;
         }
         enable_workers_dev(&self.rest, authorization, plan.desired().target()).await?;
+        if role == ManagedWorkerRole::EntitlementPolicy && commerce_enabled {
+            ensure_reconciliation_schedule(&self.rest, authorization, plan.desired().target())
+                .await?;
+        }
         let after = self
-            .inspect_full(authorization, plan.desired().target(), now_unix_ms)
+            .inspect_full_expected(
+                authorization,
+                plan.desired().target(),
+                now_unix_ms,
+                Some((role, commerce_enabled)),
+            )
             .await?;
         if crate::assess_drift(plan.desired(), &after).status != DriftStatus::InSync
-            || !resources_in_sync(&after)
+            || !managed_worker::resources_in_sync(&after, role, commerce_enabled)
         {
             return Err(DevkitError::new(
                 DevkitErrorCode::VerificationFailed,
@@ -774,6 +803,16 @@ where
         self.inspect_full(authorization, target, now_unix_ms).await
     }
 
+    async fn resolve_public_endpoint(
+        &self,
+        authorization: &DeveloperAuthorization,
+        target: &DeploymentTarget,
+        now_unix_ms: u64,
+    ) -> DevkitResult<String> {
+        ensure_provider_authorization(authorization, target, false, now_unix_ms)?;
+        workers_dev_gateway_url(&self.rest, authorization, target).await
+    }
+
     async fn test(
         &self,
         authorization: &DeveloperAuthorization,
@@ -782,58 +821,14 @@ where
         now_unix_ms: u64,
     ) -> DevkitResult<GatewayTestReceipt> {
         let observed = self.inspect(authorization, target, now_unix_ms).await?;
-        let health_url = observed
-            .resource_facts
-            .get("gateway_health_url")
-            .and_then(Value::as_str)
-            .ok_or_else(|| {
-                DevkitError::new(
-                    DevkitErrorCode::VerificationFailed,
-                    "Cloudflare Worker did not publish a verified gateway health URL",
-                )
-            })?;
-        let health = self
-            .rest
-            .test_gateway_health(health_url, one_time_identity)
-            .await?;
-        let protocol_version = health
-            .get("protocol_version")
-            .and_then(Value::as_str)
-            .ok_or_else(|| {
-                DevkitError::new(
-                    DevkitErrorCode::RemoteProtocol,
-                    "gateway health response omitted its protocol version",
-                )
-            })?;
-        if health.get("deployment_id").and_then(Value::as_str)
-            != Some(target.deployment_id.as_str())
-        {
-            return Err(DevkitError::new(
-                DevkitErrorCode::VerificationFailed,
-                "gateway health response belongs to a different deployment",
-            ));
-        }
-        let remote_version = health
-            .get("remote_version")
-            .and_then(Value::as_str)
-            .ok_or_else(|| {
-                DevkitError::new(
-                    DevkitErrorCode::RemoteProtocol,
-                    "gateway health response omitted its remote version",
-                )
-            })?;
-        if observed.remote_version.as_deref() != Some(remote_version) {
-            return Err(DevkitError::new(
-                DevkitErrorCode::DriftDetected,
-                "gateway health version differs from the Cloudflare deployment",
-            ));
-        }
-        Ok(GatewayTestReceipt {
-            target: target.clone(),
-            protocol_version: protocol_version.into(),
-            remote_version: remote_version.into(),
-            tested_at_unix_ms: now_unix_ms,
-        })
+        managed_worker::test_managed_worker(
+            &self.rest,
+            &observed,
+            target,
+            one_time_identity,
+            now_unix_ms,
+        )
+        .await
     }
 
     async fn rotate_secret(
@@ -892,17 +887,7 @@ where
             &request.control.operation_id.to_string(),
         )
         .await?;
-        let boundary = RollbackBoundary {
-            restored: BTreeSet::from([RollbackResourceScope::WorkerCode]),
-            not_restored: BTreeSet::from([
-                RollbackResourceScope::SecretBindings,
-                RollbackResourceScope::Routes,
-                RollbackResourceScope::KvData,
-                RollbackResourceScope::D1Data,
-                RollbackResourceScope::DurableObjects,
-            ]),
-            manual_repair_required: true,
-        };
+        let boundary = managed_worker::worker_code_rollback_boundary();
         Ok(RollbackReceipt {
             target: request.target,
             operation_id: request.control.operation_id,
@@ -938,6 +923,14 @@ where
         {
             resources.insert(format!("d1-database:{database_id}"));
         }
+        if observed
+            .resource_facts
+            .get("observed_reconciliation_schedule_in_sync")
+            .and_then(Value::as_bool)
+            == Some(true)
+        {
+            resources.insert("scheduled-trigger:commerce-reconciliation".into());
+        }
         DestroyPlan::build(target.clone(), observed, resources, control, now_unix_ms)
     }
 
@@ -963,6 +956,7 @@ where
             ));
         }
         let planned_database_id = destroy_d1_database_id(plan)?;
+        let role = managed_worker::role_from_observation(&observed);
         let observed_database_id = observed
             .resource_facts
             .get("observed_d1_database_id")
@@ -975,7 +969,14 @@ where
         }
         delete_worker_script(&self.rest, authorization, plan.target()).await?;
         if let Some(database_id) = planned_database_id {
-            d1::delete_database(&self.rest, authorization, plan.target(), database_id).await?;
+            managed_worker::delete_database(
+                &self.rest,
+                authorization,
+                plan.target(),
+                role,
+                database_id,
+            )
+            .await?;
         }
         Ok(DestroyReceipt {
             target: plan.target().clone(),

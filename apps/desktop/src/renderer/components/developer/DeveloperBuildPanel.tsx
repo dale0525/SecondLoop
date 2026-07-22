@@ -132,6 +132,18 @@ function releaseChecks(
   const providersReady = !managed || Boolean(
     project.providers.identity && project.providers.entitlement && project.providers.gateway,
   );
+  const commerceSelected = project?.deployment?.cloudflare.entitlement.mode === "managed_worker"
+    && project.deployment.cloudflare.entitlement.policy.sourceMode === "commerce_provider";
+  const commerce = snapshot?.verifiedBundle?.commerce;
+  const commerceReady = !commerceSelected || Boolean(
+    commerce
+    && commerce.portalVerifiedAtUnixMs > 0
+    && commerce.webhookVerifiedAtUnixMs > 0
+    && [
+      "checkout_session_v1", "customer_portal_v1", "product_discovery_v1",
+      "signed_webhook_v1", "subscription_reconciliation_v1", "test_environment_v1",
+    ].every((capability) => commerce.capabilities.includes(capability)),
+  );
   return [
     {
       id: "project",
@@ -158,6 +170,14 @@ function releaseChecks(
       description: managed
         ? snapshot?.deploymentStatus === "ready" ? t("developer.build.checkGatewayReady") : snapshot?.deploymentMessage ?? t("developer.build.checkGatewayMissing")
         : t("developer.build.checkGatewayNotRequired"),
+    },
+    {
+      id: "commerce",
+      ready: commerceReady,
+      title: t("developer.build.checkCommerce"),
+      description: commerceSelected
+        ? commerceReady ? t("developer.build.checkCommerceReady") : t("developer.build.checkCommerceMissing")
+        : t("developer.build.checkCommerceNotRequired"),
     },
     {
       id: "skills",

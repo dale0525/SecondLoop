@@ -131,6 +131,161 @@ function configureManagedGateway(appRoot, { writeLock = true } = {}) {
   return { manifest, project };
 }
 
+function configureManagedCommerceBundle(appRoot) {
+  const manifestPath = join(appRoot, "agent-app.json");
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  const identity = {
+    id: "agentweave.identity.oidc",
+    version: "1.0.0",
+    publicConfig: {
+      issuer: "https://identity.example.com",
+      clientId: "public-desktop-client",
+      audience: "com.example.release.gateway",
+    },
+  };
+  const entitlement = {
+    id: "agentweave.entitlements.cloudflare_policy",
+    version: "1.0.0",
+    publicConfig: { baseUrl: "https://managed-commerce-entitlements.workers.dev" },
+  };
+  const commerce = {
+    id: "agentweave.commerce.creem",
+    version: "1.0.0",
+    publicConfig: {
+      environment: "test",
+      successUrl: "https://example.com/billing/success",
+    },
+  };
+  const gateway = {
+    id: "cloudflare-workers",
+    version: "1.0.0",
+    publicConfig: {
+      upstreamBaseUrl: "https://api.openai.com/v1",
+      upstreamAuthentication: "bearer",
+    },
+  };
+  const modelAccess = {
+    configurationPolicy: "app_managed",
+    profile: {
+      providerId: "cloudflare-gateway",
+      endpointType: "responses",
+      baseUrl: "https://managed-commerce-gateway.workers.dev/v1",
+      modelName: "approved-model",
+      authentication: "user_identity",
+      headers: {},
+    },
+  };
+  const project = {
+    schemaVersion: 2,
+    providers: { identity, entitlement, commerce, gateway },
+    modelAccess,
+    deployment: {
+      provider: "cloudflare",
+      cloudflare: {
+        accountId: CLOUDFLARE_ACCOUNT_ID,
+        gatewayWorkerName: "managed-commerce-gateway",
+        environment: "production",
+        entitlement: {
+          mode: "managed_worker",
+          workerName: "managed-commerce-entitlements",
+          policy: {
+            sourceMode: "commerce_provider",
+            tenantLimits: { maxRequests: 0, maxUnits: 0 },
+            productPlans: [{
+              id: "pro",
+              displayName: "Pro",
+              enabled: true,
+              productId: "prod_123",
+              allowedModels: ["approved-model"],
+              limits: { maxRequests: 0, maxUnits: 100000, maxConcurrency: 0 },
+            }],
+          },
+        },
+      },
+    },
+  };
+  Object.assign(manifest, {
+    schemaVersion: 2,
+    modelAccess,
+    identity: { mode: "required", provider: identity },
+    entitlements: { mode: "required", provider: entitlement },
+  });
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  writeFileSync(
+    join(appRoot, "agentweave-project.json"),
+    `${JSON.stringify(project, null, 2)}\n`,
+    "utf8",
+  );
+  const lockedProvider = (selection) => ({
+    id: selection.id,
+    version: selection.version,
+    publicConfigHash: hashPublicValue(selection.publicConfig),
+  });
+  const lock = {
+    schemaVersion: 2,
+    desiredHash: computeProjectDesiredHash(project),
+    runtimeProjectionHash: hashPublicValue(runtimeProviderProjection(manifest)),
+    providers: {
+      gateway: lockedProvider(gateway),
+      entitlement: lockedProvider(entitlement),
+      commerce: lockedProvider(commerce),
+    },
+    bundle: {
+      provider: "cloudflare",
+      bundleRevision: `sha256:${"a".repeat(64)}`,
+      rollbackTarget: null,
+      bindings: {
+        entitlementProjection: { configured: true, revision: "auto-projection-revision" },
+      },
+      resources: {
+        gateway: {
+          accountId: CLOUDFLARE_ACCOUNT_ID,
+          workerName: "managed-commerce-gateway",
+          environment: "production",
+          versionId: "gateway-version",
+          deploymentId: "production",
+          endpoint: modelAccess.profile.baseUrl,
+        },
+        entitlementPolicy: {
+          accountId: CLOUDFLARE_ACCOUNT_ID,
+          workerName: "managed-commerce-entitlements",
+          environment: "production",
+          versionId: "entitlement-version",
+          deploymentId: "production",
+          endpoint: entitlement.publicConfig.baseUrl,
+        },
+        commerceProjection: {
+          providerId: commerce.id,
+          providerVersion: commerce.version,
+          environment: "test",
+          databaseId: "commerce-database-id",
+          migrationHash: `sha256:${"b".repeat(64)}`,
+          capabilities: [
+            "checkout_session_v1",
+            "customer_portal_v1",
+            "product_discovery_v1",
+            "signed_webhook_v1",
+            "subscription_reconciliation_v1",
+            "test_environment_v1",
+          ],
+          portalVerifiedAtUnixMs: 1_800_000_000_100,
+          webhookVerifiedAtUnixMs: 1_800_000_000_000,
+        },
+      },
+      verification: {
+        protocolVersion: "2/2",
+        testedAtUnixMs: 1_800_000_000_200,
+        hostCapabilities: ["commerce_checkout_v1", "commerce_customer_portal_v1"],
+        userEntrypoints: ["settings.billing"],
+      },
+    },
+  };
+  mkdirSync(join(appRoot, ".agentweave"), { recursive: true });
+  const lockPath = join(appRoot, ".agentweave", "deployment.lock");
+  writeFileSync(lockPath, `${JSON.stringify(lock, null, 2)}\n`, "utf8");
+  return { lock, lockPath };
+}
+
 test("Agent App release packaging is deterministic and locks selected packages", () => {
   const temp = makeTempRoot();
   try {
@@ -328,6 +483,33 @@ test("app-managed packaging requires deployment lock and excludes all developer 
     assert.doesNotMatch(serializedLock, new RegExp(CLOUDFLARE_ACCOUNT_ID));
     assert.doesNotMatch(serializedLock, /deployment-ref-worker/);
     validateAgentAppRelease(release);
+  } finally {
+    rmSync(temp, { recursive: true, force: true });
+  }
+});
+
+test("managed Commerce packaging fails closed without webhook, portal, Host, or Settings evidence", () => {
+  const temp = makeTempRoot();
+  try {
+    const app = join(temp, "app");
+    scaffoldAgentApp({ name: "Managed Commerce", appId: "com.example.managed-commerce", output: app });
+    const { lock, lockPath } = configureManagedCommerceBundle(app);
+    assert.doesNotThrow(() => packageAgentApp({ input: app, output: join(temp, "valid-release") }));
+
+    for (const [name, mutate, expected] of [
+      ["portal", (candidate) => { candidate.bundle.resources.commerceProjection.portalVerifiedAtUnixMs = 0; }, /portalVerifiedAtUnixMs/],
+      ["webhook", (candidate) => { candidate.bundle.resources.commerceProjection.webhookVerifiedAtUnixMs = 0; }, /webhookVerifiedAtUnixMs/],
+      ["host", (candidate) => { candidate.bundle.verification.hostCapabilities = ["commerce_checkout_v1"]; }, /commerce_customer_portal_v1/],
+      ["settings", (candidate) => { candidate.bundle.verification.userEntrypoints = []; }, /settings\.billing/],
+    ]) {
+      const invalid = structuredClone(lock);
+      mutate(invalid);
+      writeFileSync(lockPath, `${JSON.stringify(invalid, null, 2)}\n`, "utf8");
+      assert.throws(
+        () => packageAgentApp({ input: app, output: join(temp, `${name}-release`) }),
+        expected,
+      );
+    }
   } finally {
     rmSync(temp, { recursive: true, force: true });
   }

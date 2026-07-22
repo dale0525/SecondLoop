@@ -98,6 +98,9 @@ export function resolveDesktopSidecar(
     gatewayArtifact: !options.isPackaged
       ? path.join(developmentRoot, ".tool", "cloudflare-gateway", "gateway.mjs")
       : null,
+    entitlementArtifact: !options.isPackaged
+      ? path.join(developmentRoot, ".tool", "cloudflare-entitlement", "entitlement.mjs")
+      : null,
     isRegularFile,
     resourcesPath: options.resourcesPath,
     workspaceRoot,
@@ -121,6 +124,7 @@ function managedEnvironment(options: {
   dataRoot: string;
   env: NodeJS.ProcessEnv;
   gatewayArtifact: string | null;
+  entitlementArtifact: string | null;
   isPackaged: boolean;
   isRegularFile: (candidate: string) => boolean;
   resourcesPath: string;
@@ -136,6 +140,8 @@ function managedEnvironment(options: {
   delete env.AGENTWEAVE_LAUNCH_RESULT_FD;
   delete env.AGENTWEAVE_CLOUDFLARE_GATEWAY_ARTIFACT;
   delete env.AGENTWEAVE_CLOUDFLARE_GATEWAY_TEMPLATE_VERSION;
+  delete env.AGENTWEAVE_CLOUDFLARE_ENTITLEMENT_ARTIFACT;
+  delete env.AGENTWEAVE_CLOUDFLARE_ENTITLEMENT_TEMPLATE_VERSION;
   env.AGENTWEAVE_APP_DATA_ROOT = options.dataRoot;
   env.AGENTWEAVE_CACHE_ROOT = options.cacheRoot;
   env.AGENTWEAVE_DATABASE_URL = `sqlite://${path.join(options.dataRoot, "agentweave.db")}?mode=rwc`;
@@ -157,6 +163,14 @@ function managedEnvironment(options: {
     ) {
       env.AGENTWEAVE_CLOUDFLARE_GATEWAY_ARTIFACT = options.gatewayArtifact;
       env.AGENTWEAVE_CLOUDFLARE_GATEWAY_TEMPLATE_VERSION = "0.3.0";
+    }
+    if (
+      env.AGENTWEAVE_DEV_API === "1"
+      && options.entitlementArtifact
+      && options.isRegularFile(options.entitlementArtifact)
+    ) {
+      env.AGENTWEAVE_CLOUDFLARE_ENTITLEMENT_ARTIFACT = options.entitlementArtifact;
+      env.AGENTWEAVE_CLOUDFLARE_ENTITLEMENT_TEMPLATE_VERSION = "0.1.0";
     }
   }
   env.AGENTWEAVE_WORKSPACE_ROOT = options.workspaceRoot;

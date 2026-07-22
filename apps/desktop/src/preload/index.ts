@@ -1,6 +1,15 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { ApprovalObservationResult } from "../shared/approvalObservation";
 import {
+  COMMERCE_CHECKOUT_CHANNEL,
+  COMMERCE_PORTAL_CHANNEL,
+  COMMERCE_STATUS_CHANNEL,
+  parseBillingStatus,
+  parseCommerceOpenReceipt,
+  type BillingStatus,
+  type CommerceOpenReceipt,
+} from "../shared/commerce";
+import {
   DEVELOPER_ACCESS_REQUEST_CHANNEL,
   type DeveloperAccessOperation,
 } from "../shared/developerAccess";
@@ -70,6 +79,11 @@ export type DesktopPreloadApi = {
     restoreBackup: () => Promise<BackupRestoreReceipt | null>;
     status: () => Promise<DataProtectionStatus>;
   };
+  commerce: {
+    checkout: (planId: string) => Promise<CommerceOpenReceipt>;
+    customerPortal: () => Promise<CommerceOpenReceipt>;
+    status: () => Promise<BillingStatus>;
+  };
   developerProject: {
     load: () => Promise<DeveloperProjectSnapshot>;
     packageApp: () => Promise<DeveloperPackageReceipt>;
@@ -135,6 +149,17 @@ export const desktopPreloadApi: DesktopPreloadApi = Object.freeze({
     ),
     status: async () => parseDataProtectionStatus(
       await ipcRenderer.invoke(DATA_PROTECTION_STATUS_CHANNEL) as unknown,
+    ),
+  }),
+  commerce: Object.freeze({
+    checkout: async (planId: string) => parseCommerceOpenReceipt(
+      await ipcRenderer.invoke(COMMERCE_CHECKOUT_CHANNEL, { planId }) as unknown,
+    ),
+    customerPortal: async () => parseCommerceOpenReceipt(
+      await ipcRenderer.invoke(COMMERCE_PORTAL_CHANNEL) as unknown,
+    ),
+    status: async () => parseBillingStatus(
+      await ipcRenderer.invoke(COMMERCE_STATUS_CHANNEL) as unknown,
     ),
   }),
   developerProject: Object.freeze({

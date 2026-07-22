@@ -1,6 +1,10 @@
 import { requestServer } from "./trustedServerRequest";
 
-export type DeveloperProviderKind = "identity" | "entitlement" | "gateway_deployment";
+export type DeveloperProviderKind =
+  | "identity"
+  | "entitlement"
+  | "commerce"
+  | "gateway_deployment";
 
 export type DeveloperConfigFieldType =
   | "string"

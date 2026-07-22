@@ -64,11 +64,12 @@ function state({ fresh = false, allowed = true } = {}) {
   };
 }
 
-function config() {
+function config(schemaVersion = 1) {
   return parseGatewayConfig(gatewayConfig({
     entitlements: {
       mode: "signed_http",
       projection: {
+        schemaVersion,
         sourceId: "developer-backend-v1",
         url: "https://entitlements.example.test/v1/projection",
         secretBinding: "ENTITLEMENT_PROJECTION_SECRET",
@@ -115,7 +116,7 @@ async function hmacKey(secret = SECRET) {
 
 async function signedResponse(request, { decision = "allow", secret = SECRET, mutate } = {}) {
   const value = {
-    schemaVersion: 1,
+    schemaVersion: request.schemaVersion,
     sourceId: request.sourceId,
     projectionId: "projection-42",
     revision: "revision-7",
@@ -130,13 +131,24 @@ async function signedResponse(request, { decision = "allow", secret = SECRET, mu
     expiresAt: NOW_SECONDS + 300,
     decision,
     reasonCode: decision === "allow" ? null : "subscription_required",
-    tenantBudget: {
+    tenantBudget: request.schemaVersion === 2 ? {
+      periodStart: NOW_SECONDS - 60,
+      periodEnd: NOW_SECONDS + 3600,
+      requests: { mode: "unlimited" },
+      units: { mode: "limited", value: 1_000_000 },
+    } : {
       periodStart: NOW_SECONDS - 60,
       periodEnd: NOW_SECONDS + 3600,
       maxRequests: 1000,
       maxUnits: 1_000_000,
     },
-    subjectBudget: {
+    subjectBudget: request.schemaVersion === 2 ? {
+      periodStart: NOW_SECONDS - 60,
+      periodEnd: NOW_SECONDS + 3600,
+      requests: { mode: "limited", value: 100 },
+      units: { mode: "unlimited" },
+      concurrency: { mode: "unlimited" },
+    } : {
       periodStart: NOW_SECONDS - 60,
       periodEnd: NOW_SECONDS + 3600,
       maxRequests: 100,
@@ -149,19 +161,25 @@ async function signedResponse(request, { decision = "allow", secret = SECRET, mu
   const signature = await webcrypto.subtle.sign(
     "HMAC",
     await hmacKey(secret),
-    canonical(projectionInternals.RESPONSE_DOMAIN, [request.nonce], body),
+    canonical(
+      request.schemaVersion === 2
+        ? projectionInternals.RESPONSE_DOMAIN_V2
+        : projectionInternals.RESPONSE_DOMAIN,
+      [request.nonce],
+      body,
+    ),
   );
   return new Response(body, {
     status: 200,
     headers: {
       "content-type": "application/json",
-      [projectionInternals.SIGNATURE_HEADER]: `v1=${Buffer.from(signature).toString("base64url")}`,
+      [projectionInternals.SIGNATURE_HEADER]: `v${request.schemaVersion}=${Buffer.from(signature).toString("base64url")}`,
     },
   });
 }
 
-function resolver(database, fetchImpl) {
-  return new EntitlementProjectionResolver(config(), environment(database), {
+function resolver(database, fetchImpl, schemaVersion = 1) {
+  return new EntitlementProjectionResolver(config(schemaVersion), environment(database), {
     fetchImpl,
     cryptoImpl: webcrypto,
     nowMilliseconds: () => NOW_SECONDS * 1000,
@@ -221,6 +239,24 @@ test("a fresh signed projection avoids the remote resolver", async () => {
   await target.ensure(identity, { model: "model-small" });
   assert.equal(database.batches.length, 0);
   assert.equal(database.reads.length, 1);
+});
+
+test("projection v2 stores explicit unlimited flags without magic numeric budgets", async () => {
+  const database = new FakeD1([state(), state({ fresh: true })]);
+  let captured;
+  const target = resolver(database, async (url, init) => {
+    captured = init;
+    return signedResponse(JSON.parse(new TextDecoder().decode(init.body)));
+  }, 2);
+  await target.ensure(identity, { model: "model-small" });
+  const request = JSON.parse(new TextDecoder().decode(captured.body));
+  assert.equal(request.schemaVersion, 2);
+  assert.equal(captured.headers["x-agentweave-entitlement-version"], "2");
+  assert.match(captured.headers[projectionInternals.SIGNATURE_HEADER], /^v2=/);
+  const tenantValues = database.batches[0][3].values;
+  const subjectValues = database.batches[0][4].values;
+  assert.deepEqual(tenantValues.slice(6, 10), [0, 1_000_000, 1, 0]);
+  assert.deepEqual(subjectValues.slice(7, 13), [100, 0, 1000, 0, 1, 1]);
 });
 
 test("invalid signatures, stale bindings, and resolver failures fail closed without D1 writes", async () => {

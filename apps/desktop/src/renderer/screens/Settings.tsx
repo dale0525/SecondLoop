@@ -7,6 +7,7 @@ import { SettingsModel } from "../components/SettingsModel";
 import { SettingsFoundation } from "../components/SettingsFoundation";
 import { SettingsHostBootstrap } from "../components/SettingsHostBootstrap";
 import { SettingsIdentity } from "../components/SettingsIdentity";
+import { SettingsBilling } from "../components/SettingsBilling";
 import { useHostBootstrap } from "../hostBootstrap";
 import { SettingsLanguage } from "../components/SettingsLanguage";
 import { useI18n } from "../i18n/I18nProvider";
@@ -51,6 +52,7 @@ export function Settings({
       <div className="settings-shell">
         <SettingsHostBootstrap />
         {bootstrap.discovery?.access.identity.mode === "required" ? <SettingsIdentity /> : null}
+        <SettingsBilling />
         <SettingsAppearance />
         <SettingsLanguage />
         <SettingsFoundation

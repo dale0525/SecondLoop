@@ -2,6 +2,8 @@ import { fail } from "./errors.js";
 
 const REQUEST_DOMAIN = "agentweave-entitlement-projection-request-v1";
 const RESPONSE_DOMAIN = "agentweave-entitlement-projection-response-v1";
+const REQUEST_DOMAIN_V2 = "agentweave-entitlement-projection-request-v2";
+const RESPONSE_DOMAIN_V2 = "agentweave-entitlement-projection-response-v2";
 const SIGNATURE_HEADER = "x-agentweave-entitlement-signature";
 
 const POLICY_STATE = `
@@ -55,16 +57,19 @@ WHERE deployment_id = ?1 AND provider_id = ?2 AND issuer = ?3 AND tenant = ?4
 const UPSERT_TENANT = `
 INSERT INTO gateway_tenant_budgets (
   deployment_id, provider_id, issuer, tenant, status, period_start, period_end,
-  max_requests, max_units, used_requests, used_units, reserved_requests,
+  max_requests, max_units, max_requests_unlimited, max_units_unlimited,
+  used_requests, used_units, reserved_requests,
   reserved_units, policy_source, policy_revision, policy_projection_id,
   policy_issued_at, policy_expires_at, updated_at
-) VALUES (?1, ?2, ?3, ?4, 'active', ?5, ?6, ?7, ?8, 0, 0, 0, 0,
-  ?9, ?10, ?11, ?12, ?13, ?14)
+) VALUES (?1, ?2, ?3, ?4, 'active', ?5, ?6, ?7, ?8, ?9, ?10, 0, 0, 0, 0,
+  ?11, ?12, ?13, ?14, ?15, ?16)
 ON CONFLICT (deployment_id, provider_id, issuer, tenant, period_start) DO UPDATE SET
   status = excluded.status,
   period_end = excluded.period_end,
   max_requests = excluded.max_requests,
   max_units = excluded.max_units,
+  max_requests_unlimited = excluded.max_requests_unlimited,
+  max_units_unlimited = excluded.max_units_unlimited,
   policy_source = excluded.policy_source,
   policy_revision = excluded.policy_revision,
   policy_projection_id = excluded.policy_projection_id,
@@ -80,16 +85,20 @@ const UPSERT_SUBJECT = `
 INSERT INTO gateway_entitlements (
   deployment_id, provider_id, issuer, tenant, subject, status, period_start,
   period_end, max_requests, max_units, max_concurrency, used_requests, used_units,
+  max_requests_unlimited, max_units_unlimited, max_concurrency_unlimited,
   reserved_requests, reserved_units, policy_source, policy_revision,
   policy_projection_id, policy_issued_at, policy_expires_at, updated_at
-) VALUES (?1, ?2, ?3, ?4, ?5, 'active', ?6, ?7, ?8, ?9, ?10, 0, 0, 0, 0,
-  ?11, ?12, ?13, ?14, ?15, ?16)
+) VALUES (?1, ?2, ?3, ?4, ?5, 'active', ?6, ?7, ?8, ?9, ?10, 0, 0,
+  ?11, ?12, ?13, 0, 0, ?14, ?15, ?16, ?17, ?18, ?19)
 ON CONFLICT (deployment_id, provider_id, issuer, tenant, subject, period_start) DO UPDATE SET
   status = excluded.status,
   period_end = excluded.period_end,
   max_requests = excluded.max_requests,
   max_units = excluded.max_units,
   max_concurrency = excluded.max_concurrency,
+  max_requests_unlimited = excluded.max_requests_unlimited,
+  max_units_unlimited = excluded.max_units_unlimited,
+  max_concurrency_unlimited = excluded.max_concurrency_unlimited,
   policy_source = excluded.policy_source,
   policy_revision = excluded.policy_revision,
   policy_projection_id = excluded.policy_projection_id,
@@ -151,21 +160,64 @@ function onlyKeys(value, allowed, label) {
   return value;
 }
 
-function budget(value, label, subject = false) {
+function budgetV1(value, label, subject = false) {
   onlyKeys(value, ["periodStart", "periodEnd", "maxRequests", "maxUnits", "maxConcurrency"], label);
   const result = {
     periodStart: integer(value.periodStart, `${label}.periodStart`, 0, Number.MAX_SAFE_INTEGER),
     periodEnd: integer(value.periodEnd, `${label}.periodEnd`, 1, Number.MAX_SAFE_INTEGER),
     maxRequests: integer(value.maxRequests, `${label}.maxRequests`, 0, Number.MAX_SAFE_INTEGER),
     maxUnits: integer(value.maxUnits, `${label}.maxUnits`, 0, Number.MAX_SAFE_INTEGER),
+    maxRequestsUnlimited: 0,
+    maxUnitsUnlimited: 0,
   };
   if (result.periodEnd <= result.periodStart) throw new TypeError(`${label} window is invalid`);
   if (subject) {
     result.maxConcurrency = integer(value.maxConcurrency, `${label}.maxConcurrency`, 1, 1000);
+    result.maxConcurrencyUnlimited = 0;
   } else if (value.maxConcurrency !== undefined) {
     throw new TypeError(`${label}.maxConcurrency is not allowed`);
   }
   return Object.freeze(result);
+}
+
+function limitV2(value, label, maximum = Number.MAX_SAFE_INTEGER) {
+  onlyKeys(value, ["mode", "value"], label);
+  const mode = text(value.mode, `${label}.mode`, 16);
+  if (mode === "unlimited") {
+    if (value.value !== undefined) throw new TypeError(`${label}.value is not allowed`);
+    return Object.freeze({ value: 0, unlimited: 1 });
+  }
+  if (mode !== "limited") throw new TypeError(`${label}.mode is invalid`);
+  return Object.freeze({ value: integer(value.value, `${label}.value`, 1, maximum), unlimited: 0 });
+}
+
+function budgetV2(value, label, subject = false) {
+  onlyKeys(value, ["periodStart", "periodEnd", "requests", "units", "concurrency"], label);
+  const requests = limitV2(value.requests, `${label}.requests`);
+  const units = limitV2(value.units, `${label}.units`);
+  const result = {
+    periodStart: integer(value.periodStart, `${label}.periodStart`, 0, Number.MAX_SAFE_INTEGER),
+    periodEnd: integer(value.periodEnd, `${label}.periodEnd`, 1, Number.MAX_SAFE_INTEGER),
+    maxRequests: requests.value,
+    maxUnits: units.value,
+    maxRequestsUnlimited: requests.unlimited,
+    maxUnitsUnlimited: units.unlimited,
+  };
+  if (result.periodEnd <= result.periodStart) throw new TypeError(`${label} window is invalid`);
+  if (subject) {
+    const concurrency = limitV2(value.concurrency, `${label}.concurrency`, 1000);
+    result.maxConcurrency = concurrency.unlimited ? 1000 : concurrency.value;
+    result.maxConcurrencyUnlimited = concurrency.unlimited;
+  } else if (value.concurrency !== undefined) {
+    throw new TypeError(`${label}.concurrency is not allowed`);
+  }
+  return Object.freeze(result);
+}
+
+function budget(value, label, subject, schemaVersion) {
+  return schemaVersion === 2
+    ? budgetV2(value, label, subject)
+    : budgetV1(value, label, subject);
 }
 
 function concat(...values) {
@@ -241,14 +293,14 @@ function validateProjection(value, expected, config, now) {
     "tenantBudget",
     "subjectBudget",
   ], "projection");
-  const tenantBudget = budget(value.tenantBudget, "projection.tenantBudget");
-  const subjectBudget = budget(value.subjectBudget, "projection.subjectBudget", true);
+  const tenantBudget = budget(value.tenantBudget, "projection.tenantBudget", false, config.schemaVersion);
+  const subjectBudget = budget(value.subjectBudget, "projection.subjectBudget", true, config.schemaVersion);
   const issuedAt = integer(value.issuedAt, "projection.issuedAt", 0, Number.MAX_SAFE_INTEGER);
   const expiresAt = integer(value.expiresAt, "projection.expiresAt", 1, Number.MAX_SAFE_INTEGER);
   const decision = text(value.decision, "projection.decision", 16);
   if (!['allow', 'deny'].includes(decision)) throw new TypeError("projection.decision is invalid");
   const reasonCode = value.reasonCode === null ? null : text(value.reasonCode, "projection.reasonCode", 128);
-  const exact = value.schemaVersion === 1
+  const exact = value.schemaVersion === config.schemaVersion
     && value.sourceId === config.sourceId
     && value.nonce === expected.nonce
     && value.deploymentId === expected.deploymentId
@@ -345,7 +397,7 @@ export class EntitlementProjectionResolver {
   async #fetchProjection(identity, model, now) {
     const nonce = this.cryptoImpl.randomUUID();
     const request = {
-      schemaVersion: 1,
+      schemaVersion: this.projection.schemaVersion,
       sourceId: this.projection.sourceId,
       nonce,
       deploymentId: this.config.deploymentId,
@@ -370,7 +422,7 @@ export class EntitlementProjectionResolver {
       signature = await this.cryptoImpl.subtle.sign(
         "HMAC",
         key,
-        canonical(REQUEST_DOMAIN, [String(now), nonce], body),
+        canonical(this.projection.schemaVersion === 2 ? REQUEST_DOMAIN_V2 : REQUEST_DOMAIN, [String(now), nonce], body),
       );
     } catch {
       unavailable();
@@ -390,10 +442,10 @@ export class EntitlementProjectionResolver {
         signal: abort.signal,
         headers: {
           "content-type": "application/json",
-          "x-agentweave-entitlement-version": "1",
+          "x-agentweave-entitlement-version": String(this.projection.schemaVersion),
           "x-agentweave-entitlement-timestamp": String(now),
           "x-agentweave-entitlement-nonce": nonce,
-          [SIGNATURE_HEADER]: `v1=${base64Url(signature)}`,
+          [SIGNATURE_HEADER]: `v${this.projection.schemaVersion}=${base64Url(signature)}`,
         },
         body,
       });
@@ -404,12 +456,13 @@ export class EntitlementProjectionResolver {
       }
       responseBody = await boundedBody(response, this.projection.maxResponseBytes);
       const signed = response.headers.get(SIGNATURE_HEADER);
-      if (!signed?.startsWith("v1=")) throw new TypeError("projection signature is missing");
+      const signaturePrefix = `v${this.projection.schemaVersion}=`;
+      if (!signed?.startsWith(signaturePrefix)) throw new TypeError("projection signature is missing");
       const valid = await this.cryptoImpl.subtle.verify(
         "HMAC",
         key,
-        decodeBase64Url(signed.slice(3)),
-        canonical(RESPONSE_DOMAIN, [nonce], responseBody),
+        decodeBase64Url(signed.slice(signaturePrefix.length)),
+        canonical(this.projection.schemaVersion === 2 ? RESPONSE_DOMAIN_V2 : RESPONSE_DOMAIN, [nonce], responseBody),
       );
       if (!valid) throw new TypeError("projection signature is invalid");
       const decoded = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(responseBody));
@@ -462,6 +515,8 @@ export class EntitlementProjectionResolver {
           tenant.periodEnd,
           tenant.maxRequests,
           tenant.maxUnits,
+          tenant.maxRequestsUnlimited,
+          tenant.maxUnitsUnlimited,
           source,
           projection.revision,
           projection.projectionId,
@@ -477,6 +532,9 @@ export class EntitlementProjectionResolver {
           subject.maxRequests,
           subject.maxUnits,
           subject.maxConcurrency,
+          subject.maxRequestsUnlimited,
+          subject.maxUnitsUnlimited,
+          subject.maxConcurrencyUnlimited,
           source,
           projection.revision,
           projection.projectionId,
@@ -509,6 +567,8 @@ export class EntitlementProjectionResolver {
 export const projectionInternals = Object.freeze({
   POLICY_STATE,
   REQUEST_DOMAIN,
+  REQUEST_DOMAIN_V2,
   RESPONSE_DOMAIN,
+  RESPONSE_DOMAIN_V2,
   SIGNATURE_HEADER,
 });

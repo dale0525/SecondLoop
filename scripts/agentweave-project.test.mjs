@@ -95,6 +95,136 @@ function deploymentLock(project = managedProject(), app = managedApp(project)) {
   };
 }
 
+function managedBundleProject() {
+  return {
+    schemaVersion: 2,
+    providers: {
+      identity: provider("agentweave.identity.oidc", {
+        audience: "com.example.agent.gateway",
+        clientId: "desktop-public-client",
+        issuer: "https://identity.example.com",
+      }),
+      entitlement: provider("agentweave.entitlements.cloudflare_policy", {
+        baseUrl: "https://example-agent-entitlements.workers.dev",
+      }),
+      commerce: provider("agentweave.commerce.creem", {
+        environment: "test",
+        successUrl: "https://example.com/billing/success",
+      }),
+      gateway: provider("cloudflare-workers", {
+        upstreamBaseUrl: "https://api.openai.com/v1",
+        upstreamAuthentication: "bearer",
+      }),
+    },
+    modelAccess: {
+      configurationPolicy: "app_managed",
+      profile: {
+        providerId: "cloudflare-gateway",
+        endpointType: "responses",
+        baseUrl: ENDPOINT,
+        modelName: "approved-model",
+        authentication: "user_identity",
+        headers: {},
+      },
+    },
+    deployment: {
+      provider: "cloudflare",
+      cloudflare: {
+        accountId: ACCOUNT_ID,
+        gatewayWorkerName: "example-agent-gateway",
+        environment: "production",
+        entitlement: {
+          mode: "managed_worker",
+          workerName: "example-agent-entitlements",
+          policy: {
+            sourceMode: "commerce_provider",
+            tenantLimits: { maxRequests: 0, maxUnits: 0 },
+            productPlans: [{
+              id: "pro",
+              displayName: "Pro",
+              enabled: true,
+              productId: "prod_123",
+              allowedModels: ["approved-model"],
+              limits: { maxRequests: 0, maxUnits: 100000, maxConcurrency: 0 },
+            }],
+          },
+        },
+      },
+    },
+  };
+}
+
+function deploymentBundleLock(project = managedBundleProject(), app = managedApp(project)) {
+  const lockedProvider = (selection) => ({
+    id: selection.id,
+    version: selection.version,
+    publicConfigHash: hashPublicValue(selection.publicConfig),
+  });
+  const capabilities = [
+    "checkout_session_v1",
+    "customer_portal_v1",
+    "product_discovery_v1",
+    "signed_webhook_v1",
+    "subscription_reconciliation_v1",
+    "test_environment_v1",
+  ];
+  return {
+    schemaVersion: 2,
+    desiredHash: computeProjectDesiredHash(project),
+    runtimeProjectionHash: hashPublicValue(runtimeProviderProjection(app)),
+    providers: {
+      gateway: lockedProvider(project.providers.gateway),
+      entitlement: lockedProvider(project.providers.entitlement),
+      commerce: lockedProvider(project.providers.commerce),
+    },
+    bundle: {
+      provider: "cloudflare",
+      bundleRevision: `sha256:${"a".repeat(64)}`,
+      rollbackTarget: {
+        gatewayVersionId: "gateway-version-previous",
+        entitlementVersionId: "entitlement-version-previous",
+      },
+      bindings: {
+        entitlementProjection: { configured: true, revision: "auto-projection-revision" },
+      },
+      resources: {
+        gateway: {
+          accountId: ACCOUNT_ID,
+          workerName: "example-agent-gateway",
+          environment: "production",
+          versionId: "gateway-version-current",
+          deploymentId: "production",
+          endpoint: ENDPOINT,
+        },
+        entitlementPolicy: {
+          accountId: ACCOUNT_ID,
+          workerName: "example-agent-entitlements",
+          environment: "production",
+          versionId: "entitlement-version-current",
+          deploymentId: "production",
+          endpoint: "https://example-agent-entitlements.workers.dev",
+        },
+        commerceProjection: {
+          providerId: "agentweave.commerce.creem",
+          providerVersion: "1.0.0",
+          environment: "test",
+          databaseId: "commerce-database-id",
+          migrationHash: `sha256:${"b".repeat(64)}`,
+          capabilities,
+          portalVerifiedAtUnixMs: 1_800_000_000_100,
+          webhookVerifiedAtUnixMs: 1_800_000_000_000,
+        },
+      },
+      verification: {
+        protocolVersion: "2/2",
+        testedAtUnixMs: 1_800_000_000_200,
+        hostCapabilities: ["commerce_checkout_v1", "commerce_customer_portal_v1"],
+        userEntrypoints: ["settings.billing"],
+      },
+    },
+  };
+}
+
 function writeJson(path, value) {
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
 }
@@ -239,6 +369,33 @@ test("deployment lock strictly binds Cloudflare references to desired and runtim
   assert.throws(
     () => validateDeploymentLockData(unknown, { project, app }),
     /unknown field 'zoneId'/,
+  );
+});
+
+test("managed Commerce bundle lock requires webhook, portal, Host commands, and billing entrypoint", () => {
+  const project = managedBundleProject();
+  const app = managedApp(project);
+  const lock = deploymentBundleLock(project, app);
+  assert.equal(validateDeploymentLockData(lock, { project, app }), lock);
+  assert.doesNotMatch(JSON.stringify(lock), /apiKey|webhookSecret|portalUrl|customerId/i);
+
+  for (const [mutate, expected] of [
+    [(candidate) => { candidate.bundle.resources.commerceProjection.portalVerifiedAtUnixMs = 0; }, /portalVerifiedAtUnixMs/],
+    [(candidate) => { candidate.bundle.resources.commerceProjection.webhookVerifiedAtUnixMs = 0; }, /webhookVerifiedAtUnixMs/],
+    [(candidate) => { candidate.bundle.verification.hostCapabilities = ["commerce_checkout_v1"]; }, /commerce_customer_portal_v1/],
+    [(candidate) => { candidate.bundle.verification.userEntrypoints = []; }, /settings\.billing/],
+    [(candidate) => { candidate.bundle.bindings.entitlementProjection.configured = false; }, /must be configured/],
+  ]) {
+    const invalid = structuredClone(lock);
+    mutate(invalid);
+    assert.throws(() => validateDeploymentLockData(invalid, { project, app }), expected);
+  }
+
+  const drifted = structuredClone(lock);
+  drifted.bundle.resources.entitlementPolicy.workerName = "different-entitlement-worker";
+  assert.throws(
+    () => validateDeploymentLockData(drifted, { project, app }),
+    /references do not match desired Cloudflare resources/,
   );
 });
 

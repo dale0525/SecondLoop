@@ -7,8 +7,10 @@
   "main": "dist-electron/main.cjs",
   "scripts": {
     "build": "vite build && npm run build:electron",
-    "build:electron": "npm run build:gateway && vite build --config vite.electron.config.ts --mode electron-main && vite build --config vite.electron.config.ts --mode electron-preload && vite build --config vite.electron.config.ts --mode electron-approval-preload && node scripts/check-preload-bundles.mjs",
+    "build:electron": "npm run build:workers && vite build --config vite.electron.config.ts --mode electron-main && vite build --config vite.electron.config.ts --mode electron-preload && vite build --config vite.electron.config.ts --mode electron-approval-preload && node scripts/check-preload-bundles.mjs",
+    "build:workers": "npm run build:gateway && npm run build:entitlement",
     "build:gateway": "node ../../scripts/build-cloudflare-gateway.mjs",
+    "build:entitlement": "node ../../scripts/build-cloudflare-entitlement.mjs",
     "dev": "vite",
     "package:macos": "node scripts/package-macos.mjs",
     "start": "electron .",

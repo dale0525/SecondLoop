@@ -16,7 +16,7 @@ const MIGRATION_TABLE: &str = "agentweave_gateway_migrations";
 const MAX_BOOTSTRAP_ROWS: usize = 10_000;
 const MAX_D1_BATCH_STATEMENTS: usize = 1_000;
 const MAX_D1_SQL_BYTES: usize = 512 * 1024;
-const MIGRATIONS: [(&str, &str); 3] = [
+const MIGRATIONS: [(&str, &str); 4] = [
     (
         "0001_initial.sql",
         include_str!("../../../../gateway/cloudflare-worker/migrations/0001_initial.sql"),
@@ -31,6 +31,12 @@ const MIGRATIONS: [(&str, &str); 3] = [
         "0003_signed_entitlement_projections.sql",
         include_str!(
             "../../../../gateway/cloudflare-worker/migrations/0003_signed_entitlement_projections.sql"
+        ),
+    ),
+    (
+        "0004_unlimited_policy_limits.sql",
+        include_str!(
+            "../../../../gateway/cloudflare-worker/migrations/0004_unlimited_policy_limits.sql"
         ),
     ),
 ];
@@ -417,7 +423,10 @@ where
     parse_database(&result.value, &name)
 }
 
-fn parse_database_list(value: &Value, expected_name: &str) -> DevkitResult<Option<D1Database>> {
+pub(super) fn parse_database_list(
+    value: &Value,
+    expected_name: &str,
+) -> DevkitResult<Option<D1Database>> {
     let records = value.as_array().ok_or_else(|| {
         DevkitError::new(
             DevkitErrorCode::RemoteProtocol,
@@ -441,7 +450,7 @@ fn parse_database_list(value: &Value, expected_name: &str) -> DevkitResult<Optio
     }
 }
 
-fn parse_database(value: &Value, expected_name: &str) -> DevkitResult<D1Database> {
+pub(super) fn parse_database(value: &Value, expected_name: &str) -> DevkitResult<D1Database> {
     let id = value
         .get("uuid")
         .or_else(|| value.get("id"))
@@ -530,7 +539,7 @@ where
     Ok(())
 }
 
-fn split_sql_statements(sql: &str) -> DevkitResult<Vec<String>> {
+pub(super) fn split_sql_statements(sql: &str) -> DevkitResult<Vec<String>> {
     #[derive(Clone, Copy, Eq, PartialEq)]
     enum State {
         Normal,
@@ -647,7 +656,7 @@ fn split_sql_statements(sql: &str) -> DevkitResult<Vec<String>> {
     Ok(statements)
 }
 
-async fn d1_batch<T, R>(
+pub(super) async fn d1_batch<T, R>(
     rest: &CloudflareRestClient<T, R>,
     authorization: &DeveloperAuthorization,
     target: &DeploymentTarget,
@@ -687,7 +696,7 @@ where
     Ok(value)
 }
 
-fn parse_applied_migrations(value: &Value) -> DevkitResult<BTreeMap<String, String>> {
+pub(super) fn parse_applied_migrations(value: &Value) -> DevkitResult<BTreeMap<String, String>> {
     let rows = query_rows(value)?;
     let mut applied = BTreeMap::new();
     for row in rows {
@@ -713,7 +722,7 @@ fn parse_applied_migrations(value: &Value) -> DevkitResult<BTreeMap<String, Stri
     Ok(applied)
 }
 
-fn query_rows(value: &Value) -> DevkitResult<&[Value]> {
+pub(super) fn query_rows(value: &Value) -> DevkitResult<&[Value]> {
     let results = value.as_array().ok_or_else(|| {
         DevkitError::new(
             DevkitErrorCode::RemoteProtocol,
@@ -839,7 +848,7 @@ where
     Ok(())
 }
 
-async fn d1_query<T, R>(
+pub(super) async fn d1_query<T, R>(
     rest: &CloudflareRestClient<T, R>,
     authorization: &DeveloperAuthorization,
     target: &DeploymentTarget,

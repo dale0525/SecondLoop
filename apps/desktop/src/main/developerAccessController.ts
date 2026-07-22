@@ -15,32 +15,27 @@ import {
 } from "./identityCallbackServer";
 import type { SidecarRequest } from "./sidecarSupervisor";
 import { connectDeveloperFirebase } from "./developerFirebaseController";
-
-const MAX_RESPONSE_BYTES = 1024 * 1024;
-const MAX_REQUEST_BYTES = 2 * 1024 * 1024;
-const PLAN_HASH = /^[a-f0-9]{64}$/;
-const PROJECT_REVISION = /^[a-f0-9]{64}$/;
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-type IpcEvent = { sender: { id: number } };
-type IpcMainLike = {
-  handle(channel: string, handler: (event: IpcEvent, value: unknown) => unknown): void;
-  removeHandler(channel: string): void;
-};
-
-type RequestDescription = Readonly<{
-  body?: unknown;
-  method: "DELETE" | "GET" | "POST";
-  pathname: string;
-  planRevision?: string;
-}>;
-
-type PendingDeployment = Readonly<{
-  deployment: DeveloperGatewayDeploymentReceipt;
-  projectRevision: string;
-}>;
+import {
+  createDeveloperAccessBundleController,
+  type DeveloperAccessBundleProjectCallbacks,
+} from "./developerAccessBundleController";
+import {
+  createDeveloperAccessBundleLifecycleController,
+  type DeveloperAccessBundleLifecycleCallbacks,
+} from "./developerAccessBundleLifecycleController";
+import {
+  DEVELOPER_ACCESS_OPERATIONS,
+  LIFECYCLE_TARGET_OPERATIONS,
+  MAX_REQUEST_BYTES, MAX_RESPONSE_BYTES, PLAN_HASH, PROJECT_REVISION, UUID,
+  type IpcEvent,
+  type IpcMainLike,
+  type PendingDeployment,
+  type RequestDescription,
+} from "./developerAccessControllerDefinitions";
 
 export function registerDeveloperAccessController(options: {
+  accessBundle?: DeveloperAccessBundleProjectCallbacks;
+  accessBundleLifecycle?: DeveloperAccessBundleLifecycleCallbacks;
   ensureCredentialVault: () => Promise<void>;
   ipcMain: IpcMainLike;
   invalidateDeployment?: () => Promise<DeveloperProjectSnapshot>;
@@ -65,6 +60,17 @@ export function registerDeveloperAccessController(options: {
   const planRevisions = new Map<string, string>();
   const destroyPlanRevisions = new Map<string, string>();
   const pendingDeployments = new Map<string, PendingDeployment>();
+  const accessBundles = createDeveloperAccessBundleController({
+    loadProject: options.loadProject,
+    recordBundle: options.accessBundle?.record,
+    requestJson: (description) => requestSidecarJson(options.sidecarRequest, description),
+    verifyBundle: options.accessBundle?.verify,
+  });
+  const accessBundleLifecycle = createDeveloperAccessBundleLifecycleController({
+    callbacks: options.accessBundleLifecycle,
+    loadProject: options.loadProject,
+    requestJson: (description) => requestSidecarJson(options.sidecarRequest, description),
+  });
   const assertRequester = (event: IpcEvent) => {
     if (event.sender.id !== options.requesterWebContents.id) {
       throw new Error("Developer access is restricted to the requester window");
@@ -85,6 +91,17 @@ export function registerDeveloperAccessController(options: {
     assertRequester(event);
     const request = parseRequest(value);
     await options.ensureCredentialVault();
+    if (request.operation === "commerce.creem.dashboard") {
+      if (request.input !== undefined) {
+        throw new Error("Creem Dashboard navigation does not accept input");
+      }
+      await options.openExternal("https://www.creem.io/dashboard/developers/webhooks");
+      return Object.freeze({ opened: true });
+    }
+    if (accessBundles.handles(request.operation)) return accessBundles.handle(request);
+    if (accessBundleLifecycle.handles(request.operation)) {
+      return accessBundleLifecycle.handle(request);
+    }
     if (request.operation === "cloudflare.connect") {
       return connectCloudflare(options, request.input, closeCloudflareListener, (active) => {
         cloudflareListener = active;
@@ -130,6 +147,7 @@ export function registerDeveloperAccessController(options: {
       publicResponse(response);
       const status = exactRecord(response, [
         "authorization",
+        "entitlementTemplate",
         "firebaseAuthorization",
         "gatewayTemplate",
         "sensitiveBindings",
@@ -151,6 +169,7 @@ export function registerDeveloperAccessController(options: {
               projectRevision: pending.projectRevision,
             })
           : null,
+        pendingAccessBundle: accessBundles.pending(),
       });
     }
     if (request.operation === "gateway.rotate" || request.operation === "gateway.rollback") {
@@ -175,6 +194,7 @@ export function registerDeveloperAccessController(options: {
       if (!invalidate) throw new Error("Gateway deployment invalidation is unavailable");
       const project = await invalidate();
       pendingDeployments.clear();
+      accessBundles.clear();
       destroyPlanRevisions.delete(destroy.planHash);
       return Object.freeze({ destroy, project });
     }
@@ -225,6 +245,7 @@ export function registerDeveloperAccessController(options: {
       planRevisions.clear();
       destroyPlanRevisions.clear();
       pendingDeployments.clear();
+      accessBundleLifecycle.clear();
     }
     if (request.operation === "firebase.disconnect") await closeFirebaseListener();
     if (request.operation === "cloudflare.accounts") return parseAccounts(response);
@@ -282,7 +303,8 @@ async function connectCloudflare(
 
 function parseRequest(value: unknown): DeveloperAccessRequest {
   const request = exactRecord(value, ["input", "operation"], true);
-  if (typeof request.operation !== "string" || !OPERATIONS.has(request.operation as DeveloperAccessOperation)) {
+  if (typeof request.operation !== "string"
+    || !DEVELOPER_ACCESS_OPERATIONS.has(request.operation as DeveloperAccessOperation)) {
     throw new Error("Developer access operation is invalid");
   }
   return {
@@ -349,6 +371,8 @@ function describeRequest(request: DeveloperAccessRequest): RequestDescription {
       throw new Error("Cloudflare connect must use the protected authorization flow");
     case "firebase.connect":
       throw new Error("Firebase connect must use the protected authorization flow");
+    default:
+      throw new Error("Developer access operation requires a protected flow");
   }
 }
 
@@ -971,25 +995,3 @@ function exactRecord(
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-
-const OPERATIONS = new Set<DeveloperAccessOperation>([
-  "status", "cloudflare.connect", "cloudflare.cancel", "cloudflare.disconnect",
-  "cloudflare.accounts", "cloudflare.selectAccount",
-  "firebase.connect", "firebase.cancel", "firebase.disconnect",
-  "firebase.projects", "firebase.configure",
-  "gateway.plan",
-  "gateway.apply",
-  "gateway.inspect",
-  "gateway.test",
-  "gateway.rotate",
-  "gateway.rollback",
-  "gateway.destroyPlan",
-  "gateway.destroyApply",
-]);
-
-const LIFECYCLE_TARGET_OPERATIONS = new Set<DeveloperAccessOperation>([
-  "gateway.inspect",
-  "gateway.rotate",
-  "gateway.rollback",
-  "gateway.destroyPlan",
-]);

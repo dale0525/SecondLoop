@@ -14,6 +14,10 @@ const migrationV3 = readFileSync(
   new URL("../migrations/0003_signed_entitlement_projections.sql", import.meta.url),
   "utf8",
 );
+const migrationV4 = readFileSync(
+  new URL("../migrations/0004_unlimited_policy_limits.sql", import.meta.url),
+  "utf8",
+);
 const deploymentId = "deployment-test";
 const identity = Object.freeze({
   providerId: "oidc-test",
@@ -289,6 +293,32 @@ test("two subjects cannot race through the final global budget slot", async () =
   assert.equal(database.count("gateway_idempotency_tombstones"), 1);
 });
 
+test("explicit unlimited flags bypass only plan budgets and retain the system concurrency ceiling", async () => {
+  const now = { value: 15_000 };
+  const database = new LocalD1();
+  database.seed({ now: now.value, maxRequests: 1, maxUnits: 1, maxConcurrency: 1 });
+  for (const table of ["gateway_deployment_budgets", "gateway_tenant_budgets"]) {
+    database.database.exec(`
+      UPDATE ${table}
+      SET max_requests = 0, max_units = 0,
+          max_requests_unlimited = 1, max_units_unlimited = 1
+    `);
+  }
+  database.database.exec(`
+    UPDATE gateway_entitlements
+    SET max_requests = 0, max_units = 0, max_concurrency = 1,
+        max_requests_unlimited = 1, max_units_unlimited = 1,
+        max_concurrency_unlimited = 1
+  `);
+  const store = entitlementStore(database, now);
+  const reservation = await store.reserve(identity, reservationInput(80, 50_000));
+  assert.equal(reservation.maxConcurrency, 1000);
+  const dispatched = await store.markDispatched(reservation);
+  await store.settle(dispatched, { outcome: "completed", actualUnits: 40_000 });
+  const second = await store.reserve(identity, reservationInput(81, 50_000));
+  assert.equal(second.maxConcurrency, 1000);
+});
+
 test("tenant rejection cannot leave partial global or subject counters", async () => {
   const now = { value: 25_000 };
   const database = new LocalD1();
@@ -466,16 +496,17 @@ function foreignKeys(database, table) {
     .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
 }
 
-test("authoritative migrations produce the same v3 foreign-key contract as the snapshot", () => {
+test("authoritative migrations produce the same v4 foreign-key contract as the snapshot", () => {
   const fresh = new DatabaseSync(":memory:");
   fresh.exec(schema);
   const migrated = new DatabaseSync(":memory:");
   migrated.exec(migrationV1);
   migrated.exec(migrationV2);
   migrated.exec(migrationV3);
+  migrated.exec(migrationV4);
   assert.equal(migrated.prepare(`
     SELECT value FROM gateway_schema_metadata WHERE key = 'schema_version'
-  `).get().value, "3");
+  `).get().value, "4");
   for (const table of [
     "gateway_tenant_budgets",
     "gateway_entitlements",
@@ -520,6 +551,7 @@ test("v1 migration preserves reservations as isolated legacy tombstones", () => 
   `).run(identity.providerId, identity.issuer, identity.subject, "a".repeat(64), "b".repeat(64));
   database.exec(migrationV2);
   database.exec(migrationV3);
+  database.exec(migrationV4);
 
   const migrated = database.prepare(`
     SELECT deployment_id, tenant, device_id, state, dispatched_at
@@ -538,7 +570,7 @@ test("v1 migration preserves reservations as isolated legacy tombstones", () => 
   `).get().count), 1);
 });
 
-test("a migrated v1 idempotency hash blocks the same raw request ID in v3", async () => {
+test("a migrated v1 idempotency hash blocks the same raw request ID in v4", async () => {
   const current = Math.floor(Date.now() / 1000);
   const rawInput = reservationInput(93, 100);
   const legacyHash = await sha256Hex([
@@ -575,6 +607,7 @@ test("a migrated v1 idempotency hash blocks the same raw request ID in v3", asyn
   );
   database.exec(migrationV2);
   database.exec(migrationV3);
+  database.exec(migrationV4);
 
   const wrapped = new LocalD1(database);
   wrapped.seed({

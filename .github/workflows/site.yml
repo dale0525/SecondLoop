@@ -1,0 +1,41 @@
+name: AgentWeave site
+
+on:
+  pull_request:
+    paths:
+      - "site/**"
+      - ".gitignore"
+      - ".github/workflows/site.yml"
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - ".gitignore"
+      - ".github/workflows/site.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agentweave-site-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  site:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: prefix-dev/setup-pixi@v0.9.0
+        with:
+          cache: true
+      - name: Install site dependencies
+        run: pixi run npm --prefix site ci
+      - name: Type-check, build, and verify static routes
+        run: pixi run npm --prefix site run check
+      - name: Upload verified site
+        uses: actions/upload-artifact@v4
+        with:
+          name: agentweave-site
+          path: site/dist
+          if-no-files-found: error
+          retention-days: 7

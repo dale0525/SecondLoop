@@ -135,6 +135,8 @@ dependencies = [
  "axum",
  "base64",
  "chrono",
+ "commerce-creem",
+ "commerce-runtime",
  "entitlement-providers",
  "fs2",
  "futures",
@@ -483,6 +485,37 @@ checksum = "ba5a308b75df32fe02788e748662718f03fde005016435c444eea572398219fd"
 dependencies = [
  "bytes",
  "memchr",
+]
+
+[[package]]
+name = "commerce-creem"
+version = "0.1.0"
+dependencies = [
+ "agent-devkit",
+ "async-trait",
+ "chrono",
+ "commerce-runtime",
+ "hex",
+ "hmac",
+ "reqwest",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+ "url",
+ "zeroize",
+]
+
+[[package]]
+name = "commerce-runtime"
+version = "0.1.0"
+dependencies = [
+ "agent-devkit",
+ "async-trait",
+ "serde",
+ "thiserror 2.0.18",
+ "url",
 ]
 
 [[package]]

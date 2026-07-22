@@ -555,6 +555,7 @@ pub fn router_for_transport(
         .merge(crate::data_protection_api::router())
         .merge(crate::automation_api::router())
         .merge(crate::structured_content_api::router())
+        .merge(crate::commerce_api::routes())
         .merge(crate::oauth_api::protected_router())
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
@@ -573,7 +574,8 @@ pub fn router_for_transport(
     if include_dev_routes {
         router = router
             .merge(crate::dev_api::routes())
-            .merge(crate::developer_control_plane_api::routes());
+            .merge(crate::developer_control_plane_api::routes())
+            .merge(crate::developer_commerce_api::routes());
     }
     let callback_router = crate::oauth_api::callback_router().route_layer(
         middleware::from_fn_with_state(state.clone(), crate::identity_api::require_identity),

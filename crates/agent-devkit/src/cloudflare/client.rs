@@ -329,6 +329,78 @@ where
         })
     }
 
+    /// Calls the public entitlement Worker health endpoint without forwarding credentials.
+    pub async fn test_entitlement_health(&self, health_url: &str) -> DevkitResult<Value> {
+        let url = secure_origin_url(health_url, false)?;
+        if url.path() != "/healthz" || url.query().is_some() {
+            return Err(DevkitError::new(
+                DevkitErrorCode::OriginRejected,
+                "entitlement health URL does not use the pinned health path",
+            ));
+        }
+        let request = CloudflareTransportRequest::new(
+            CloudflareHttpMethod::Get,
+            url,
+            BTreeMap::from([("accept".into(), "application/json".into())]),
+            Vec::new(),
+            RequestBodySensitivity::Public,
+        );
+        let response = self.transport.send(request).await.map_err(|failure| {
+            let (code, message) = match failure.kind {
+                CloudflareTransportFailureKind::Timeout => (
+                    DevkitErrorCode::Timeout,
+                    "entitlement health request timed out",
+                ),
+                CloudflareTransportFailureKind::Connect | CloudflareTransportFailureKind::Tls => (
+                    DevkitErrorCode::Unavailable,
+                    "entitlement health connection failed",
+                ),
+                CloudflareTransportFailureKind::Protocol => (
+                    DevkitErrorCode::RemoteProtocol,
+                    "entitlement health transport failed",
+                ),
+            };
+            DevkitError::new(code, message)
+        })?;
+        if (300..400).contains(&response.status()) {
+            return Err(DevkitError::new(
+                DevkitErrorCode::RedirectRejected,
+                "entitlement health redirects are not permitted",
+            ));
+        }
+        if response.status() == 429 {
+            let wait = response
+                .header("retry-after")
+                .and_then(|value| value.parse::<u64>().ok())
+                .unwrap_or(1)
+                .saturating_mul(1_000)
+                .min(86_400_000);
+            return Err(DevkitError::new(
+                DevkitErrorCode::RateLimited,
+                "entitlement health rate limit was reached",
+            )
+            .retry_after(wait));
+        }
+        if !(200..300).contains(&response.status()) {
+            return Err(DevkitError::new(
+                DevkitErrorCode::VerificationFailed,
+                format!("entitlement health returned HTTP {}", response.status()),
+            ));
+        }
+        if response.body().len() > MAX_API_RESPONSE_BYTES {
+            return Err(DevkitError::new(
+                DevkitErrorCode::RemoteProtocol,
+                "entitlement health response exceeds the size limit",
+            ));
+        }
+        serde_json::from_slice(response.body()).map_err(|_| {
+            DevkitError::new(
+                DevkitErrorCode::RemoteProtocol,
+                "entitlement health returned an invalid response",
+            )
+        })
+    }
+
     pub(crate) async fn execute_bytes(
         &self,
         authorization: Option<&DeveloperAuthorization>,

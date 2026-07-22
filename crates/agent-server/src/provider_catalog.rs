@@ -6,6 +6,7 @@ pub fn builtin_provider_catalog() -> anyhow::Result<Vec<ProviderDescriptor>> {
     let mut descriptors = entitlement_providers::entitlement_provider_descriptors();
     descriptors.push(identity_firebase::firebase_identity_provider_descriptor());
     descriptors.push(identity_oidc::oidc_identity_provider_descriptor());
+    descriptors.push(commerce_creem::creem_provider_descriptor());
     descriptors.push(agent_devkit::cloudflare::cloudflare_gateway_provider_descriptor()?);
     descriptors.sort_by(|left, right| left.provider_id.cmp(&right.provider_id));
 
@@ -39,6 +40,7 @@ mod tests {
         assert!(providers.contains_key(identity_oidc::OIDC_IDENTITY_PROVIDER_ID));
         assert!(providers.contains_key(identity_firebase::FIREBASE_IDENTITY_PROVIDER_ID));
         assert!(providers.contains_key(entitlement_providers::HTTP_ENTITLEMENT_PROVIDER_ID));
+        assert!(providers.contains_key(commerce_creem::CREEM_PROVIDER_ID));
         assert!(!providers.contains_key(agent_devkit::cloudflare::CLOUDFLARE_PROVIDER_ID));
     }
 }

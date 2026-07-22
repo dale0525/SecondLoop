@@ -6,12 +6,16 @@ import { pathToFileURL } from "node:url";
 import { registerApprovalWindowController } from "./approvalWindow";
 import { registerAttachmentController } from "./attachmentController";
 import { registerDataProtectionController } from "./dataProtectionController";
+import { registerCommerceController } from "./commerceController";
 import { registerDeveloperAccessController } from "./developerAccessController";
 import {
   invalidateDeveloperGatewayDeployment,
   loadDeveloperProjectSnapshot,
+  recordDeveloperAccessBundle,
+  recordDeveloperAccessBundleLifecycle,
   recordDeveloperGatewayDeployment,
   registerDeveloperProjectController,
+  verifyDeveloperAccessBundle,
   verifyDeveloperGatewayDeployment,
 } from "./developerProjectController";
 import { packageDeveloperApp } from "./developerPackager";
@@ -266,6 +270,29 @@ app.whenReady().then(async () => {
           && sidecarResolution.env.AGENTWEAVE_DEV_API === "1"
         ) {
           disposers.push(registerDeveloperAccessController({
+            accessBundle: {
+              record: (expectedRevision, receipt) => recordDeveloperAccessBundle({
+                appRoot: developerAppRoot,
+                expectedRevision,
+                receipt,
+              }),
+              verify: (bundle, expectedRevision, test) => verifyDeveloperAccessBundle({
+                appRoot: developerAppRoot,
+                bundle,
+                expectedRevision,
+                test,
+              }),
+            },
+            accessBundleLifecycle: {
+              invalidate: () => invalidateDeveloperGatewayDeployment({
+                appRoot: developerAppRoot,
+              }),
+              record: (expectedRevision, mutation) => recordDeveloperAccessBundleLifecycle({
+                appRoot: developerAppRoot,
+                expectedRevision,
+                mutation,
+              }),
+            },
             ensureCredentialVault: () => security.ensureCredentialVault(),
             firebaseRedirectUri: process.env.AGENTWEAVE_FIREBASE_OAUTH_REDIRECT_URI
               ?? "http://127.0.0.1:8979/agentweave/firebase/callback",
@@ -294,6 +321,12 @@ app.whenReady().then(async () => {
               }),
           }));
         }
+        disposers.push(registerCommerceController({
+          ipcMain,
+          openExternal: (url) => shell.openExternal(url),
+          requesterWebContents: mainWindow.webContents,
+          sidecarRequest: sidecar.request,
+        }));
         disposers.push(registerModelSettingsController({
           ipcMain,
           loadHostDiscovery: () => loadHostBootstrap({
