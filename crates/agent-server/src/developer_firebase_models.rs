@@ -135,7 +135,8 @@ pub(crate) struct CloudProjectList {
 pub(crate) struct CloudProject {
     project_id: String,
     project_number: String,
-    name: String,
+    #[serde(default)]
+    name: Option<String>,
     lifecycle_state: String,
     #[serde(default)]
     create_time: Option<String>,
@@ -149,13 +150,17 @@ impl CloudProject {
     pub(crate) fn summary(self) -> DevkitResult<FirebaseProjectSummary> {
         let _ = (self.create_time, self.labels, self.parent);
         validate_project_id(&self.project_id)?;
+        let display_name = match self.name {
+            Some(name) if name.trim().is_empty() => self.project_id.clone(),
+            Some(name) if name.len() <= 512 => name,
+            Some(_) => return Err(remote_protocol()),
+            None => self.project_id.clone(),
+        };
         if self.project_number.is_empty()
             || !self
                 .project_number
                 .bytes()
                 .all(|byte| byte.is_ascii_digit())
-            || self.name.is_empty()
-            || self.name.len() > 512
             || self.lifecycle_state != "ACTIVE"
         {
             return Err(remote_protocol());
@@ -163,7 +168,7 @@ impl CloudProject {
         Ok(FirebaseProjectSummary {
             project_id: self.project_id,
             project_number: self.project_number,
-            display_name: self.name,
+            display_name,
         })
     }
 }
@@ -294,7 +299,7 @@ pub(crate) fn unique_query(url: &Url) -> DevkitResult<BTreeMap<String, String>> 
     for (name, value) in url.query_pairs() {
         if !matches!(
             name.as_ref(),
-            "code" | "state" | "scope" | "error" | "error_description"
+            "code" | "state" | "scope" | "iss" | "error" | "error_description"
         ) || values
             .insert(name.into_owned(), value.into_owned())
             .is_some()
