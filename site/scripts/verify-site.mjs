@@ -16,6 +16,7 @@ const routes = [
   ["zh/oauth-help/index.html", "lang=\"zh-CN\"", "开发者工具 → 补充必要信息 → 用户登录"],
 ];
 const remoteResourcePattern = /<(?:script|img)\b[^>]*\bsrc="https?:\/\/[^\"]*"[^>]*>|<link\b(?=[^>]*\brel="(?:stylesheet|preload|modulepreload)")(?=[^>]*\bhref="https?:\/\/)[^>]*>/i;
+const unsupportedProjectCreationCopy = /select or create|request a new project|project creation|选择或创建|创建新项目|项目创建/i;
 
 assert.match('<link rel="stylesheet" href="https://example.com/app.css">', remoteResourcePattern);
 assert.match('<link href="https://example.com/app.css" rel="preload" as="style">', remoteResourcePattern);
@@ -30,6 +31,7 @@ for (const [route, language, requiredCopy] of routes) {
   assert.ok(html.includes(language), `${route} must declare ${language}`);
   assert.ok(html.includes(requiredCopy), `${route} is missing required copy`);
   assert.ok(!html.includes("AgentWeave Developer Tools by SecondLoop"), `${route} uses the retired OAuth application name`);
+  assert.doesNotMatch(html, unsupportedProjectCreationCopy, `${route} claims unsupported Google Cloud project creation`);
   assert.match(html, /rel="canonical"/, `${route} must expose a canonical URL`);
   assert.ok(html.includes('property="og:image" content="https://agentweave.secondloop.app/favicon.svg"'), `${route} must expose an Open Graph image`);
   assert.ok(html.includes('name="twitter:image" content="https://agentweave.secondloop.app/favicon.svg"'), `${route} must expose a Twitter image`);
@@ -53,6 +55,8 @@ const oauthHelp = readFileSync(join(distRoot, "oauth-help/index.html"), "utf8");
 assert.ok(oauthHelp.includes("S256 PKCE"));
 assert.ok(oauthHelp.includes("127.0.0.1"));
 assert.ok(oauthHelp.includes("https://www.googleapis.com/auth/firebase"));
+assert.ok(oauthHelp.includes("identityPlatform:initializeAuth"));
+assert.ok(oauthHelp.includes("does not create or delete Cloud projects"));
 
 for (const publicFile of ["_headers", "favicon.svg", "robots.txt", "sitemap.xml"]) {
   assert.ok(existsSync(join(distRoot, publicFile)), `missing public artifact: ${publicFile}`);
