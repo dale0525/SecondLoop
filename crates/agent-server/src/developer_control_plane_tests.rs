@@ -23,11 +23,13 @@ use async_trait::async_trait;
 use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
+use tokio::sync::Notify;
 use url::Url;
 
 const ACCOUNT_ID: &str = "0123456789abcdef0123456789abcdef";
 
 struct FakeGatewayProvider {
+    completion_gate: Option<(Arc<Notify>, Arc<Notify>)>,
     descriptor: ProviderDescriptor,
     secrets: Arc<DeveloperSensitiveStore>,
 }
@@ -35,6 +37,19 @@ struct FakeGatewayProvider {
 impl FakeGatewayProvider {
     fn new(secrets: Arc<DeveloperSensitiveStore>) -> Self {
         Self {
+            completion_gate: None,
+            descriptor: cloudflare_gateway_provider_descriptor().unwrap(),
+            secrets,
+        }
+    }
+
+    fn with_completion_gate(
+        secrets: Arc<DeveloperSensitiveStore>,
+        started: Arc<Notify>,
+        release: Arc<Notify>,
+    ) -> Self {
+        Self {
+            completion_gate: Some((started, release)),
             descriptor: cloudflare_gateway_provider_descriptor().unwrap(),
             secrets,
         }
@@ -93,6 +108,10 @@ impl GatewayDeploymentProvider for FakeGatewayProvider {
     ) -> DevkitResult<DeveloperAuthorization> {
         self.secrets.resolve(&request.code_handle).await?;
         self.secrets.resolve(&request.pkce_verifier_handle).await?;
+        if let Some((started, release)) = &self.completion_gate {
+            started.notify_one();
+            release.notified().await;
+        }
         let token = self
             .secrets
             .store(
@@ -423,6 +442,101 @@ async fn oauth_account_binding_and_deployment_are_host_scoped_and_public_only() 
     assert!(
         reused.is_ok(),
         "stored secret should be reusable without Renderer access"
+    );
+}
+
+#[tokio::test]
+async fn pending_reauthorization_masks_an_expired_authorization() {
+    let storage = Storage::connect("sqlite::memory:").await.unwrap();
+    let sensitive = Arc::new(
+        DeveloperSensitiveStore::new(Arc::new(InMemorySecretStore::default()), &"e".repeat(64))
+            .unwrap(),
+    );
+    let completion_started = Arc::new(Notify::new());
+    let completion_release = Arc::new(Notify::new());
+    let control = Arc::new(
+        DeveloperControlPlane::new(
+            storage.sqlite_pool(),
+            sensitive.clone(),
+            Arc::new(FakeGatewayProvider::with_completion_gate(
+                sensitive.clone(),
+                completion_started.clone(),
+                completion_release.clone(),
+            )),
+            "e".repeat(64),
+            "com.example.agent".into(),
+            CloudflareOAuthDefaults::default(),
+            None,
+        )
+        .await
+        .unwrap(),
+    );
+    let expired_token = sensitive
+        .store(
+            "fake/expired-access-token",
+            SensitiveValue::new(b"expired-cloudflare-token".to_vec()).unwrap(),
+        )
+        .await
+        .unwrap();
+    let expired = DeveloperAuthorization::new_unbound(
+        CLOUDFLARE_PROVIDER_ID,
+        "local-developer-host",
+        expired_token,
+        None,
+        BTreeSet::from(["scope".into()]),
+        BTreeSet::from(["capability".into()]),
+        "expired-authorization",
+        1,
+        Some(2),
+    )
+    .unwrap();
+    control.save_authorization(&expired).await.unwrap();
+    assert_eq!(
+        control.authorization_status().await.unwrap().phase,
+        DeveloperAuthorizationPhase::Expired
+    );
+
+    let start = control
+        .start_authorization(
+            CloudflareOAuthClientSelection::Custom {
+                client_id: "client-id".into(),
+                scope_catalog: BTreeMap::from([("scope".into(), "scope".into())]),
+            },
+            Url::parse("http://127.0.0.1:43893/cloudflare/callback").unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        control.authorization_status().await.unwrap().phase,
+        DeveloperAuthorizationPhase::AwaitingCallback
+    );
+
+    let state = Url::parse(&start.authorization_url)
+        .unwrap()
+        .query_pairs()
+        .find(|(name, _)| name == "state")
+        .unwrap()
+        .1
+        .into_owned();
+    let callback_control = Arc::clone(&control);
+    let callback_url =
+        format!("http://127.0.0.1:43893/cloudflare/callback?code=new-code&state={state}");
+    let callback = tokio::spawn(async move {
+        callback_control
+            .complete_authorization_callback(&callback_url)
+            .await
+    });
+    completion_started.notified().await;
+    assert_eq!(
+        control.authorization_status().await.unwrap().phase,
+        DeveloperAuthorizationPhase::AwaitingCallback,
+        "token exchange must not make the pending authorization appear expired"
+    );
+    completion_release.notify_one();
+    let callback = callback.await.unwrap().unwrap();
+    assert_eq!(
+        callback.status.phase,
+        DeveloperAuthorizationPhase::SelectAccount
     );
 }
 
