@@ -17,7 +17,7 @@ import { contactEmail } from "../../lib/i18n";
 
   <h2>1. 连接前检查</h2>
   <ul>
-    <li>使用有权创建或管理目标 Cloud 项目的 Google 账号。</li>
+    <li>使用有权管理目标 Cloud 项目的 Google 账号。</li>
     <li>先使用不包含生产用户或受监管数据的专用测试项目。</li>
     <li>在 Google 授权页核对账号、应用名称、发布方域名和权限。</li>
     <li>如果浏览器当前不是 Google 官方授权域名，请不要继续。</li>
@@ -29,7 +29,7 @@ import { contactEmail } from "../../lib/i18n";
     <li><code>https://www.googleapis.com/auth/cloud-platform</code><span>读取和管理所选 Google Cloud 项目，并启用本次 Firebase 配置所需的服务。</span></li>
     <li><code>https://www.googleapis.com/auth/firebase</code><span>查看和管理添加 Firebase、启用邮箱登录所需的 Firebase 项目配置。</span></li>
   </ul>
-  <p>权限范围较宽，是因为项目创建、API 启用和 Firebase 配置横跨多个 Google 服务。AgentWeave 只在开发者明确发起的配置流程中使用这些权限。不要为无权管理的项目授权。</p>
+  <p>权限范围较宽，是因为项目发现、API 启用、首次初始化 Firebase Authentication 和 Firebase 配置横跨 Cloud Resource Manager、Service Usage、Firebase Management 与 Identity Toolkit。Google 的 <code>identityPlatform:initializeAuth</code> 方法要求使用 <code>cloud-platform</code> scope，<code>firebase</code> scope 则覆盖 Firebase 项目和 Web App 写入。AgentWeave 不会创建或删除 Cloud 项目，并且只在开发者明确发起的配置流程中使用这些权限。</p>
 
   <h2>3. 配置过程</h2>
   <ol>
@@ -37,7 +37,7 @@ import { contactEmail } from "../../lib/i18n";
     <li>默认浏览器打开 Google 授权页面。</li>
     <li>同意后，Google 重定向到由本地 AgentWeave Host 持有的临时 <code>127.0.0.1</code> 回调。</li>
     <li>AgentWeave 将一次性授权码直接发送给 Google token endpoint，并提供匹配的 PKCE verifier。</li>
-    <li>你选择现有项目或创建新项目；AgentWeave 随后启用所需 API 并应用 Firebase Authentication 配置。</li>
+    <li>你选择已有项目；AgentWeave 随后按需添加 Firebase、启用 Identity Toolkit API、初始化 Firebase Authentication、启用邮箱密码登录、创建或复用 AgentWeave Web App，并返回公开 Firebase 配置。</li>
     <li>公开的 Firebase Web 配置返回开发者工作区；OAuth token 继续保留在本地敏感存储中。</li>
   </ol>
 
@@ -62,7 +62,7 @@ import { contactEmail } from "../../lib/i18n";
   <h3>回调页面无法连接</h3>
   <p>浏览器完成授权时请保持 AgentWeave 运行。本地防火墙、代理或终端安全软件需要允许临时 IPv4 loopback 回调。不要把该回调替换成公开 URL。</p>
   <h3>没有显示任何项目</h3>
-  <p>Google 账号可能缺少项目列表或创建权限，组织策略可能限制项目创建，或者项目不处于可支持的生命周期状态。可以使用专用账号重试，或请组织管理员授予所需角色。</p>
+  <p>Google 账号可能缺少列出或管理项目的权限，组织策略可能限制项目可见性或服务启用，或者项目不处于可支持的生命周期状态。可以使用专用账号重试，或请组织管理员授予所需角色。</p>
   <h3>API 启用或 Firebase 配置失败</h3>
   <p>核对计费与组织策略，确认你有权在项目中启用服务，并在 Google 服务传播延迟后重试。对于可重试错误，AgentWeave 会在有限时间内保留授权状态，而不会静默切换项目。</p>
 
