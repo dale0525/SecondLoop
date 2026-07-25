@@ -72,9 +72,22 @@ pub struct DeveloperAuthorizationCallbackReceipt {
 impl DeveloperControlPlane {
     pub async fn authorization_status(&self) -> DevkitResult<DeveloperAuthorizationStatus> {
         let now = now_unix_ms();
-        let authorization = self.load_authorization().await?;
+        // Keep the pending snapshot stable until the persisted authorization is loaded so a
+        // completing callback cannot expose the expired record between these two reads.
         let pending = self.pending_authorization.lock().await;
+        let authorization = self.load_authorization().await?;
+        let awaiting_callback = pending
+            .as_ref()
+            .is_some_and(|transaction| transaction.expires_at_unix_ms > now);
         let phase = match authorization.as_ref() {
+            Some(authorization)
+                if authorization
+                    .expires_at_unix_ms()
+                    .is_some_and(|expires| expires <= now)
+                    && awaiting_callback =>
+            {
+                DeveloperAuthorizationPhase::AwaitingCallback
+            }
             Some(authorization)
                 if authorization
                     .expires_at_unix_ms()
@@ -86,12 +99,7 @@ impl DeveloperControlPlane {
                 DeveloperAuthorizationPhase::Ready
             }
             Some(_) => DeveloperAuthorizationPhase::SelectAccount,
-            None if pending
-                .as_ref()
-                .is_some_and(|transaction| transaction.expires_at_unix_ms > now) =>
-            {
-                DeveloperAuthorizationPhase::AwaitingCallback
-            }
+            None if awaiting_callback => DeveloperAuthorizationPhase::AwaitingCallback,
             None => DeveloperAuthorizationPhase::Disconnected,
         };
         Ok(DeveloperAuthorizationStatus {
@@ -183,16 +191,18 @@ impl DeveloperControlPlane {
             .pending_authorization
             .lock()
             .await
-            .take()
+            .as_ref()
+            .cloned()
             .ok_or_else(|| {
                 DevkitError::new(
                     DevkitErrorCode::InvalidAuthorization,
                     "no Cloudflare authorization is awaiting a callback",
                 )
             })?;
-        let result = self
+        let accounts = self
             .complete_authorization_callback_inner(callback_url, &pending)
             .await;
+        self.pending_authorization.lock().await.take();
         let _ = self
             .sensitive
             .delete_handles([
@@ -200,14 +210,18 @@ impl DeveloperControlPlane {
                 pending.verifier_handle.clone(),
             ])
             .await;
-        result
+        let accounts = accounts?;
+        Ok(DeveloperAuthorizationCallbackReceipt {
+            status: self.authorization_status().await?,
+            accounts,
+        })
     }
 
     async fn complete_authorization_callback_inner(
         &self,
         callback_url: &str,
         pending: &PendingAuthorization,
-    ) -> DevkitResult<DeveloperAuthorizationCallbackReceipt> {
+    ) -> DevkitResult<Vec<DeveloperAccount>> {
         if callback_url.is_empty() || callback_url.len() > MAX_CALLBACK_BYTES {
             return Err(invalid_callback());
         }
@@ -300,10 +314,7 @@ impl DeveloperControlPlane {
                 .filter(|handle| !active.contains(handle));
             let _ = self.sensitive.delete_handles(stale).await;
         }
-        Ok(DeveloperAuthorizationCallbackReceipt {
-            status: self.authorization_status().await?,
-            accounts,
-        })
+        Ok(accounts)
     }
 
     pub async fn list_authorization_accounts(&self) -> DevkitResult<Vec<DeveloperAccount>> {

@@ -220,6 +220,7 @@ pub struct DeveloperControlPlane {
         Mutex<Option<crate::developer_firebase::PendingFirebaseAuthorization>>,
 }
 
+#[derive(Clone)]
 pub(super) struct PendingAuthorization {
     pub configuration: ProviderConfiguration,
     pub redirect_uri: url::Url,
