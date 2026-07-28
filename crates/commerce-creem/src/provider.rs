@@ -203,6 +203,7 @@ fn validate_success_url(url: &Url) -> Result<(), CommerceError> {
         && url.host_str().is_some()
         && url.username().is_empty()
         && url.password().is_none()
+        && url.query().is_none()
         && url.fragment().is_none())
     .then_some(())
     .ok_or(CommerceError::InvalidRequest)
@@ -321,6 +322,19 @@ mod tests {
         )
         .unwrap();
         (transport, provider)
+    }
+
+    #[test]
+    fn custom_success_url_rejects_query_and_fragment_state() {
+        assert!(validate_success_url(&Url::parse("https://example.test/success").unwrap()).is_ok());
+        assert!(
+            validate_success_url(&Url::parse("https://example.test/success?checkout=1").unwrap())
+                .is_err()
+        );
+        assert!(
+            validate_success_url(&Url::parse("https://example.test/success#done").unwrap())
+                .is_err()
+        );
     }
 
     #[tokio::test]

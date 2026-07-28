@@ -68,7 +68,12 @@ export function DeveloperCommerceConfiguration({
   const environment = draft.providers.commerce?.publicConfig.environment === "production"
     ? "production"
     : "test";
-  const credentialsReady = bootstrap.status === "ready";
+  const configuredSuccessUrl = draft.providers.commerce?.publicConfig.successUrl;
+  const successPage = draft.providers.commerce?.publicConfig.successPage === "custom_url"
+    || (draft.providers.commerce?.publicConfig.successPage === undefined
+      && typeof configuredSuccessUrl === "string" && configuredSuccessUrl.length > 0)
+    ? "custom_url"
+    : "managed_worker";
 
   const chooseMode = (mode: string) => {
     if (managed.mode !== "managed_worker") return;
@@ -95,7 +100,7 @@ export function DeveloperCommerceConfiguration({
     }
     if (!descriptor) return;
     const commerce = draft.providers.commerce
-      ?? selectionFromDescriptor(descriptor, { environment: "test", successUrl: "" });
+      ?? selectionFromDescriptor(descriptor, { environment: "test", successPage: "managed_worker" });
     onDraft({
       ...draft,
       providers: { ...draft.providers, commerce },
@@ -118,13 +123,17 @@ export function DeveloperCommerceConfiguration({
     });
   };
 
-  const updateCommerceConfig = (field: "environment" | "successUrl", value: string) => {
+  const updateCommerceConfig = (field: "environment" | "successPage" | "successUrl", value: string) => {
     if (!draft.providers.commerce) return;
+    let commerce = updateProviderConfig(draft.providers.commerce, field, value);
+    if (field === "successPage" && value === "managed_worker") {
+      commerce = updateProviderConfig(commerce, "successUrl", "");
+    }
     onDraft({
       ...draft,
       providers: {
         ...draft.providers,
-        commerce: updateProviderConfig(draft.providers.commerce, field, value),
+        commerce,
       },
     });
     if (field === "environment") setProducts([]);
@@ -187,12 +196,6 @@ export function DeveloperCommerceConfiguration({
             </Select.Root>
             {!productionUnlocked ? <Text color="gray" size="1">{t("developer.release.productionLockedHint")}</Text> : null}
           </label>
-          <DeveloperCommerceWebhookSetup
-            error={bootstrap.error}
-            onRetry={bootstrap.retry}
-            receipt={bootstrap.receipt}
-            status={bootstrap.status}
-          />
           <div className="release-creem-connect">
             <label className="release-field">
               <span className="release-field-label">
@@ -203,14 +206,13 @@ export function DeveloperCommerceConfiguration({
               </span>
               <TextField.Root
                 autoComplete="off"
-                disabled={!credentialsReady}
                 onChange={(event) => onSecret("commerce.apiKey", event.target.value)}
                 placeholder={t("developer.release.secretStoredPlaceholder")}
                 type="password"
                 value={secretValues["commerce.apiKey"] ?? ""}
               />
             </label>
-            <Button disabled={connecting || !credentialsReady} onClick={() => void connect()}>
+            <Button disabled={connecting} onClick={() => void connect()}>
               {connecting ? <Spinner /> : <PackageSearch aria-hidden="true" size={16} />}
               {t("developer.release.discoverProducts")}
             </Button>
@@ -224,7 +226,6 @@ export function DeveloperCommerceConfiguration({
             </span>
             <TextField.Root
               autoComplete="off"
-              disabled={!credentialsReady}
               onChange={(event) => onSecret("commerce.webhookSecret", event.target.value)}
               placeholder={t("developer.release.secretStoredPlaceholder")}
               type="password"
@@ -243,15 +244,52 @@ export function DeveloperCommerceConfiguration({
               <Callout.Text>{t("developer.release.productDiscoveryEmptyState")}</Callout.Text>
             </Callout.Root>
           )}
-          <label className="release-field release-checkout-success-field">
-            <Text size="2" weight="medium">{t("developer.release.checkoutSuccessUrl")}</Text>
-            <TextField.Root
-              onChange={(event) => updateCommerceConfig("successUrl", event.target.value)}
-              placeholder="https://example.com/billing/success"
-              value={String(draft.providers.commerce.publicConfig.successUrl ?? "")}
-            />
-            <Text color="gray" size="1">{t("developer.release.checkoutSuccessUrlHint")}</Text>
-          </label>
+          <section className="release-checkout-success" aria-labelledby="release-checkout-success-title">
+            <div>
+              <Text id="release-checkout-success-title" size="2" weight="medium">
+                {t("developer.release.checkoutSuccessPage")}
+              </Text>
+              <Text as="p" color="gray" size="1">{t("developer.release.checkoutSuccessPageHint")}</Text>
+            </div>
+            <RadioCards.Root
+              aria-label={t("developer.release.checkoutSuccessPage")}
+              className="release-checkout-success-mode"
+              onValueChange={(value) => updateCommerceConfig("successPage", value)}
+              value={successPage}
+            >
+              <RadioCards.Item value="managed_worker">
+                <strong>{t("developer.release.checkoutSuccessManaged")}</strong>
+                <Text as="p" color="gray" size="2">{t("developer.release.checkoutSuccessManagedHint")}</Text>
+              </RadioCards.Item>
+              <RadioCards.Item value="custom_url">
+                <strong>{t("developer.release.checkoutSuccessCustom")}</strong>
+                <Text as="p" color="gray" size="2">{t("developer.release.checkoutSuccessCustomHint")}</Text>
+              </RadioCards.Item>
+            </RadioCards.Root>
+            {successPage === "custom_url" ? (
+              <label className="release-field release-checkout-success-field">
+                <Text size="2" weight="medium">{t("developer.release.checkoutSuccessUrl")}</Text>
+                <TextField.Root
+                  aria-label={t("developer.release.checkoutSuccessUrl")}
+                  onChange={(event) => updateCommerceConfig("successUrl", event.target.value)}
+                  placeholder="https://example.com/billing/success"
+                  value={String(draft.providers.commerce.publicConfig.successUrl ?? "")}
+                />
+                <Text color="gray" size="1">{t("developer.release.checkoutSuccessUrlHint")}</Text>
+              </label>
+            ) : (
+              <Callout.Root color="green" size="1">
+                <CheckCircle2 aria-hidden="true" />
+                <Callout.Text>{t("developer.release.checkoutSuccessManagedReady")}</Callout.Text>
+              </Callout.Root>
+            )}
+          </section>
+          <DeveloperCommerceWebhookSetup
+            error={bootstrap.error}
+            onRetry={bootstrap.retry}
+            receipt={bootstrap.receipt}
+            status={bootstrap.status}
+          />
         </div>
       ) : null}
     </section>
@@ -371,6 +409,7 @@ function ProductMappingTable({ draft, onDraft, products }: {
           <article className={!selectable ? "is-disabled" : ""} key={product.id}>
             <div className="release-product-heading">
               <Checkbox
+                aria-label={`${t("developer.release.productMappings")}: ${product.name}`}
                 checked={plan?.enabled === true}
                 disabled={!selectable}
                 onCheckedChange={(checked) => toggle(product, checked === true)}

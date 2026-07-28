@@ -5,6 +5,7 @@ const COMMERCE_ENVIRONMENTS = new Set(["test", "production"]);
 const SOURCE_MODES = new Set(["uniform_bounded", "commerce_provider"]);
 const COMMERCE_WEBHOOK_SETUP_MODE = "commerce_webhook";
 const CREEM_PROVIDER_ID = "agentweave.commerce.creem";
+const SUCCESS_PAGES = new Set(["managed_worker", "custom_url"]);
 
 function invalid(message) {
   fail(503, "entitlement_misconfigured", "The entitlement service is not configured.", {
@@ -203,13 +204,24 @@ export function parseEntitlementConfig(rawValue) {
   let commerce = null;
   if (sourceMode === "commerce_provider") {
     const rawCommerce = object(value.commerce, "commerce");
-    onlyKeys(rawCommerce, ["providerId", "environment", "successUrl"], "commerce");
+    onlyKeys(rawCommerce, ["providerId", "environment", "successPage", "successUrl"], "commerce");
     const commerceEnvironment = string(rawCommerce.environment, "commerce.environment", 32);
     if (!COMMERCE_ENVIRONMENTS.has(commerceEnvironment)) invalid("commerce environment is unsupported");
+    const successPage = rawCommerce.successPage === undefined
+      ? (rawCommerce.successUrl === undefined ? "managed_worker" : "custom_url")
+      : string(rawCommerce.successPage, "commerce.successPage", 32);
+    if (!SUCCESS_PAGES.has(successPage)) invalid("commerce success page is unsupported");
+    if (successPage === "managed_worker" && rawCommerce.successUrl !== undefined) {
+      invalid("managed commerce success page cannot configure a custom URL");
+    }
+    if (successPage === "custom_url" && rawCommerce.successUrl === undefined) {
+      invalid("custom commerce success page requires a URL");
+    }
     commerce = Object.freeze({
       providerId: string(rawCommerce.providerId, "commerce.providerId", 128),
       environment: commerceEnvironment,
-      successUrl: exactUrl(rawCommerce.successUrl, "commerce.successUrl"),
+      successPage,
+      successUrl: successPage === "custom_url" ? exactUrl(rawCommerce.successUrl, "commerce.successUrl") : null,
     });
   } else if (value.commerce !== undefined) {
     invalid("uniform policy cannot configure commerce");

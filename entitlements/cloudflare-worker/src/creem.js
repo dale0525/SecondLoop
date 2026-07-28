@@ -101,14 +101,14 @@ export class CreemApi {
     this.clearTimeoutImpl = clearTimeoutImpl;
   }
 
-  async createCheckout({ productId, requestId, customerId, metadata }) {
+  async createCheckout({ productId, requestId, customerId, metadata, successUrl }) {
     return this.#request("v1/checkouts", {
       method: "POST",
       body: {
         request_id: requestId,
         product_id: productId,
         units: 1,
-        success_url: this.config.commerce.successUrl,
+        success_url: successUrl,
         ...(customerId ? { customer: { id: customerId } } : {}),
         metadata,
       },
