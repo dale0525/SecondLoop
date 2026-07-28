@@ -60,6 +60,82 @@ fn commerce_webhook_bootstrap_requires_cloudflare_and_creem_only() {
     assert!(project_commerce_webhook_bootstrap(&without_cloudflare).is_err());
 }
 
+#[test]
+fn commerce_projection_supports_managed_and_legacy_custom_success_pages() {
+    let verifier = json!({
+        "id": "identity",
+        "kind": "oidc",
+        "issuer": "https://identity.example.test/",
+        "audience": "agentweave-test",
+        "jwksUrl": "https://identity.example.test/jwks.json",
+        "algorithm": "RS256",
+        "header": "authorization",
+        "requireNbf": false,
+        "clockSkewSeconds": 30,
+        "projection": {"subjectClaim": "sub", "deviceMode": "disabled"}
+    });
+    let mut managed = commerce_bootstrap_input("cloudflare-workers");
+    managed.providers.commerce.as_mut().unwrap().public_config = json!({
+        "environment": "test",
+        "successPage": "managed_worker"
+    });
+    let projected =
+        project_entitlement_worker_config(&managed, &verifier, "deployment-test", "production")
+            .unwrap();
+    assert_eq!(projected["commerce"]["successPage"], "managed_worker");
+    assert!(projected["commerce"].get("successUrl").is_none());
+
+    let mut legacy = managed.clone();
+    legacy.providers.commerce.as_mut().unwrap().public_config = json!({
+        "environment": "test",
+        "successUrl": "https://example.test/billing/success"
+    });
+    let projected =
+        project_entitlement_worker_config(&legacy, &verifier, "deployment-test", "production")
+            .unwrap();
+    assert_eq!(projected["commerce"]["successPage"], "custom_url");
+    assert_eq!(
+        projected["commerce"]["successUrl"],
+        "https://example.test/billing/success"
+    );
+
+    let mut invalid = managed;
+    invalid.providers.commerce.as_mut().unwrap().public_config = json!({
+        "environment": "test",
+        "successPage": "custom_url"
+    });
+    assert!(
+        project_entitlement_worker_config(&invalid, &verifier, "deployment-test", "production",)
+            .is_err()
+    );
+
+    for malformed in [
+        json!(null),
+        json!(42),
+        json!({"url": "https://example.test"}),
+    ] {
+        let mut invalid_type = commerce_bootstrap_input("cloudflare-workers");
+        invalid_type
+            .providers
+            .commerce
+            .as_mut()
+            .unwrap()
+            .public_config = json!({
+            "environment": "test",
+            "successUrl": malformed
+        });
+        assert!(
+            project_entitlement_worker_config(
+                &invalid_type,
+                &verifier,
+                "deployment-test",
+                "production",
+            )
+            .is_err()
+        );
+    }
+}
+
 #[tokio::test]
 async fn firebase_identity_uses_the_pinned_secure_token_verifier() {
     let binding: AgentAppProviderBinding = serde_json::from_value(json!({

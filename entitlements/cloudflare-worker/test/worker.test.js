@@ -113,6 +113,16 @@ function commerceConfig() {
   };
 }
 
+function managedSuccessConfig() {
+  const config = commerceConfig();
+  config.commerce = {
+    providerId: "agentweave.commerce.creem",
+    environment: "test",
+    successPage: "managed_worker",
+  };
+  return config;
+}
+
 function uniformConfig() {
   return {
     schemaVersion: 1,
@@ -259,6 +269,60 @@ test("configuration preserves explicit unlimited limits and requires subscriptio
     ...commerceConfig(),
     policy: { ...commerceConfig().policy, productPlans: [] },
   }));
+});
+
+test("configuration defaults legacy success URLs to custom and supports a managed Worker page", () => {
+  const legacy = parseEntitlementConfig(commerceConfig());
+  assert.equal(legacy.commerce.successPage, "custom_url");
+  assert.equal(legacy.commerce.successUrl, "https://example.test/billing/success");
+
+  const managed = parseEntitlementConfig(managedSuccessConfig());
+  assert.equal(managed.commerce.successPage, "managed_worker");
+  assert.equal(managed.commerce.successUrl, null);
+
+  assert.throws(() => parseEntitlementConfig({
+    ...managedSuccessConfig(),
+    commerce: { ...managedSuccessConfig().commerce, successUrl: "https://example.test/success" },
+  }));
+  assert.throws(() => parseEntitlementConfig({
+    ...managedSuccessConfig(),
+    commerce: {
+      providerId: "agentweave.commerce.creem",
+      environment: "test",
+      successPage: "custom_url",
+    },
+  }));
+});
+
+test("managed Checkout success page is static, private, and ignores query data", async () => {
+  const worker = createEntitlementWorker();
+  const response = await worker.fetch(new Request(
+    "https://entitlements.example.test/agentweave/commerce/v1/checkout/success?checkout_id=sensitive",
+  ), environment(new LocalD1(), managedSuccessConfig()));
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.equal(response.headers.get("content-language"), "en");
+  assert.equal(response.headers.get("content-type"), "text/html; charset=utf-8");
+  assert.match(response.headers.get("content-security-policy"), /default-src 'none'/);
+  assert.equal(response.headers.get("referrer-policy"), "no-referrer");
+  assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+  assert.equal(response.headers.get("location"), null);
+  const body = await response.text();
+  assert.match(body, /Checkout complete/);
+  assert.doesNotMatch(body, /sensitive/);
+
+  const chinese = await worker.fetch(new Request(
+    "https://entitlements.example.test/agentweave/commerce/v1/checkout/success",
+    { headers: { "accept-language": "zh-CN,zh;q=0.9,en;q=0.8" } },
+  ), environment(new LocalD1(), managedSuccessConfig()));
+  assert.equal(chinese.headers.get("content-language"), "zh-CN");
+  assert.match(await chinese.text(), /支付完成/);
+
+  const custom = await worker.fetch(new Request(
+    "https://entitlements.example.test/agentweave/commerce/v1/checkout/success",
+  ), environment(new LocalD1(), commerceConfig()));
+  assert.equal(custom.status, 404);
 });
 
 test("health binds the deployment and immutable Worker version", async () => {
@@ -509,6 +573,7 @@ test("checkout binds a verified subject and customer portal never accepts a clie
   assert.equal(checkout.status, 201);
   const checkoutBody = JSON.parse(calls[0].init.body);
   assert.equal(checkoutBody.product_id, "prod_123");
+  assert.equal(checkoutBody.success_url, "https://example.test/billing/success");
   assert.equal(checkoutBody.metadata.agentweavePlanId, "pro-monthly");
   assert.equal(checkoutBody.customer, undefined);
 
@@ -554,6 +619,54 @@ test("checkout binds a verified subject and customer portal never accepts a clie
     customerId: "cust_attacker",
   }), env);
   assert.equal(injected.status, 400);
+});
+
+test("managed Checkout derives its success URL from the Worker origin", async () => {
+  const calls = [];
+  const worker = createEntitlementWorker({
+    cryptoImpl: webcrypto,
+    nowSeconds: () => NOW,
+    authenticatorFactory,
+    fetchImpl: async (url, init) => {
+      calls.push({ url: url.toString(), init });
+      return Response.json({
+        id: "ch_managed", mode: "test", checkout_url: "https://checkout.creem.io/ch_managed",
+      });
+    },
+  });
+  const response = await worker.fetch(userRequest("/agentweave/commerce/v1/checkout", {
+    planId: "pro-monthly",
+    requestId: "request_0000000000000010",
+    requestNonce: "nonce_0000000000000010",
+  }), environment(new LocalD1(), managedSuccessConfig()));
+
+  assert.equal(response.status, 201);
+  assert.equal(
+    JSON.parse(calls[0].init.body).success_url,
+    "https://entitlements.example.test/agentweave/commerce/v1/checkout/success",
+  );
+
+  const spoofedHost = await worker.fetch(new Request(
+    "https://entitlements.example.test/agentweave/commerce/v1/checkout",
+    {
+      method: "POST",
+      headers: {
+        authorization: "Bearer identity-token",
+        "content-type": "application/json",
+        host: "attacker.example",
+      },
+      body: JSON.stringify({
+        planId: "pro-monthly",
+        requestId: "request_0000000000000011",
+        requestNonce: "nonce_0000000000000011",
+      }),
+    },
+  ), environment(new LocalD1(), managedSuccessConfig()));
+  assert.equal(spoofedHost.status, 201);
+  assert.equal(
+    JSON.parse(calls[1].init.body).success_url,
+    "https://entitlements.example.test/agentweave/commerce/v1/checkout/success",
+  );
 });
 
 test("paid, scheduled cancellation, and refund converge to paid-through semantics", async () => {
