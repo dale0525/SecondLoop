@@ -23,7 +23,9 @@ export function useCreemWebhookBootstrap({
   const [status, setStatus] = useState<CreemWebhookBootstrapStatus>("idle");
   const [receipt, setReceipt] = useState<CreemWebhookEndpoint | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [rerunVersion, setRerunVersion] = useState(0);
   const attemptedKey = useRef<string | null>(null);
+  const queuedKey = useRef<string | null>(null);
   const running = useRef(false);
   const entitlement = draft.deployment.cloudflare.entitlement;
   const selected = authorizationReady
@@ -52,9 +54,15 @@ export function useCreemWebhookBootstrap({
     : null;
 
   const execute = useCallback(async (force = false) => {
-    if (!requestKey || running.current || (!force && attemptedKey.current === requestKey)) return;
+    if (!requestKey) return;
+    if (running.current) {
+      if (attemptedKey.current !== requestKey) queuedKey.current = requestKey;
+      return;
+    }
+    if (!force && attemptedKey.current === requestKey) return;
     running.current = true;
     attemptedKey.current = requestKey;
+    queuedKey.current = null;
     setStatus("deploying");
     setError(null);
     try {
@@ -70,6 +78,10 @@ export function useCreemWebhookBootstrap({
         : "Creem webhook Worker could not be prepared");
     } finally {
       running.current = false;
+      if (queuedKey.current !== null && queuedKey.current !== requestKey) {
+        queuedKey.current = null;
+        setRerunVersion((current) => current + 1);
+      }
     }
   }, [draft, onProjectSaved, requestKey, snapshot]);
 
@@ -97,7 +109,15 @@ export function useCreemWebhookBootstrap({
     }
     const timeout = window.setTimeout(() => void execute(), 250);
     return () => window.clearTimeout(timeout);
-  }, [configurationReady, draft.providers.gateway, execute, selected, verifiedBundle, verifiedMatchesSelection]);
+  }, [
+    configurationReady,
+    draft.providers.gateway,
+    execute,
+    rerunVersion,
+    selected,
+    verifiedBundle,
+    verifiedMatchesSelection,
+  ]);
 
   return Object.freeze({
     error,
