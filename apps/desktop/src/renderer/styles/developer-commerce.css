@@ -9,6 +9,7 @@
 }
 
 .release-commerce {
+  container: release-commerce / inline-size;
   padding: 18px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-content);
@@ -38,6 +39,33 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: end;
   gap: 12px;
+}
+
+.release-checkout-success {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-muted);
+}
+
+.release-checkout-success > div:first-child,
+.release-checkout-success p {
+  margin: 0;
+}
+
+.release-checkout-success > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.release-checkout-success-mode {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.release-checkout-success-mode [data-radix-collection-item] {
+  min-width: 0;
 }
 
 .release-creem-connect > button {
@@ -78,6 +106,21 @@
 .release-commerce-bootstrap h4,
 .release-commerce-bootstrap p {
   margin: 0;
+}
+
+.release-commerce-bootstrap > [class*="rt-CalloutRoot"],
+.release-commerce-bootstrap > [class*="rt-CalloutRoot"] [class*="rt-CalloutText"] {
+  min-width: 0;
+}
+
+.release-commerce-bootstrap > [class*="rt-CalloutRoot"] [class*="rt-CalloutText"] {
+  overflow-wrap: anywhere;
+}
+
+.release-commerce-bootstrap > [class*="rt-CalloutRoot"] button {
+  box-sizing: border-box;
+  max-width: 100%;
+  white-space: normal;
 }
 
 .release-commerce-bootstrap header p,
@@ -381,6 +424,7 @@
 
 @media (max-width: 760px) {
   .release-commerce-mode,
+  .release-checkout-success-mode,
   .release-commerce-bootstrap > header,
   .release-creem-connect,
   .release-product-fields,
@@ -450,5 +494,34 @@
   .release-verification-step-heading > [class*="rt-Badge"] {
     grid-column: 2;
     justify-self: start;
+  }
+}
+
+@container release-commerce (max-width: 600px) {
+  .release-commerce-mode,
+  .release-checkout-success-mode,
+  .release-creem-connect,
+  .release-webhook-url {
+    grid-template-columns: 1fr;
+  }
+
+  .release-commerce-bootstrap > header {
+    grid-template-columns: 36px minmax(0, 1fr);
+  }
+
+  .release-commerce-bootstrap > header > [class*="rt-Badge"] {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .release-creem-connect > button,
+  .release-webhook-url > button,
+  .release-commerce button {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .release-webhook-url > svg {
+    display: none;
   }
 }
