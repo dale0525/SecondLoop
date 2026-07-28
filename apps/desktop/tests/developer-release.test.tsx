@@ -18,6 +18,25 @@ class TestResizeObserver implements ResizeObserver {
   unobserve(): void {}
 }
 
+function creemBootstrapReceipt(accountId: string): Record<string, unknown> {
+  return {
+    state: "bootstrap_ready",
+    providerId: "cloudflare-workers",
+    providerVersion: "0.1.0",
+    target: {
+      accountId,
+      deploymentId: "deployment-1",
+      workerName: "example-entitlements",
+      environment: "production",
+    },
+    versionId: "version-setup",
+    endpoint: "https://example-entitlements.workers.dev",
+    webhookUrl: "https://example-entitlements.workers.dev/agentweave/commerce/v1/webhooks/creem",
+    operationId: "4f290eb3-8712-4f7d-bde8-0a98aa95e33b",
+    completedAtUnixMs: 1_700_000_000_000,
+  };
+}
+
 beforeEach(() => {
   vi.stubGlobal("ResizeObserver", TestResizeObserver);
 });
@@ -258,7 +277,7 @@ describe("developer release workspace", () => {
     expect(screen.queryByRole("heading", { name: "Deployment secrets" })).not.toBeInTheDocument();
   });
 
-  it("prepares the Creem webhook only after Cloudflare and Creem are selected", async () => {
+  it("prepares the Creem webhook only after products are configured and defaults to a managed success page", async () => {
     const accountId = "0123456789abcdef0123456789abcdef";
     const initial = userConfigurableSnapshot();
     const save = vi.fn(async (request: unknown) => ({
@@ -268,6 +287,21 @@ describe("developer release workspace", () => {
     }));
     const accessRequest = vi.fn(async (operation: string) => {
       if (operation === "status") return controlStatus("ready", accountId);
+      if (operation === "commerce.creem.products") return {
+        environment: "test",
+        configuredRevision: "ui-configured-revision",
+        products: [{
+          id: "prod_pro",
+          name: "Pro monthly",
+          description: "Monthly subscription",
+          environment: "test",
+          priceMinor: 2_000,
+          currency: "USD",
+          billingType: "recurring",
+          billingPeriod: "month",
+          active: true,
+        }],
+      };
       if (operation === "commerce.creem.bootstrap") return {
         state: "bootstrap_ready",
         providerId: "cloudflare-workers",
@@ -300,6 +334,28 @@ describe("developer release workspace", () => {
 
     await user.click(screen.getByText("Creem"));
 
+    expect(screen.getByLabelText("Creem API key")).toBeEnabled();
+    expect(screen.getByText("Host it with the Worker")).toBeInTheDocument();
+    expect(screen.getByText(
+      "The success page is deployed with the Entitlement Worker. No separate site or Cloudflare Pages project is required.",
+    )).toBeInTheDocument();
+    await user.click(screen.getByRole("radio", { name: /Use a custom page/ }));
+    expect(await screen.findByLabelText("Custom success URL")).toBeVisible();
+    await user.click(screen.getByRole("radio", { name: /Host it with the Worker/ }));
+    expect(screen.queryByLabelText("Custom success URL")).not.toBeInTheDocument();
+    expect(accessRequest).not.toHaveBeenCalledWith("commerce.creem.bootstrap", expect.anything());
+
+    await user.type(screen.getByLabelText("Creem API key"), "creem-test-api-key-sentinel");
+    await user.click(screen.getByRole("button", { name: "Connect and discover products" }));
+    await user.click(await screen.findByRole("checkbox", {
+      name: "Enabled subscription products: Pro monthly",
+    }));
+
+    await waitFor(() => expect(save).toHaveBeenCalled());
+    await waitFor(() => expect(accessRequest).toHaveBeenCalledWith(
+      "commerce.creem.bootstrap",
+      expect.anything(),
+    ));
     expect(await screen.findByText("Webhook URL ready")).toBeInTheDocument();
     expect(screen.getByText(
       "https://com-example-agent-entitlements.workers.dev/agentweave/commerce/v1/webhooks/creem",
@@ -310,6 +366,9 @@ describe("developer release workspace", () => {
     expect(screen.getAllByText("Creem API key")).toHaveLength(1);
     expect(screen.getAllByText("Creem Webhook Secret")).toHaveLength(1);
     expect(screen.queryByRole("heading", { name: "Deployment secrets" })).not.toBeInTheDocument();
+    const successPage = screen.getByText("Checkout success page");
+    const deployment = screen.getByRole("heading", { name: "Prepare the Creem Webhook Worker" });
+    expect(successPage.compareDocumentPosition(deployment) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
   });
 
   it("configures the only Firebase project without manual identity fields", async () => {
@@ -649,6 +708,167 @@ describe("developer release workspace", () => {
     expect(screen.getByLabelText("Creem API key")).toBeEnabled();
     expect(screen.getByLabelText(/Creem Webhook Secret/)).toBeEnabled();
     expect(accessRequest).not.toHaveBeenCalledWith("commerce.creem.bootstrap", expect.anything());
+  });
+
+  it("re-prepares a verified Creem Worker after the success-page configuration changes", async () => {
+    const accountId = "0123456789abcdef0123456789abcdef";
+    const baseSnapshot = managedCommerceSnapshot();
+    const project = structuredClone(baseSnapshot.project);
+    const commerce = (project.providers as Record<string, Record<string, unknown>>).commerce;
+    commerce.publicConfig = {
+      environment: "test",
+      successPage: "custom_url",
+      successUrl: "https://old.example.test/billing/success",
+    };
+    const snapshot = { ...baseSnapshot, project };
+    const save = vi.fn(async (request: unknown) => ({
+      ...snapshot,
+      revision: "f".repeat(64),
+      project: (request as { project: Record<string, unknown> }).project,
+      deploymentStatus: "stale" as const,
+      verifiedBundle: null,
+    }));
+    const accessRequest = vi.fn(async (operation: string) => {
+      if (operation === "status") return controlStatus("ready", accountId);
+      if (operation === "commerce.creem.bootstrap") return creemBootstrapReceipt(accountId);
+      throw new Error(`Unexpected operation: ${operation}`);
+    });
+    installReleaseBridge(snapshot, { accessRequest, save });
+    window.history.replaceState(null, "", "/#developer/access/setup");
+    const user = userEvent.setup();
+
+    render(<App />);
+    await screen.findByRole("heading", { name: "Complete the Creem Test path" });
+    await user.click(screen.getByRole("button", { name: /Required details/ }));
+    expect(await screen.findByRole("radio", { name: /Use a custom page/ })).toBeChecked();
+    const successUrl = await screen.findByLabelText("Custom success URL");
+    await user.clear(successUrl);
+    await user.type(successUrl, "https://app.example.test/billing/success");
+
+    await waitFor(() => expect(accessRequest).toHaveBeenCalledWith(
+      "commerce.creem.bootstrap",
+      expect.anything(),
+    ));
+    expect(save).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-prepares a verified Creem Worker after a product-plan limit changes", async () => {
+    const accountId = "0123456789abcdef0123456789abcdef";
+    const snapshot = managedCommerceSnapshot();
+    const save = vi.fn(async (request: unknown) => ({
+      ...snapshot,
+      revision: "e".repeat(64),
+      project: (request as { project: Record<string, unknown> }).project,
+      deploymentStatus: "stale" as const,
+      verifiedBundle: null,
+    }));
+    const accessRequest = vi.fn(async (operation: string) => {
+      if (operation === "status") return controlStatus("ready", accountId);
+      if (operation === "commerce.creem.products") return {
+        environment: "test",
+        configuredRevision: "ui-configured-revision",
+        products: [{
+          id: "prod_pro",
+          name: "Pro",
+          description: "Monthly subscription",
+          environment: "test",
+          priceMinor: 2_000,
+          currency: "USD",
+          billingType: "recurring",
+          billingPeriod: "month",
+          active: true,
+        }],
+      };
+      if (operation === "commerce.creem.bootstrap") return creemBootstrapReceipt(accountId);
+      throw new Error(`Unexpected operation: ${operation}`);
+    });
+    installReleaseBridge(snapshot, { accessRequest, save });
+    window.history.replaceState(null, "", "/#developer/access/setup");
+    const user = userEvent.setup();
+
+    render(<App />);
+    await screen.findByRole("heading", { name: "Complete the Creem Test path" });
+    await user.click(screen.getByRole("button", { name: /Required details/ }));
+    await user.type(screen.getByLabelText("Creem API key"), "creem-test-api-key-sentinel");
+    await user.click(screen.getByRole("button", { name: "Connect and discover products" }));
+    const requestLimit = await screen.findByRole("spinbutton", { name: "Requests / period" });
+    await user.clear(requestLimit);
+    await user.type(requestLimit, "25");
+
+    await waitFor(() => expect(accessRequest).toHaveBeenCalledWith(
+      "commerce.creem.bootstrap",
+      expect.anything(),
+    ));
+    expect(save).toHaveBeenCalledTimes(1);
+  });
+
+  it("queues the latest Creem configuration while a Worker preparation is in flight", async () => {
+    const accountId = "0123456789abcdef0123456789abcdef";
+    const snapshot = managedCommerceSnapshot();
+    const save = vi.fn(async (request: unknown) => ({
+      ...snapshot,
+      revision: crypto.randomUUID().replaceAll("-", "").padEnd(64, "0"),
+      project: (request as { project: Record<string, unknown> }).project,
+      deploymentStatus: "stale" as const,
+      verifiedBundle: null,
+    }));
+    const firstBootstrap: {
+      resolve: ((value: Record<string, unknown>) => void) | null;
+    } = { resolve: null };
+    const accessRequest = vi.fn(async (operation: string) => {
+      if (operation === "status") return controlStatus("ready", accountId);
+      if (operation === "commerce.creem.products") return {
+        environment: "test",
+        configuredRevision: "ui-configured-revision",
+        products: [{
+          id: "prod_pro",
+          name: "Pro",
+          description: "Monthly subscription",
+          environment: "test",
+          priceMinor: 2_000,
+          currency: "USD",
+          billingType: "recurring",
+          billingPeriod: "month",
+          active: true,
+        }],
+      };
+      if (operation === "commerce.creem.bootstrap") {
+        if (firstBootstrap.resolve === null) {
+          return new Promise<Record<string, unknown>>((resolve) => {
+            firstBootstrap.resolve = resolve;
+          });
+        }
+        return creemBootstrapReceipt(accountId);
+      }
+      throw new Error(`Unexpected operation: ${operation}`);
+    });
+    installReleaseBridge(snapshot, { accessRequest, save });
+    window.history.replaceState(null, "", "/#developer/access/setup");
+    const user = userEvent.setup();
+
+    render(<App />);
+    await screen.findByRole("heading", { name: "Complete the Creem Test path" });
+    await user.click(screen.getByRole("button", { name: /Required details/ }));
+    await user.type(screen.getByLabelText("Creem API key"), "creem-test-api-key-sentinel");
+    await user.click(screen.getByRole("button", { name: "Connect and discover products" }));
+    const requestLimit = await screen.findByRole("spinbutton", { name: "Requests / period" });
+    await user.clear(requestLimit);
+    await user.type(requestLimit, "10");
+    await waitFor(() => expect(accessRequest).toHaveBeenCalledWith(
+      "commerce.creem.bootstrap",
+      expect.anything(),
+    ));
+
+    await user.clear(requestLimit);
+    await user.type(requestLimit, "20");
+    await new Promise((resolve) => window.setTimeout(resolve, 300));
+    if (firstBootstrap.resolve === null) throw new Error("First Creem bootstrap did not start");
+    firstBootstrap.resolve(creemBootstrapReceipt(accountId));
+
+    await waitFor(() => expect(accessRequest.mock.calls.filter(
+      ([operation]) => operation === "commerce.creem.bootstrap",
+    )).toHaveLength(2));
+    expect(save).toHaveBeenCalledTimes(2);
   });
 
   it("shows the safe resource message for a partial access bundle inspection", async () => {

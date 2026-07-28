@@ -8,6 +8,7 @@ import { CommerceStore } from "./store.js";
 
 const JSON_LIMIT = 64 * 1024;
 const RECONCILE_DOMAIN = "agentweave-commerce-reconcile-v1";
+const CHECKOUT_SUCCESS_PATH = "/agentweave/commerce/v1/checkout/success";
 
 function exactObject(value, allowed) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -40,6 +41,64 @@ async function jsonBody(request, allowed) {
 
 function json(value, status = 200) {
   return Response.json(value, { status, headers: { "cache-control": "no-store" } });
+}
+
+function checkoutSuccessUrl(request, config) {
+  if (config.commerce.successPage === "custom_url") return config.commerce.successUrl;
+  // Cloudflare binds request.url to the route-selected hostname. Derive from it,
+  // never from the caller-controlled Host header; operator-added custom routes
+  // are therefore the only alternate origins that can reach this Worker.
+  const url = new URL(request.url);
+  if (url.protocol !== "https:" || url.username || url.password) {
+    fail(503, "entitlement_misconfigured", "The entitlement service is not configured.");
+  }
+  url.pathname = CHECKOUT_SUCCESS_PATH;
+  url.search = "";
+  url.hash = "";
+  return url.toString();
+}
+
+function checkoutSuccessPage(request) {
+  const chinese = (request.headers.get("accept-language") ?? "")
+    .split(",")
+    .some((language) => language.trim().toLowerCase().startsWith("zh"));
+  const copy = chinese
+    ? { language: "zh-CN", title: "支付完成", message: "可以关闭此页面并返回应用。" }
+    : { language: "en", title: "Checkout complete", message: "You can close this page and return to the app." };
+  return new Response(`<!doctype html>
+<html lang="${copy.language}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${copy.title}</title>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+    body { min-height: 100vh; margin: 0; display: grid; place-items: center; background: Canvas; color: CanvasText; }
+    main { width: min(32rem, calc(100% - 3rem)); text-align: center; }
+    span { display: inline-grid; width: 3rem; height: 3rem; place-items: center; border-radius: 50%; background: #16834a; color: white; font-size: 1.5rem; }
+    h1 { margin: 1.25rem 0 .5rem; font-size: clamp(1.6rem, 6vw, 2.25rem); letter-spacing: -.025em; }
+    p { margin: 0; color: GrayText; font-size: 1rem; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <main>
+    <span aria-hidden="true">✓</span>
+    <h1>${copy.title}</h1>
+    <p>${copy.message}</p>
+  </main>
+</body>
+</html>`, {
+    status: 200,
+    headers: {
+      "cache-control": "no-store",
+      "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      "content-language": copy.language,
+      "content-type": "text/html; charset=utf-8",
+      "referrer-policy": "no-referrer",
+      vary: "accept-language",
+      "x-content-type-options": "nosniff",
+    },
+  });
 }
 
 function requestId(request, cryptoImpl) {
@@ -172,6 +231,12 @@ export function createEntitlementWorker({
             ] : [])],
           });
         }
+        if (request.method === "GET" && url.pathname === CHECKOUT_SUCCESS_PATH) {
+          if (config.commerce?.successPage !== "managed_worker") {
+            fail(404, "not_found", "The requested endpoint was not found.");
+          }
+          return checkoutSuccessPage(request);
+        }
         if (config.setup) {
           if (request.method === "POST" && url.pathname === "/agentweave/commerce/v1/webhooks/creem") {
             fail(503, "commerce_setup_required", "Commerce webhook setup is not complete.");
@@ -241,6 +306,7 @@ export function createEntitlementWorker({
             productId: plan.productId,
             requestId: checkoutRequestId,
             customerId: customer?.customer_id ?? null,
+            successUrl: checkoutSuccessUrl(request, config),
             metadata: {
               agentweaveAppId: config.appId,
               agentweaveSubjectRef: reference,
@@ -306,6 +372,7 @@ export function createEntitlementWorker({
 export default createEntitlementWorker();
 
 export const workerInternals = Object.freeze({
+  CHECKOUT_SUCCESS_PATH,
   RECONCILE_DOMAIN,
   allSettledInBatches,
   reconcileSubscription,

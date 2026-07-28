@@ -342,7 +342,7 @@ export function validateManagedDraft(
       }
       for (const field of descriptor.configuration_schema.public_fields) {
         if (field.visible_when
-          && selection.publicConfig[field.visible_when.field_id] !== field.visible_when.equals) continue;
+          && visibleProviderConfigValue(selection, field.visible_when.field_id) !== field.visible_when.equals) continue;
         const value = selection.publicConfig[field.id];
         if (label === "Entitlement"
           && managedEntitlement.mode === "managed_worker"
@@ -355,7 +355,10 @@ export function validateManagedDraft(
         if (field.field_type === "integer" && !Number.isSafeInteger(value)) {
           issues.push(`${field.label} must be an integer`);
         }
-        if (field.field_type === "https_url" && !validUrl(value, true)) {
+        if (field.field_type === "https_url"
+          && !(selection.id === "agentweave.commerce.creem" && field.id === "successUrl"
+            ? validExactHttpsUrl(value)
+            : validUrl(value, true))) {
           issues.push(`${field.label} must be a credential-free HTTPS URL`);
         }
         if (field.field_type === "url" && !validUrl(value, false)) {
@@ -418,6 +421,14 @@ function hasValue(value: unknown): boolean {
   return value !== undefined && value !== null;
 }
 
+function visibleProviderConfigValue(selection: ProviderSelection, fieldId: string): unknown {
+  const value = selection.publicConfig[fieldId];
+  if (selection.id !== "agentweave.commerce.creem" || fieldId !== "successPage" || value !== undefined) {
+    return value;
+  }
+  return hasValue(selection.publicConfig.successUrl) ? "custom_url" : "managed_worker";
+}
+
 function validUrl(value: unknown, httpsOnly: boolean): boolean {
   if (typeof value !== "string") return false;
   try {
@@ -426,4 +437,10 @@ function validUrl(value: unknown, httpsOnly: boolean): boolean {
   } catch {
     return false;
   }
+}
+
+function validExactHttpsUrl(value: unknown): boolean {
+  if (!validUrl(value, true) || typeof value !== "string") return false;
+  const parsed = new URL(value);
+  return !parsed.search && !parsed.hash;
 }

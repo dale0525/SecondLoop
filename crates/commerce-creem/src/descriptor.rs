@@ -1,6 +1,6 @@
 use crate::CREEM_PROVIDER_ID;
 use agent_devkit::{
-    ConfigFieldDescriptor, ConfigFieldType, HostPlatform, ProtocolCompatibility,
+    ConfigFieldDescriptor, ConfigFieldType, FieldCondition, HostPlatform, ProtocolCompatibility,
     ProviderConfigurationSchema, ProviderDescriptor, ProviderKind, SensitiveFieldDescriptor,
 };
 use commerce_runtime::REQUIRED_SUBSCRIPTION_CAPABILITIES;
@@ -40,7 +40,7 @@ pub fn creem_provider_descriptor() -> ProviderDescriptor {
             .collect(),
         configuration_schema: ProviderConfigurationSchema {
             schema_version: 1,
-            migration_version: 1,
+            migration_version: 2,
             public_fields: vec![
                 ConfigFieldDescriptor {
                     id: "environment".into(),
@@ -57,18 +57,34 @@ pub fn creem_provider_descriptor() -> ProviderDescriptor {
                     visible_when: None,
                 },
                 ConfigFieldDescriptor {
+                    id: "successPage".into(),
+                    label: "Checkout success page".into(),
+                    description: "Use the page hosted by the managed Entitlement Worker, or provide a custom HTTPS page."
+                        .into(),
+                    field_type: ConfigFieldType::String,
+                    required: false,
+                    default_value: Some(json!("managed_worker")),
+                    allowed_values: vec![json!("managed_worker"), json!("custom_url")],
+                    minimum_length: None,
+                    maximum_length: None,
+                    advanced: false,
+                    visible_when: None,
+                },
+                ConfigFieldDescriptor {
                     id: "successUrl".into(),
                     label: "Checkout success URL".into(),
-                    description: "Server-controlled HTTPS destination used after Checkout."
-                        .into(),
+                    description: "Optional custom HTTPS destination used after Checkout.".into(),
                     field_type: ConfigFieldType::HttpsUrl,
-                    required: true,
+                    required: false,
                     default_value: None,
                     allowed_values: Vec::new(),
                     minimum_length: Some(8),
                     maximum_length: Some(2_048),
                     advanced: false,
-                    visible_when: None,
+                    visible_when: Some(FieldCondition {
+                        field_id: "successPage".into(),
+                        equals: "custom_url".into(),
+                    }),
                 },
             ],
             sensitive_fields: vec![
@@ -137,5 +153,31 @@ mod tests {
                 })
         );
         assert_eq!(descriptor.configuration_schema.sensitive_fields.len(), 3);
+    }
+
+    #[test]
+    fn managed_checkout_success_page_is_the_optional_default() {
+        let descriptor = creem_provider_descriptor();
+        let page = descriptor
+            .configuration_schema
+            .public_fields
+            .iter()
+            .find(|field| field.id == "successPage")
+            .unwrap();
+        let url = descriptor
+            .configuration_schema
+            .public_fields
+            .iter()
+            .find(|field| field.id == "successUrl")
+            .unwrap();
+        assert_eq!(page.default_value, Some(json!("managed_worker")));
+        assert!(!page.required);
+        assert!(!url.required);
+        assert_eq!(
+            url.visible_when
+                .as_ref()
+                .map(|condition| condition.equals.as_str()),
+            Some("custom_url")
+        );
     }
 }

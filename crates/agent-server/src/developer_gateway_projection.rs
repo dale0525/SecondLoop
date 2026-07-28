@@ -559,18 +559,53 @@ fn project_entitlement_worker_config(
                 .ok_or_else(|| {
                     DevkitError::invalid_configuration("Commerce environment is invalid")
                 })?;
-            let success_url = public
-                .get("successUrl")
-                .and_then(Value::as_str)
-                .ok_or_else(|| {
-                    DevkitError::invalid_configuration("Commerce success URL is missing")
-                })?;
-            normalized_https_url(success_url, "Commerce success URL")?;
-            Some(json!({
+            let configured_success_url = match public.get("successUrl") {
+                None => None,
+                Some(Value::String(value)) => Some(value.as_str()),
+                Some(_) => {
+                    return Err(DevkitError::invalid_configuration(
+                        "Commerce success URL is invalid",
+                    ));
+                }
+            };
+            let success_page = match public.get("successPage") {
+                None if configured_success_url.is_some() => "custom_url",
+                None => "managed_worker",
+                Some(Value::String(value))
+                    if matches!(value.as_str(), "managed_worker" | "custom_url") =>
+                {
+                    value.as_str()
+                }
+                _ => {
+                    return Err(DevkitError::invalid_configuration(
+                        "Commerce success page mode is invalid",
+                    ));
+                }
+            };
+            let success_url = match success_page {
+                "managed_worker" if configured_success_url.is_some() => {
+                    return Err(DevkitError::invalid_configuration(
+                        "managed Commerce success page cannot configure a custom URL",
+                    ));
+                }
+                "managed_worker" => None,
+                "custom_url" => {
+                    let value = configured_success_url.ok_or_else(|| {
+                        DevkitError::invalid_configuration("Commerce success URL is missing")
+                    })?;
+                    Some(normalized_https_url(value, "Commerce success URL")?)
+                }
+                _ => unreachable!(),
+            };
+            let mut commerce = json!({
                 "providerId": commerce_creem::CREEM_PROVIDER_ID,
                 "environment": environment,
-                "successUrl": success_url,
-            }))
+                "successPage": success_page,
+            });
+            if let Some(success_url) = success_url {
+                commerce["successUrl"] = json!(success_url);
+            }
+            Some(commerce)
         }
         _ => {
             return Err(DevkitError::invalid_configuration(
