@@ -633,6 +633,7 @@
   "developer.release.unsupportedProduct": "Not a subscription",
   "developer.release.planId": "Stable plan ID",
   "developer.release.allowedModels": "Allowed models",
+  "developer.release.allowedModelsHint": "Leave blank to allow all models. Separate multiple model IDs with commas.",
   "developer.release.maxRequests": "Requests / period",
   "developer.release.maxUnits": "Tokens / usage units",
   "developer.release.maxConcurrency": "Concurrent requests",
