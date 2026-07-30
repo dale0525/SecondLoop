@@ -30,6 +30,7 @@ import {
   type DeveloperVerifiedDeployment,
 } from "../shared/developerProject";
 import { refreshRuntimeAfterProjectSave } from "./developerProjectReload";
+import { loadRecoverySnapshot } from "./developerProjectRecovery";
 
 const MAX_DOCUMENT_BYTES = 256 * 1024;
 const REVISION_PATTERN = /^[a-f0-9]{64}$/;
@@ -66,13 +67,13 @@ export function registerDeveloperProjectController(options: {
 
   options.ipcMain.handle(DEVELOPER_PROJECT_LOAD_CHANNEL, async (event) => {
     trusted(event);
-    return serialize(loadSnapshot);
+    return serialize((root) => loadSnapshot(root, true));
   });
   options.ipcMain.handle(DEVELOPER_PROJECT_SAVE_CHANNEL, async (event, value) => {
     trusted(event);
     const request = parseSaveRequest(value);
     return serialize(async (root) => {
-      const previous = await loadSnapshot(root);
+      const previous = await loadSnapshot(root, true);
       const snapshot = await saveProject(root, request, previous);
       await refreshRuntimeAfterProjectSave({
         refreshRuntime: options.refreshRuntime,
@@ -111,8 +112,9 @@ export function registerDeveloperProjectController(options: {
 
 export async function loadDeveloperProjectSnapshot(
   appRoot: string | null,
+  allowRecovery = false,
 ): Promise<DeveloperProjectSnapshot> {
-  return serializeProjectMutation(appRoot, loadSnapshot);
+  return serializeProjectMutation(appRoot, (root) => loadSnapshot(root, allowRecovery));
 }
 
 export async function recordDeveloperGatewayDeployment(options: {
@@ -416,15 +418,18 @@ async function configuredRoot(value: string | null): Promise<string> {
   return root;
 }
 
-async function loadSnapshot(root: string): Promise<DeveloperProjectSnapshot> {
+async function loadSnapshot(
+  root: string,
+  allowRecovery = false,
+): Promise<DeveloperProjectSnapshot> {
   await recoverJournal(root);
   const manifest = await readJsonObject(path.join(root, "agent-app.json"), "Agent App manifest");
   const project = await readJsonObject(
     path.join(root, "agentweave-project.json"),
     "AgentWeave project configuration",
   );
-  validateAgentWeaveProjectData(project);
-  validateProjectMatchesRuntime(project, manifest);
+  const recovery = loadRecoverySnapshot({ allowRecovery, appRoot: root, manifest, project });
+  if (recovery) return recovery;
   const lockPath = path.join(root, ".agentweave", "deployment.lock");
   let deploymentStatus: DeveloperProjectSnapshot["deploymentStatus"] = "not_required";
   let deploymentMessage: string | null = null;
@@ -459,6 +464,7 @@ async function loadSnapshot(root: string): Promise<DeveloperProjectSnapshot> {
     project,
     deploymentStatus,
     deploymentMessage,
+    recoveryReason: null,
     verifiedDeployment,
     verifiedBundle,
   };

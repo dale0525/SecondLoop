@@ -263,6 +263,8 @@
   "developer.apiConnected": "Development API connected",
   "developer.apiDisconnected": "Development API disconnected",
   "developer.apiUnavailable": "Development API is not available",
+  "developer.recovery.title": "Developer Recovery is active.",
+  "developer.recovery.description": "The Agent runtime is closed while configuration is invalid. Complete Access setup and save a valid project to reload it.",
   "developer.apiUnavailableHint": "Start the server with AGENTWEAVE_DEV_API=1 to manage local skills.",
   "developer.tabsLabel": "Developer tool sections",
   "developer.tabModel": "Model",

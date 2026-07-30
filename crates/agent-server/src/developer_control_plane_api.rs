@@ -14,12 +14,7 @@ use crate::developer_gateway_projection::{
 };
 use agent_devkit::{DevkitError, DevkitErrorCode, RemoteMutationRisk};
 use axum::response::{IntoResponse, Response};
-use axum::{
-    Json, Router,
-    extract::State,
-    http::StatusCode,
-    routing::{delete, get, post},
-};
+use axum::{Json, extract::State, http::StatusCode};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -30,58 +25,8 @@ use zeroize::Zeroize;
 const MAX_PUBLIC_CONFIG_BYTES: usize = 256 * 1024;
 const MAX_SECRET_BYTES: usize = 64 * 1024;
 
-pub(crate) fn routes() -> Router<Arc<AppState>> {
-    Router::new()
-        .route("/dev/control/status", get(status))
-        .route(
-            "/dev/control/cloudflare/authorization",
-            post(start_authorization).delete(disconnect_authorization),
-        )
-        .route(
-            "/dev/control/cloudflare/authorization/callback",
-            post(complete_authorization),
-        )
-        .route(
-            "/dev/control/cloudflare/authorization/pending",
-            delete(cancel_pending_authorization),
-        )
-        .route(
-            "/dev/control/cloudflare/accounts",
-            get(list_accounts).post(select_account),
-        )
-        .route(
-            "/dev/control/firebase/authorization",
-            post(start_firebase_authorization).delete(disconnect_firebase_authorization),
-        )
-        .route(
-            "/dev/control/firebase/authorization/callback",
-            post(complete_firebase_authorization),
-        )
-        .route(
-            "/dev/control/firebase/authorization/pending",
-            delete(cancel_firebase_authorization),
-        )
-        .route(
-            "/dev/control/firebase/projects",
-            get(list_firebase_projects).post(configure_firebase_project),
-        )
-        .route("/dev/control/gateway/plan", post(plan_deployment))
-        .route("/dev/control/access/plan", post(plan_access_bundle))
-        .route("/dev/control/access/apply", post(apply_access_bundle))
-        .route("/dev/control/access/test", post(test_access_bundle))
-        .route(
-            "/dev/control/commerce/creem/bootstrap",
-            post(bootstrap_commerce_webhook),
-        )
-        .route("/dev/control/gateway/apply", post(apply_deployment))
-        .route("/dev/control/gateway/inspect", post(inspect_deployment))
-        .route("/dev/control/gateway/test", post(test_deployment))
-        .route("/dev/control/gateway/rotate", post(rotate_secret))
-        .route("/dev/control/gateway/rollback", post(rollback))
-        .route("/dev/control/gateway/destroy/plan", post(plan_destroy))
-        .route("/dev/control/gateway/destroy/apply", post(apply_destroy))
-        .merge(crate::developer_control_plane_bundle_lifecycle_api::routes())
-}
+mod routes;
+pub(crate) use routes::{recovery_routes, routes};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]

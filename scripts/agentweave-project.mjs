@@ -207,7 +207,7 @@ function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
-function validateProviderSelection(value, label) {
+function validateProviderSelection(value, label, { validateKnownConfig = true } = {}) {
   const provider = requireObject(value, label);
   requireOnlyKeys(provider, ["id", "version", "publicConfig"], label);
   requireFields(provider, ["id", "version", "publicConfig"], label);
@@ -215,12 +215,12 @@ function validateProviderSelection(value, label) {
   requireSemver(provider.version, `${label}.version`);
   requireObject(provider.publicConfig, `${label}.publicConfig`);
   rejectNonPublicConfig(provider.publicConfig, `${label}.publicConfig`);
-  validateKnownProviderPublicConfig(provider.id, provider.publicConfig, `${label}.publicConfig`);
+  if (validateKnownConfig) validateKnownProviderPublicConfig(provider.id, provider.publicConfig, `${label}.publicConfig`);
   return provider;
 }
 
-function validateOptionalProviderSelection(value, label) {
-  return value === null ? null : validateProviderSelection(value, label);
+function validateOptionalProviderSelection(value, label, options) {
+  return value === null ? null : validateProviderSelection(value, label, options);
 }
 
 function parsePublicUrl(value, label, { allowLoopbackHttp = true } = {}) {
@@ -300,28 +300,28 @@ function validateModelAccess(value, label) {
   return modelAccess;
 }
 
-function validateIdentity(value, label) {
+function validateIdentity(value, label, options) {
   const identity = requireObject(value, label);
   requireOnlyKeys(identity, ["mode", "provider"], label);
   requireFields(identity, ["mode"], label);
   if (!["local_single_user", "required"].includes(identity.mode)) fail(`${label}.mode is unsupported`);
   if (identity.mode === "required") {
     if (!hasOwn(identity, "provider")) fail(`${label}.provider is required`);
-    validateProviderSelection(identity.provider, `${label}.provider`);
+    validateProviderSelection(identity.provider, `${label}.provider`, options);
   } else if (hasOwn(identity, "provider")) {
     fail(`${label}.provider is not allowed in local_single_user mode`);
   }
   return identity;
 }
 
-function validateEntitlements(value, label) {
+function validateEntitlements(value, label, options) {
   const entitlements = requireObject(value, label);
   requireOnlyKeys(entitlements, ["mode", "provider"], label);
   requireFields(entitlements, ["mode"], label);
   if (!["disabled", "required"].includes(entitlements.mode)) fail(`${label}.mode is unsupported`);
   if (entitlements.mode === "required") {
     if (!hasOwn(entitlements, "provider")) fail(`${label}.provider is required`);
-    validateProviderSelection(entitlements.provider, `${label}.provider`);
+    validateProviderSelection(entitlements.provider, `${label}.provider`, options);
   } else if (hasOwn(entitlements, "provider")) {
     fail(`${label}.provider is not allowed in disabled mode`);
   }
@@ -345,7 +345,7 @@ function validateManagedRemotePolicy(projection, label) {
   }
 }
 
-export function validateRuntimeProviderProjection(app, label = "agent app manifest") {
+export function validateRuntimeProviderProjection(app, label = "agent app manifest", options) {
   requireObject(app, label);
   requireInteger(app.schemaVersion, `${label}.schemaVersion`);
   if (app.schemaVersion > RUNTIME_PROVIDER_MANIFEST_SCHEMA_VERSION) {
@@ -365,16 +365,16 @@ export function validateRuntimeProviderProjection(app, label = "agent app manife
   requireFields(app, fields, label);
   const projection = {
     modelAccess: validateModelAccess(app.modelAccess, `${label}.modelAccess`),
-    identity: validateIdentity(app.identity, `${label}.identity`),
-    entitlements: validateEntitlements(app.entitlements, `${label}.entitlements`),
+    identity: validateIdentity(app.identity, `${label}.identity`, options),
+    entitlements: validateEntitlements(app.entitlements, `${label}.entitlements`, options),
   };
   rejectNonPublicConfig(projection, `${label} public provider projection`);
   validateManagedRemotePolicy(projection, label);
   return projection;
 }
 
-export function runtimeProviderProjection(app, label = "agent app manifest") {
-  return cloneJson(validateRuntimeProviderProjection(app, label));
+export function runtimeProviderProjection(app, label = "agent app manifest", options) {
+  return cloneJson(validateRuntimeProviderProjection(app, label, options));
 }
 
 function validatePlanLimits(value, label) {
@@ -518,8 +518,8 @@ function validateCloudflareDesiredState(value, label, schemaVersion = AGENTWEAVE
   return deployment;
 }
 
-export function projectRuntimeProjection(project, label = "agentweave-project.json") {
-  const validated = validateAgentWeaveProjectData(project, label);
+export function projectRuntimeProjection(project, label = "agentweave-project.json", options) {
+  const validated = validateAgentWeaveProjectData(project, label, options);
   return {
     modelAccess: cloneJson(validated.modelAccess),
     identity: validated.providers.identity === null
@@ -531,7 +531,7 @@ export function projectRuntimeProjection(project, label = "agentweave-project.js
   };
 }
 
-export function validateAgentWeaveProjectData(project, label = AGENTWEAVE_PROJECT_FILE) {
+export function validateAgentWeaveProjectData(project, label = AGENTWEAVE_PROJECT_FILE, options) {
   const document = requireObject(project, label);
   requireOnlyKeys(document, ["schemaVersion", "providers", "modelAccess", "deployment"], label);
   requireFields(document, ["schemaVersion", "providers", "modelAccess", "deployment"], label);
@@ -548,7 +548,7 @@ export function validateAgentWeaveProjectData(project, label = AGENTWEAVE_PROJEC
   requireOnlyKeys(providers, providerKinds, `${label}.providers`);
   requireFields(providers, providerKinds, `${label}.providers`);
   for (const kind of providerKinds) {
-    validateOptionalProviderSelection(providers[kind], `${label}.providers.${kind}`);
+    validateOptionalProviderSelection(providers[kind], `${label}.providers.${kind}`, options);
   }
   validateModelAccess(document.modelAccess, `${label}.modelAccess`);
   if (document.deployment !== null) {
@@ -581,6 +581,7 @@ export function validateAgentWeaveProjectData(project, label = AGENTWEAVE_PROJEC
   validateRuntimeProviderProjection(
     { schemaVersion: RUNTIME_PROVIDER_MANIFEST_SCHEMA_VERSION, ...projection },
     `${label} runtime projection`,
+    options,
   );
   return document;
 }
@@ -598,9 +599,9 @@ export function computeProviderPublicConfigHash(provider) {
   return hashPublicValue(selection.publicConfig);
 }
 
-export function validateProjectMatchesRuntime(project, app) {
-  const desiredProjection = projectRuntimeProjection(project);
-  const runtimeProjection = runtimeProviderProjection(app);
+export function validateProjectMatchesRuntime(project, app, options) {
+  const desiredProjection = projectRuntimeProjection(project, "agentweave-project.json", options);
+  const runtimeProjection = runtimeProviderProjection(app, "agent app manifest", options);
   if (app.schemaVersion === 1) {
     const legacyDefault = {
       modelAccess: { configurationPolicy: "user_configurable" },

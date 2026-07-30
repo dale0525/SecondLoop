@@ -41,6 +41,79 @@ pub(super) async fn remove_test_dir(path: PathBuf) {
     }
 }
 
+pub(super) async fn write_runtime_package(package_root: &Path, tool_name: &str) {
+    tokio::fs::create_dir_all(package_root).await.unwrap();
+    tokio::fs::write(
+        package_root.join("agentweave.json"),
+        serde_json::json!({
+            "schemaVersion": 1,
+            "id": "com.example.server-runtime",
+            "version": "1.0.0",
+            "displayName": "Server runtime",
+            "kind": "native_runtime",
+            "package": {
+                "includeInstructions": false,
+                "includeRuntime": true
+            }
+        })
+        .to_string(),
+    )
+    .await
+    .unwrap();
+    tokio::fs::write(
+        package_root.join("skill.json"),
+        serde_json::json!({
+            "name": "server-runtime",
+            "description": "Server runtime test skill.",
+            "version": "1.0.0",
+            "entry": {
+                "type": "command",
+                "command": "node",
+                "args": ["index.js"]
+            },
+            "tools": [{
+                "name": tool_name,
+                "description": "Test tool.",
+                "input_schema": { "type": "object" }
+            }]
+        })
+        .to_string(),
+    )
+    .await
+    .unwrap();
+    tokio::fs::write(package_root.join("index.js"), "process.stdin.resume();\n")
+        .await
+        .unwrap();
+}
+
+pub(super) async fn write_instruction_package(package_root: &Path, id: &str) {
+    tokio::fs::create_dir_all(package_root).await.unwrap();
+    let name = id.rsplit('.').next().unwrap();
+    tokio::fs::write(
+        package_root.join("agentweave.json"),
+        serde_json::json!({
+            "schemaVersion": 1,
+            "id": id,
+            "version": "1.0.0",
+            "displayName": name,
+            "kind": "instruction_only",
+            "package": {
+                "includeInstructions": true,
+                "includeRuntime": false
+            }
+        })
+        .to_string(),
+    )
+    .await
+    .unwrap();
+    tokio::fs::write(
+        package_root.join("SKILL.md"),
+        format!("---\nname: {name}\ndescription: {name}\n---\n{name}\n"),
+    )
+    .await
+    .unwrap();
+}
+
 fn set_test_writable(permissions: &mut std::fs::Permissions, directory: bool) {
     #[cfg(unix)]
     {
