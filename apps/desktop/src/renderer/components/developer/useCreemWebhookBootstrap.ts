@@ -35,6 +35,7 @@ export function useCreemWebhookBootstrap({
     && entitlement.policy.sourceMode === "commerce_provider"
     && draft.providers.commerce?.id === "agentweave.commerce.creem"
     && Boolean(draft.deployment.cloudflare.accountId);
+  const modelReady = draft.modelAccess.profile.modelName.trim().length > 0;
   const configurationReady = bootstrapConfigurationReady(draft);
   const configurationFingerprint = creemBootstrapFingerprint(draft);
   const savedConfigurationFingerprint = creemBootstrapFingerprint(snapshot.project);
@@ -49,7 +50,7 @@ export function useCreemWebhookBootstrap({
     && verifiedBundle?.entitlementPolicy.target.accountId === draft.deployment.cloudflare.accountId
     && verifiedBundle?.entitlementPolicy.target.workerName
       === (entitlement.mode === "managed_worker" ? entitlement.workerName : "");
-  const requestKey = selected && configurationReady && !verifiedMatchesSelection
+  const requestKey = selected && modelReady && configurationReady && !verifiedMatchesSelection
     ? configurationFingerprint
     : null;
 
@@ -100,7 +101,7 @@ export function useCreemWebhookBootstrap({
       setError(null);
       return;
     }
-    if (!configurationReady) {
+    if (!modelReady || !configurationReady) {
       attemptedKey.current = null;
       setReceipt(null);
       setStatus("idle");
@@ -113,6 +114,7 @@ export function useCreemWebhookBootstrap({
     configurationReady,
     draft.providers.gateway,
     execute,
+    modelReady,
     rerunVersion,
     selected,
     verifiedBundle,

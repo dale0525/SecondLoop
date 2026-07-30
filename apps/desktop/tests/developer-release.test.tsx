@@ -277,7 +277,7 @@ describe("developer release workspace", () => {
     expect(screen.queryByRole("heading", { name: "Deployment secrets" })).not.toBeInTheDocument();
   });
 
-  it("prepares the Creem webhook only after products are configured and defaults to a managed success page", async () => {
+  it("prepares the Creem webhook only after products and the required model are configured", async () => {
     const accountId = "0123456789abcdef0123456789abcdef";
     const initial = userConfigurableSnapshot();
     const save = vi.fn(async (request: unknown) => ({
@@ -359,6 +359,11 @@ describe("developer release workspace", () => {
       "Leave blank to allow all models. Separate multiple model IDs with commas.",
     );
     await user.clear(productAllowedModels);
+
+    await new Promise((resolve) => window.setTimeout(resolve, 300));
+    expect(save).not.toHaveBeenCalled();
+    expect(accessRequest).not.toHaveBeenCalledWith("commerce.creem.bootstrap", expect.anything());
+    await user.type(screen.getByRole("textbox", { name: /^Allowed model Required/ }), "gpt-4.1-mini");
 
     await waitFor(() => expect(save).toHaveBeenCalled());
     await waitFor(() => expect(accessRequest).toHaveBeenCalledWith(
