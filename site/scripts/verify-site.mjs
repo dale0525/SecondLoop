@@ -57,6 +57,11 @@ assert.ok(oauthHelp.includes("127.0.0.1"));
 assert.ok(oauthHelp.includes("https://www.googleapis.com/auth/firebase"));
 assert.ok(oauthHelp.includes("identityPlatform:initializeAuth"));
 assert.ok(oauthHelp.includes("does not create or delete Cloud projects"));
+assert.ok(oauthHelp.includes("select an existing project"));
+assert.ok(!oauthHelp.includes("request a new project"));
+
+const zhOauthHelp = readFileSync(join(distRoot, "zh/oauth-help/index.html"), "utf8");
+assert.ok(zhOauthHelp.includes("不会创建或删除 Cloud 项目"));
 
 for (const publicFile of ["_headers", "favicon.svg", "robots.txt", "sitemap.xml"]) {
   assert.ok(existsSync(join(distRoot, publicFile)), `missing public artifact: ${publicFile}`);
