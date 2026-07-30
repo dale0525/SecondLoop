@@ -301,6 +301,7 @@ app.whenReady().then(async () => {
               appRoot: developerAppRoot,
             }),
             loadProject: () => loadDeveloperProjectSnapshot(developerAppRoot),
+            loadProjectForStatus: () => loadDeveloperProjectSnapshot(developerAppRoot, true),
             openExternal: (url) => shell.openExternal(url),
             recordDeployment: (expectedRevision, receipt) =>
               recordDeveloperGatewayDeployment({

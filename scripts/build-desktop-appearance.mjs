@@ -35,7 +35,10 @@ export function buildDesktopAppearance(appRootInput = process.env.AGENTWEAVE_APP
   }
 
   const appRoot = resolveConfinedPath(PROJECT_ROOT, appRootInput, "desktop Agent App root");
-  const { app } = validateAgentApp(appRoot);
+  const { app } = validateAgentApp(appRoot, {
+    validateProject: false,
+    validateRuntimeProviders: false,
+  });
   const appearance = app.appearance ?? defaultAppearance();
   const catalogById = new Map(VSCODE_THEME_CATALOG.themes.map((theme) => [theme.id, theme]));
   const builtinThemes = appearance.themes.builtins.map((id) => ({

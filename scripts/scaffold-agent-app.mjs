@@ -603,7 +603,11 @@ function validateFontDirectory(appRoot) {
 
 export function validateAgentApp(
   appPath,
-  { catalogPath = FOUNDATION_CATALOG_PATH, validateProject = true } = {},
+  {
+    catalogPath = FOUNDATION_CATALOG_PATH,
+    validateProject = true,
+    validateRuntimeProviders = true,
+  } = {},
 ) {
   const appRoot = resolveConfinedPath(PROJECT_ROOT, appPath, "agent app path");
   if (!existsSync(appRoot) || !statSync(appRoot).isDirectory()) {
@@ -616,7 +620,9 @@ export function validateAgentApp(
   }
   const app = readJson(manifestPath, "agent app manifest");
   rejectEmbeddedSecrets(app);
-  validateRuntimeProviderProjection(app);
+  validateRuntimeProviderProjection(app, "agent app manifest", {
+    validateKnownConfig: validateRuntimeProviders,
+  });
   requireOnlyKeys(
     app,
     [

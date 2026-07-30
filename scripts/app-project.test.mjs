@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
@@ -14,14 +14,30 @@ function fixture(name) {
   return root;
 }
 
-function writeApp(root, path, appId = "com.example.test-app") {
+function writeApp(root, path, appId = "com.example.testapp") {
   const appRoot = join(root, path);
-  mkdirSync(join(appRoot, "packages"), { recursive: true });
-  writeFileSync(join(appRoot, "agent-app.json"), JSON.stringify({
-    appId,
-    branding: { displayName: "Test App" },
-  }));
+  cpSync(join(process.cwd(), "templates", "agent-app"), appRoot, { recursive: true });
+  const manifestPath = join(appRoot, "agent-app.json");
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  manifest.appId = appId;
+  manifest.package.id = appId;
+  manifest.branding.displayName = "Test App";
+  writeFileSync(manifestPath, JSON.stringify(manifest));
   return appRoot;
+}
+
+function writeIncompleteFirebase(appRoot, publicConfig) {
+  const manifestPath = join(appRoot, "agent-app.json");
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  manifest.identity = {
+    mode: "required",
+    provider: { id: "agentweave.identity.firebase", version: "0.1.0", publicConfig },
+  };
+  writeFileSync(manifestPath, JSON.stringify(manifest));
+  const projectPath = join(appRoot, "agentweave-project.json");
+  const project = JSON.parse(readFileSync(projectPath, "utf8"));
+  project.providers.identity = manifest.identity.provider;
+  writeFileSync(projectPath, JSON.stringify(project));
 }
 
 test("project resolver prefers the standard app directory", () => {
@@ -63,8 +79,39 @@ test("app dev and package plans use the same selected App", () => {
     const packaged = createAppPackagePlan({ projectRoot: root });
     assert.equal(dev.app.appRoot, appRoot);
     assert.equal(dev.environment.AGENTWEAVE_DEV_SKILLS_ROOT, join(appRoot, "packages"));
+    assert.equal(dev.environment.AGENTWEAVE_DEV_RECOVERY_REVISION, undefined);
+    assert.equal(dev.recovery, null);
     assert.equal(packaged.input, appRoot);
-    assert.equal(packaged.output, join(root, "dist", "macos", "com-example-test-app"));
+    assert.equal(packaged.output, join(root, "dist", "macos", "com-example-testapp"));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("app dev recovery revision changes when the editable project changes", () => {
+  const root = fixture("recovery-revision");
+  try {
+    const appRoot = writeApp(root, "app");
+    writeIncompleteFirebase(appRoot, {});
+    const first = createAppDevPlan({ projectRoot: root });
+    assert.match(first.recovery.reason, /projectId is required/);
+    writeIncompleteFirebase(appRoot, { projectId: "example-project" });
+    const second = createAppDevPlan({ projectRoot: root });
+    assert.notEqual(
+      first.environment.AGENTWEAVE_DEV_RECOVERY_REVISION,
+      second.environment.AGENTWEAVE_DEV_RECOVERY_REVISION,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("app dev rejects structurally invalid projects instead of broadening recovery", () => {
+  const root = fixture("invalid-recovery-project");
+  try {
+    const appRoot = writeApp(root, "app");
+    writeFileSync(join(appRoot, "agentweave-project.json"), "{}\n");
+    assert.throws(() => createAppDevPlan({ projectRoot: root }), /schemaVersion is required/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

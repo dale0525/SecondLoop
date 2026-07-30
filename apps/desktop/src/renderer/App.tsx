@@ -23,6 +23,7 @@ import { Accounts } from "./screens/Accounts";
 import { Memory } from "./screens/Memory";
 import { FoundationActions } from "./screens/FoundationActions";
 import { IdentityRequiredScreen } from "./components/IdentityRequiredScreen";
+import { loadDeveloperProject } from "./developerAccessApi";
 
 type AppView = "chat" | "settings" | "developer" | "owner-skills" | "accounts" | "memory" | "actions";
 type DevApiProbe = {
@@ -82,6 +83,7 @@ function AppContent(): JSX.Element {
     inventory: null,
     status: "idle",
   });
+  const [developerRecovery, setDeveloperRecovery] = useState(false);
   const devApiProbeStarted = useRef(false);
   const bootstrap = useHostBootstrap();
   const { t } = useI18n();
@@ -146,6 +148,10 @@ function AppContent(): JSX.Element {
   }, []);
 
   const navigate = (nextView: AppView) => {
+    if (developerRecovery && nextView !== "developer") {
+      navigateDeveloper("access/setup");
+      return;
+    }
     setView(nextView);
     const nextHash = nextView === "chat" ? "" : `#${nextView}`;
     if (typeof window !== "undefined" && window.location.hash !== nextHash) {
@@ -154,6 +160,7 @@ function AppContent(): JSX.Element {
   };
 
   const navigateDeveloper = (nextRoute: DeveloperRoute = developerRoute) => {
+    if (developerRecovery) nextRoute = "access/setup";
     setDeveloperRoute(nextRoute);
     setView("developer");
     const nextHash = `#developer/${nextRoute}`;
@@ -163,16 +170,52 @@ function AppContent(): JSX.Element {
   };
 
   useEffect(() => {
+    if (!window.agentWeave?.developerProject) return;
+    let active = true;
+    void loadDeveloperProject()
+      .then((snapshot) => {
+        if (!active || snapshot.recoveryReason === null) return;
+        setDeveloperRecovery(true);
+        setDeveloperRoute("access/setup");
+        setView("developer");
+        if (window.location.hash !== "#developer/access/setup") {
+          window.location.hash = "#developer/access/setup";
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
     if (
       bootstrap.status !== "loading"
-      && !isViewAllowed(view, bootstrap.features, ownerPolicy, devApiProbe.status)
+      && !isViewAllowed(
+        view,
+        developerRoute,
+        developerRecovery,
+        bootstrap.features,
+        ownerPolicy,
+        devApiProbe.status,
+      )
     ) {
       navigate("settings");
     }
-  }, [bootstrap.features, bootstrap.status, devApiProbe.status, ownerPolicy, view]);
+  }, [
+    bootstrap.features,
+    bootstrap.status,
+    devApiProbe.status,
+    developerRecovery,
+    developerRoute,
+    ownerPolicy,
+    view,
+  ]);
 
   const activeView = isViewAllowed(
     view,
+    developerRoute,
+    developerRecovery,
     bootstrap.features,
     ownerPolicy,
     devApiProbe.status,
@@ -207,6 +250,8 @@ function AppContent(): JSX.Element {
           onBack={() => navigate("settings")}
           onInventoryChange={handleDevInventoryChange}
           onNavigate={navigateDeveloper}
+          onRecoveryResolved={() => setDeveloperRecovery(false)}
+          recoveryMode={developerRecovery}
           route={developerRoute}
         />
       ) : activeView === "accounts" ? (
@@ -243,10 +288,16 @@ function AppContent(): JSX.Element {
 
 function isViewAllowed(
   view: AppView,
+  developerRoute: DeveloperRoute,
+  developerRecovery: boolean,
   features: DesktopHostFeatures,
   ownerPolicy: OwnerPolicy | null,
   devApiStatus: DevApiProbe["status"] = "unavailable",
 ): boolean {
+  if (developerRecovery) {
+    return view === "developer"
+      && developerRoute === "access/setup";
+  }
   if (view === "accounts") return features.accounts;
   if (view === "memory") return features.memory;
   if (view === "actions") return features.actions;

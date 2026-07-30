@@ -19,6 +19,36 @@ describe("developer access controller", () => {
     ]));
   });
 
+  it("uses the recoverable project snapshot only for control-plane status", async () => {
+    const harness = ipcHarness();
+    const loadProject = vi.fn(async () => {
+      throw new Error("strict project validation failed");
+    });
+    const loadProjectForStatus = vi.fn(async () => commerceProjectSnapshot("a".repeat(64)));
+    registerDeveloperAccessController({
+      ensureCredentialVault: async () => undefined,
+      ipcMain: harness.ipcMain,
+      loadProject,
+      loadProjectForStatus,
+      openExternal: vi.fn(),
+      recordDeployment: vi.fn(),
+      redirectUri: "http://127.0.0.1:48972/agentweave/cloudflare/callback",
+      requesterWebContents: { id: 7 },
+      sidecarRequest: async () => jsonResponse({
+        authorization: authorizationStatus("disconnected"),
+        gatewayTemplate: { version: "gateway-v1", sha256: "f".repeat(64) },
+        sensitiveBindings: {},
+      }),
+      verifyDeployment: vi.fn(),
+    });
+
+    await expect(harness.invoke({ operation: "status" })).resolves.toMatchObject({
+      pendingDeployment: null,
+    });
+    expect(loadProjectForStatus).toHaveBeenCalledTimes(1);
+    expect(loadProject).not.toHaveBeenCalled();
+  });
+
   it("binds automatic Creem webhook bootstrap to the current public project", async () => {
     const harness = ipcHarness();
     const revision = "a".repeat(64);
@@ -233,6 +263,7 @@ describe("developer access controller", () => {
         project: {},
         deploymentStatus: "missing" as const,
         deploymentMessage: null,
+        recoveryReason: null,
       };
     });
     const verifyDeployment = vi.fn(async (_deployment, _revision, _test) => ({
@@ -243,6 +274,7 @@ describe("developer access controller", () => {
       project: {},
       deploymentStatus: "ready" as const,
       deploymentMessage: null,
+      recoveryReason: null,
     }));
     registerDeveloperAccessController({
       ensureCredentialVault: async () => undefined,
@@ -255,6 +287,7 @@ describe("developer access controller", () => {
         project: appManagedProject(),
         deploymentStatus: "missing",
         deploymentMessage: null,
+        recoveryReason: null,
       }),
       openExternal: vi.fn(),
       recordDeployment,
@@ -543,6 +576,7 @@ function lifecycleProjectSnapshot(
     project: appManagedProject(),
     deploymentStatus,
     deploymentMessage: deploymentStatus === "ready" ? null : "Verification required",
+    recoveryReason: null,
     verifiedDeployment: deploymentStatus === "ready"
       ? {
           target: gatewayTarget(),
@@ -647,6 +681,7 @@ function commerceProjectSnapshot(revision: string) {
     project,
     deploymentStatus: "missing" as const,
     deploymentMessage: "Verification required",
+    recoveryReason: null,
   };
 }
 

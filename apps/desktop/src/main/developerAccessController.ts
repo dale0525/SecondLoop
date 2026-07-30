@@ -41,6 +41,7 @@ export function registerDeveloperAccessController(options: {
   invalidateDeployment?: () => Promise<DeveloperProjectSnapshot>;
   firebaseRedirectUri?: string;
   loadProject: () => Promise<DeveloperProjectSnapshot>;
+  loadProjectForStatus?: () => Promise<DeveloperProjectSnapshot>;
   openExternal: (url: string) => Promise<unknown> | unknown;
   recordDeployment: (
     expectedRevision: string,
@@ -156,7 +157,7 @@ export function registerDeveloperAccessController(options: {
         .some((key) => !Object.hasOwn(status, key))) {
         throw new Error("Developer control status is invalid");
       }
-      const project = await options.loadProject();
+      const project = await (options.loadProjectForStatus ?? options.loadProject)();
       for (const [key, pending] of pendingDeployments) {
         if (pending.projectRevision !== project.revision) pendingDeployments.delete(key);
       }

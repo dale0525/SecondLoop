@@ -31,6 +31,16 @@ test("desktop localization merges packaged App messages over host catalogs", () 
     const chinese = JSON.parse(readFileSync(chinesePath, "utf8"));
     chinese["app.name"] = "本地化智能体";
     writeFileSync(chinesePath, `${JSON.stringify(chinese, null, 2)}\n`, "utf8");
+    const manifestPath = join(appRoot, "agent-app.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    manifest.schemaVersion = 2;
+    manifest.modelAccess = { configurationPolicy: "user_configurable" };
+    manifest.identity = {
+      mode: "required",
+      provider: { id: "agentweave.identity.firebase", version: "0.1.0", publicConfig: {} },
+    };
+    manifest.entitlements = { mode: "disabled" };
+    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 
     const bundle = buildDesktopLocalization(appRoot);
 
