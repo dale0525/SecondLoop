@@ -384,6 +384,55 @@ describe("developer release workspace", () => {
     expect(successPage.compareDocumentPosition(deployment) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
   });
 
+  it("reuses the saved Creem API key when discovering products", async () => {
+    const accountId = "0123456789abcdef0123456789abcdef";
+    const apiKeyRevision = "stored-creem-api-key-revision";
+    const status = {
+      ...(controlStatus("ready", accountId) as Record<string, unknown>),
+      sensitiveBindings: {
+        CREEM_API_KEY: apiKeyRevision,
+        CREEM_WEBHOOK_SECRET: "stored-creem-webhook-secret-revision",
+      },
+    };
+    const accessRequest = vi.fn(async (operation: string) => {
+      if (operation === "status") return status;
+      if (operation === "commerce.creem.products") return {
+        environment: "test",
+        configuredRevision: apiKeyRevision,
+        products: [{
+          id: "prod_saved",
+          name: "Saved key product",
+          description: "Discovered without re-entering the key",
+          environment: "test",
+          priceMinor: 2_000,
+          currency: "USD",
+          billingType: "recurring",
+          billingPeriod: "month",
+          active: true,
+        }],
+      };
+      throw new Error(`Unexpected operation: ${operation}`);
+    });
+    installReleaseBridge(userConfigurableSnapshot(), {
+      accessRequest,
+      controlStatus: status,
+    });
+    window.history.replaceState(null, "", "/#developer/access/setup");
+    const user = userEvent.setup();
+
+    render(<App />);
+    await user.click(await screen.findByText("Creem"));
+
+    expect(await screen.findByLabelText(/Creem API key/)).toHaveValue("");
+    await user.click(screen.getByRole("button", { name: "Connect and discover products" }));
+
+    expect(await screen.findByText("Saved key product")).toBeInTheDocument();
+    expect(accessRequest).toHaveBeenCalledWith("commerce.creem.products", {
+      environment: "test",
+      revision: apiKeyRevision,
+    });
+  });
+
   it("configures the only Firebase project without manual identity fields", async () => {
     let firebasePhase: "select_project" | "ready" = "select_project";
     const accessRequest = vi.fn(async (operation: string, input?: unknown) => {

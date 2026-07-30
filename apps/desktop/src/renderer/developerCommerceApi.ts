@@ -30,12 +30,13 @@ export async function bootstrapCreemWebhook(
 
 export async function discoverCreemProducts(input: {
   environment: "test" | "production";
-  apiKey: string;
+  apiKey?: string;
+  revision: string;
 }): Promise<CreemProductDiscovery> {
   return parseProducts(await request("commerce.creem.products", {
     environment: input.environment,
-    apiKey: input.apiKey,
-    revision: `ui-${crypto.randomUUID()}`,
+    revision: input.revision,
+    ...(input.apiKey ? { apiKey: input.apiKey } : {}),
   }));
 }
 

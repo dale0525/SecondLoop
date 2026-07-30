@@ -31,6 +31,7 @@ import type {
 } from "./useCreemWebhookBootstrap";
 
 export function DeveloperCommerceConfiguration({
+  apiKeyRevision,
   bootstrap,
   commerceProviders,
   configuredSlots,
@@ -41,6 +42,7 @@ export function DeveloperCommerceConfiguration({
   productionUnlocked,
   secretValues,
 }: {
+  apiKeyRevision: string | null;
   bootstrap: Readonly<{
     error: string | null;
     receipt: CreemWebhookEndpoint | null;
@@ -141,16 +143,21 @@ export function DeveloperCommerceConfiguration({
 
   const connect = async () => {
     const apiKey = secretValues["commerce.apiKey"]?.trim();
-    if (!apiKey) {
+    const revision = apiKey ? `ui-${crypto.randomUUID()}` : apiKeyRevision;
+    if (!revision) {
       setConnectionError(t("developer.release.creemApiKeyRequired"));
       return;
     }
     setConnecting(true);
     setConnectionError(null);
     try {
-      const discovery = await discoverCreemProducts({ environment, apiKey });
+      const discovery = await discoverCreemProducts({
+        environment,
+        revision,
+        ...(apiKey ? { apiKey } : {}),
+      });
       setProducts(discovery.products);
-      onSecret("commerce.apiKey", "");
+      if (apiKey) onSecret("commerce.apiKey", "");
       await onProductsConnected();
     } catch (error) {
       setConnectionError(error instanceof Error ? error.message : t("developer.release.creemConnectionFailed"));
