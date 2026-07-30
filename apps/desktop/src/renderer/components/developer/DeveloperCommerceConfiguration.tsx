@@ -10,7 +10,7 @@ import {
   TextField,
 } from "@radix-ui/themes";
 import { CheckCircle2, CreditCard, PackageSearch, ShieldAlert, Webhook } from "lucide-react";
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import {
   discoverCreemProducts,
@@ -346,7 +346,10 @@ function UniformPolicyEditor({ draft, onDraft }: {
       <header><strong>{t("developer.release.uniformPolicy")}</strong><small>{t("developer.release.zeroUnlimitedHint")}</small></header>
       <div className="release-product-fields">
         <label><span>{t("developer.release.planId")}</span><TextField.Root onChange={(event) => updatePlan("id", event.target.value)} value={plan.id} /></label>
-        <label><span>{t("developer.release.allowedModels")}</span><TextField.Root onChange={(event) => updatePlan("allowedModels", event.target.value)} value={plan.allowedModels.join(", ")} /></label>
+        <AllowedModelsField
+          onChange={(value) => updatePlan("allowedModels", value)}
+          value={plan.allowedModels.join(", ")}
+        />
         {(["maxRequests", "maxUnits", "maxConcurrency"] as const).map((field) => (
           <label key={field}><span>{t(`developer.release.${field}`)}</span><TextField.Root min="0" onChange={(event) => updatePlan(field, event.target.value)} type="number" value={String(plan.limits[field])} /></label>
         ))}
@@ -420,7 +423,10 @@ function ProductMappingTable({ draft, onDraft, products }: {
             {plan?.enabled ? (
               <div className="release-product-fields">
                 <label><span>{t("developer.release.planId")}</span><TextField.Root onChange={(event) => change(product.id, "id", event.target.value)} value={plan.id} /></label>
-                <label><span>{t("developer.release.allowedModels")}</span><TextField.Root onChange={(event) => change(product.id, "allowedModels", event.target.value)} value={plan.allowedModels.join(", ")} /></label>
+                <AllowedModelsField
+                  onChange={(value) => change(product.id, "allowedModels", value)}
+                  value={plan.allowedModels.join(", ")}
+                />
                 {(["maxRequests", "maxUnits", "maxConcurrency"] as const).map((field) => (
                   <label key={field}><span>{t(`developer.release.${field}`)}</span><TextField.Root min="0" onChange={(event) => change(product.id, field, event.target.value)} type="number" value={String(plan.limits[field])} /></label>
                 ))}
@@ -431,6 +437,26 @@ function ProductMappingTable({ draft, onDraft, products }: {
       })}
       <div className="release-unlimited-note"><CheckCircle2 aria-hidden="true" size={16} />{t("developer.release.gatewayHardLimitsRemain")}</div>
     </div>
+  );
+}
+
+function AllowedModelsField({ onChange, value }: {
+  onChange: (value: string) => void;
+  value: string;
+}): JSX.Element {
+  const { t } = useI18n();
+  const helpId = useId();
+  return (
+    <label>
+      <span>{t("developer.release.allowedModels")}</span>
+      <TextField.Root
+        aria-describedby={helpId}
+        aria-label={t("developer.release.allowedModels")}
+        onChange={(event) => onChange(event.target.value)}
+        value={value}
+      />
+      <small className="release-field-help" id={helpId}>{t("developer.release.allowedModelsHint")}</small>
+    </label>
   );
 }
 

@@ -74,6 +74,10 @@ function selectSubscription(subscriptions, now) {
   });
 }
 
+function modelAllowed(plan, model) {
+  return plan.allowedModels.length === 0 || plan.allowedModels.includes(model);
+}
+
 async function planFor(config, store, identity, model, now, cryptoImpl, env) {
   if (config.policy.sourceMode === "uniform_bounded") {
     const plan = config.policy.uniformPlan;
@@ -81,7 +85,7 @@ async function planFor(config, store, identity, model, now, cryptoImpl, env) {
     return {
       plan,
       ...period,
-      reasonCode: plan.allowedModels.includes(model) ? null : "model_not_allowed",
+      reasonCode: modelAllowed(plan, model) ? null : "model_not_allowed",
       subjectRef: null,
       subscription: null,
     };
@@ -114,7 +118,7 @@ async function planFor(config, store, identity, model, now, cryptoImpl, env) {
     plan,
     periodStart: Number(subscription.current_period_start),
     periodEnd: Number(subscription.paid_through),
-    reasonCode: plan.allowedModels.includes(model) ? null : "model_not_allowed",
+    reasonCode: modelAllowed(plan, model) ? null : "model_not_allowed",
     subjectRef: reference,
     subscription,
   };

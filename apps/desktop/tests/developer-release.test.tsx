@@ -331,6 +331,10 @@ describe("developer release workspace", () => {
     render(<App />);
     await screen.findByRole("heading", { name: "Subscription source and usage policy" });
     expect(accessRequest).not.toHaveBeenCalledWith("commerce.creem.bootstrap", expect.anything());
+    const uniformAllowedModels = screen.getByRole("textbox", { name: "Allowed models" });
+    expect(document.getElementById(uniformAllowedModels.getAttribute("aria-describedby") ?? "")).toHaveTextContent(
+      "Leave blank to allow all models. Separate multiple model IDs with commas.",
+    );
 
     await user.click(screen.getByText("Creem"));
 
@@ -350,6 +354,11 @@ describe("developer release workspace", () => {
     await user.click(await screen.findByRole("checkbox", {
       name: "Enabled subscription products: Pro monthly",
     }));
+    const productAllowedModels = await screen.findByRole("textbox", { name: "Allowed models" });
+    expect(document.getElementById(productAllowedModels.getAttribute("aria-describedby") ?? "")).toHaveTextContent(
+      "Leave blank to allow all models. Separate multiple model IDs with commas.",
+    );
+    await user.clear(productAllowedModels);
 
     await waitFor(() => expect(save).toHaveBeenCalled());
     await waitFor(() => expect(accessRequest).toHaveBeenCalledWith(
@@ -363,6 +372,10 @@ describe("developer release workspace", () => {
     expect(accessRequest).toHaveBeenCalledWith("commerce.creem.bootstrap", expect.objectContaining({
       expectedProjectRevision: "c".repeat(64),
     }));
+    const savedProject = (save.mock.calls.at(-1)?.[0] as {
+      project: { deployment: { cloudflare: { entitlement: { policy: { productPlans: Array<{ allowedModels: string[] }> } } } } };
+    }).project;
+    expect(savedProject.deployment.cloudflare.entitlement.policy.productPlans[0]?.allowedModels).toEqual([]);
     expect(screen.getAllByText("Creem API key")).toHaveLength(1);
     expect(screen.getAllByText("Creem Webhook Secret")).toHaveLength(1);
     expect(screen.queryByRole("heading", { name: "Deployment secrets" })).not.toBeInTheDocument();
