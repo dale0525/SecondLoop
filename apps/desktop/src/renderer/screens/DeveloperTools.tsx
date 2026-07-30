@@ -218,8 +218,8 @@ export function DeveloperTools({
     setProjectSnapshot(snapshot);
     setProject(parseDeveloperProject(snapshot.project));
     if (snapshot.recoveryReason === null) onRecoveryResolved?.();
-    bootstrap.reload();
-  }, [bootstrap, onRecoveryResolved]);
+    if (!recoveryMode) bootstrap.reload();
+  }, [bootstrap, onRecoveryResolved, recoveryMode]);
 
   const handleDelete = useCallback(async (skillPackage: DevSkillPackage) => {
     const operationId = beginOperation();
@@ -315,7 +315,7 @@ export function DeveloperTools({
       ) : null}
 
       <Tabs.Root
-        className="developer-tabs"
+        className={`developer-tabs${recoveryMode ? " developer-tabs--recovery" : ""}`}
         onValueChange={(value) => navigate(value as DeveloperTab)}
         value={activeTab}
       >

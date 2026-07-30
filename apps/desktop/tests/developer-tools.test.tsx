@@ -153,10 +153,11 @@ describe("DeveloperTools", () => {
       recoveryReason: "agent app manifest.identity.provider.publicConfig.projectId is required",
     });
     if (!window.agentWeave) throw new Error("Release bridge must be installed first");
+    const hostBootstrapLoad = vi.fn(window.agentWeave.hostBootstrap!.load);
+    window.agentWeave.hostBootstrap = { load: hostBootstrapLoad };
+    const serverRequest = vi.fn(window.agentWeave.server!.request);
     window.agentWeave.server = {
-      request: async () => {
-        throw new Error("ordinary development inventory is unavailable");
-      },
+      request: serverRequest,
     };
     window.history.replaceState(null, "", "/#settings");
 
@@ -167,6 +168,34 @@ describe("DeveloperTools", () => {
     expect(screen.getByRole("button", { name: "Back to settings" })).toBeDisabled();
     expect(screen.queryByRole("tab", { name: "Model" })).not.toBeInTheDocument();
     expect(screen.queryByRole("main", { name: "Settings" })).not.toBeInTheDocument();
+    expect(document.querySelector(".developer-tabs")).toHaveClass("developer-tabs--recovery");
+    expect(hostBootstrapLoad).not.toHaveBeenCalled();
+    expect(serverRequest.mock.calls.map(([operation]) => operation)).not.toContain("sessions.list");
+
+    const css = readFileSync("src/renderer/styles/developer.css", "utf8");
+    expect(css).toMatch(/\.developer-tabs--recovery\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\);/);
+  });
+
+  it("fails closed when the configured developer project cannot be read", async () => {
+    installReleaseBridge(userConfigurableSnapshot());
+    if (!window.agentWeave) throw new Error("Release bridge must be installed first");
+    const hostBootstrapLoad = vi.fn(window.agentWeave.hostBootstrap!.load);
+    window.agentWeave.hostBootstrap = { load: hostBootstrapLoad };
+    const projectLoad = vi.fn().mockRejectedValue(
+      new Error("developer project journal is invalid"),
+    );
+    window.agentWeave.developerProject!.load = projectLoad;
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("The release project is unavailable");
+    expect(screen.queryByText("Developer Recovery is active.")).not.toBeInTheDocument();
+    expect(hostBootstrapLoad).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(projectLoad).toHaveBeenCalledTimes(2));
+    expect(hostBootstrapLoad).not.toHaveBeenCalled();
   });
 
   it("shows settings developer entry only when the dev API is available", async () => {

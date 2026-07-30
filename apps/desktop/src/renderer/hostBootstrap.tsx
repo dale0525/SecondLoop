@@ -34,12 +34,22 @@ const HostBootstrapContext = createContext<HostBootstrapContextValue>({
   status: "unavailable",
 });
 
-export function HostBootstrapProvider({ children }: { children: ReactNode }): JSX.Element {
+export function HostBootstrapProvider({
+  children,
+  disabled = false,
+}: {
+  children: ReactNode;
+  disabled?: boolean;
+}): JSX.Element {
   const [attempt, setAttempt] = useState(0);
   const [discovery, setDiscovery] = useState<AgentAppHostDiscovery | null>(null);
-  const [status, setStatus] = useState<HostBootstrapStatus>("loading");
+  const [status, setStatus] = useState<HostBootstrapStatus>(disabled ? "unavailable" : "loading");
   const reload = useCallback(() => {
     setDiscovery(null);
+    if (disabled) {
+      setStatus("unavailable");
+      return;
+    }
     setStatus("loading");
     const sidecar = window.agentWeave?.sidecar;
     if (!sidecar) {
@@ -50,11 +60,17 @@ export function HostBootstrapProvider({ children }: { children: ReactNode }): JS
       .then(() => sidecar.ensureRunning())
       .then(() => setAttempt((current) => current + 1))
       .catch(() => setStatus("unavailable"));
-  }, []);
+  }, [disabled]);
 
   useEffect(() => {
     let active = true;
     setDiscovery(null);
+    if (disabled) {
+      setStatus("unavailable");
+      return () => {
+        active = false;
+      };
+    }
     setStatus("loading");
     const bridge = window.agentWeave?.hostBootstrap;
     if (!bridge) {
@@ -78,7 +94,7 @@ export function HostBootstrapProvider({ children }: { children: ReactNode }): JS
     return () => {
       active = false;
     };
-  }, [attempt]);
+  }, [attempt, disabled]);
 
   const value = useMemo<HostBootstrapContextValue>(() => {
     const trustedDiscovery = status === "ready" ? discovery : null;
