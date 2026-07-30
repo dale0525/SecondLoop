@@ -31,6 +31,11 @@ declare global {
 
   interface Window {
     agentWeave?: {
+      getRuntimeInfo?(): {
+        developerProject: boolean;
+        platform: string;
+        shell: "agentweave-desktop";
+      };
       attachments?: {
         pickAndImport(): Promise<AttachmentMetadata | null>;
       };

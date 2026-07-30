@@ -11,6 +11,7 @@ type DesktopNotification = {
 export type DesktopNotificationWorkerOptions = {
   createNotification(options: { body: string; title: string }): DesktopNotification;
   intervalMs?: number;
+  isEnabled?(): boolean | Promise<boolean>;
   isSupported(): boolean;
   request: SidecarRequest;
 };
@@ -43,6 +44,7 @@ export function startDesktopNotificationWorker(
 export async function deliverDesktopNotificationsOnce(
   options: DesktopNotificationWorkerOptions,
 ): Promise<number> {
+  if (options.isEnabled && !(await options.isEnabled())) return 0;
   if (!options.isSupported()) return 0;
   const request = options.request;
   const query = new URLSearchParams({
