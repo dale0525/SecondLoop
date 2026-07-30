@@ -538,6 +538,10 @@ export function DeveloperAccessSetup({
         ) : null}
         {step === 2 && identityDescriptor && entitlementDescriptor && gatewayDescriptor ? (
           <DeveloperConfigurationStep
+            commerceApiKeyRevision={sensitiveBindingRevision(
+              controlStatus?.sensitiveBindings ?? {},
+              "commerce.apiKey",
+            )}
             commerceProviders={commerceProviders}
             commerceBootstrap={commerceBootstrap}
             configuredSlots={configuredSlots}
@@ -836,6 +840,19 @@ function logicalConfiguredSlots(bindings: Readonly<Record<string, string>>): Rea
   return slots;
 }
 
+function sensitiveBindingRevision(
+  bindings: Readonly<Record<string, string>>,
+  slot: string,
+): string | null {
+  const physicalNames: Readonly<Record<string, string>> = {
+    "gateway.upstreamApiKey": "UPSTREAM_API_KEY",
+    "entitlement.serviceCredential": "ENTITLEMENT_PROJECTION_SECRET",
+    "commerce.apiKey": "CREEM_API_KEY",
+    "commerce.webhookSecret": "CREEM_WEBHOOK_SECRET",
+  };
+  return bindings[slot] ?? bindings[physicalNames[slot] ?? ""] ?? null;
+}
+
 function requiredSensitiveSlots(draft: ManagedProjectDraft): string[] {
   const slots = ["gateway.upstreamApiKey"];
   const entitlement = draft.deployment.cloudflare.entitlement;
@@ -852,15 +869,9 @@ function makeSensitiveInputs(
   revisions: Readonly<Record<string, string>>,
   missingMessage: string,
 ): Record<string, SensitivePlanInput> {
-  const physicalRevision = (slot: string) => bindings[slot] ?? ({
-    "gateway.upstreamApiKey": bindings.UPSTREAM_API_KEY,
-    "entitlement.serviceCredential": bindings.ENTITLEMENT_PROJECTION_SECRET,
-    "commerce.apiKey": bindings.CREEM_API_KEY,
-    "commerce.webhookSecret": bindings.CREEM_WEBHOOK_SECRET,
-  } as Record<string, string | undefined>)[slot];
   return Object.fromEntries(requiredSensitiveSlots(draft).map((slot) => {
     const value = values[slot]?.trim();
-    const revision = value ? revisions[slot] ?? newRevision() : physicalRevision(slot);
+    const revision = value ? revisions[slot] ?? newRevision() : sensitiveBindingRevision(bindings, slot);
     if (!revision || (!value && !configured.has(slot))) throw new Error(missingMessage);
     return [slot, { revision, ...(value ? { value } : {}) }];
   }));
