@@ -20,7 +20,7 @@ pub(crate) fn routes() -> Router<Arc<AppState>> {
 struct DiscoverCreemProductsRequest {
     environment: CommerceEnvironment,
     revision: String,
-    api_key: SensitiveText,
+    api_key: Option<SensitiveText>,
 }
 
 async fn discover_creem_products(
@@ -38,7 +38,7 @@ async fn discover_creem_products(
             .discover_creem_products(
                 request.environment,
                 request.revision,
-                request.api_key.into_bytes(),
+                request.api_key.map(SensitiveText::into_bytes),
             )
             .await?,
     ))
@@ -68,5 +68,34 @@ impl SensitiveText {
 impl Drop for SensitiveText {
     fn drop(&mut self) {
         self.0.zeroize();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DiscoverCreemProductsRequest;
+    use serde_json::json;
+
+    #[test]
+    fn accepts_a_saved_api_key_revision_without_a_replacement_value() {
+        let request: DiscoverCreemProductsRequest = serde_json::from_value(json!({
+            "environment": "test",
+            "revision": "stored-creem-api-key-revision"
+        }))
+        .unwrap();
+
+        assert!(request.api_key.is_none());
+    }
+
+    #[test]
+    fn still_accepts_a_new_api_key_value() {
+        let request: DiscoverCreemProductsRequest = serde_json::from_value(json!({
+            "environment": "test",
+            "revision": "ui-new-creem-api-key-revision",
+            "apiKey": "creem-test-api-key-sentinel"
+        }))
+        .unwrap();
+
+        assert!(request.api_key.is_some());
     }
 }

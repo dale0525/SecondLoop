@@ -26,6 +26,7 @@ import type {
 const OPENAI_BASE_URL = "https://api.openai.com";
 
 export function DeveloperConfigurationStep({
+  commerceApiKeyRevision,
   configuredSlots,
   commerceBootstrap,
   commerceProviders,
@@ -40,6 +41,7 @@ export function DeveloperConfigurationStep({
   secretValues,
   productionUnlocked,
 }: {
+  commerceApiKeyRevision: string | null;
   configuredSlots: ReadonlySet<string>;
   commerceBootstrap: Readonly<{
     error: string | null;
@@ -266,6 +268,7 @@ export function DeveloperConfigurationStep({
       </section>
 
       <DeveloperCommerceConfiguration
+        apiKeyRevision={commerceApiKeyRevision}
         bootstrap={commerceBootstrap}
         commerceProviders={commerceProviders}
         configuredSlots={configuredSlots}

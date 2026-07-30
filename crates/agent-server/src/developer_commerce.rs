@@ -1,10 +1,9 @@
 use crate::developer_control_plane::DeveloperControlPlane;
-use agent_devkit::{DevkitError, DevkitErrorCode, DevkitResult};
+use agent_devkit::{DevkitError, DevkitErrorCode, DevkitResult, SensitiveInputResolver};
 use commerce_creem::{CreemApiKey, CreemClient, ReqwestCreemTransport};
 use commerce_runtime::{CommerceEnvironment, CommerceError, CommerceProduct};
 use serde::Serialize;
 use std::sync::Arc;
-use zeroize::Zeroizing;
 
 const CREEM_API_KEY_BINDING: &str = "CREEM_API_KEY";
 
@@ -21,14 +20,17 @@ impl DeveloperControlPlane {
         &self,
         environment: CommerceEnvironment,
         revision: String,
-        api_key: Vec<u8>,
+        api_key: Option<Vec<u8>>,
     ) -> DevkitResult<CreemProductDiscoveryReceipt> {
-        let bytes = Zeroizing::new(api_key);
-        let key = std::str::from_utf8(bytes.as_slice())
-            .map_err(|_| DevkitError::invalid_configuration("Creem API key is invalid"))?
-            .to_owned();
-        self.resolve_sensitive_binding(CREEM_API_KEY_BINDING, &revision, Some(bytes.to_vec()))
+        let binding = self
+            .resolve_sensitive_binding(CREEM_API_KEY_BINDING, &revision, api_key)
             .await?;
+        let stored = self.sensitive.resolve(&binding.handle).await?;
+        let key = stored.expose(|bytes| {
+            std::str::from_utf8(bytes)
+                .map(str::to_owned)
+                .map_err(|_| DevkitError::invalid_configuration("Creem API key is invalid"))
+        })?;
         let transport = Arc::new(ReqwestCreemTransport::new().map_err(commerce_error)?);
         let client = CreemClient::new(
             environment,

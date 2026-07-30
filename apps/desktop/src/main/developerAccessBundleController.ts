@@ -122,16 +122,19 @@ export function createDeveloperAccessBundleController(options: {
           return Object.freeze({ project, test });
         }
         case "commerce.creem.products": {
-          const input = exactRecord(request.input, ["apiKey", "environment", "revision"]);
+          const input = exactRecord(request.input, ["apiKey", "environment", "revision"], true);
           const environment = input.environment;
           if (environment !== "test" && environment !== "production") {
             throw new Error("Creem environment is invalid");
           }
+          const apiKey = input.apiKey === undefined
+            ? undefined
+            : requiredString(input.apiKey, "apiKey", 64 * 1024);
           return parseProductDiscovery(await options.requestJson({
             body: {
               environment,
               revision: requiredString(input.revision, "revision", 256),
-              apiKey: requiredString(input.apiKey, "apiKey", 64 * 1024),
+              ...(apiKey ? { apiKey } : {}),
             },
             method: "POST",
             pathname: "/dev/control/commerce/creem/products",

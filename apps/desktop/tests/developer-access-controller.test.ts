@@ -76,6 +76,43 @@ describe("developer access controller", () => {
     expect(JSON.stringify(bodies[0])).not.toMatch(/apiKey|webhookSecret|secretValue/i);
   });
 
+  it("discovers Creem products from a saved API key revision", async () => {
+    const harness = ipcHarness();
+    const bodies: unknown[] = [];
+    registerDeveloperAccessController({
+      ensureCredentialVault: async () => undefined,
+      ipcMain: harness.ipcMain,
+      loadProject: vi.fn(),
+      openExternal: vi.fn(),
+      recordDeployment: vi.fn(),
+      redirectUri: "http://127.0.0.1:48972/agentweave/cloudflare/callback",
+      requesterWebContents: { id: 7 },
+      sidecarRequest: async (pathname, init) => {
+        expect(pathname).toContain("/dev/control/commerce/creem/products");
+        bodies.push(JSON.parse(String(init?.body)) as unknown);
+        return jsonResponse({
+          environment: "test",
+          configuredRevision: "stored-creem-api-key-revision",
+          products: [],
+        });
+      },
+      verifyDeployment: vi.fn(),
+    });
+
+    await harness.invoke({
+      operation: "commerce.creem.products",
+      input: {
+        environment: "test",
+        revision: "stored-creem-api-key-revision",
+      },
+    });
+
+    expect(bodies).toEqual([{
+      environment: "test",
+      revision: "stored-creem-api-key-revision",
+    }]);
+  });
+
   it("keeps the Cloudflare authorization URL and callback credentials in Main", async () => {
     const port = await freePort();
     const redirectUri = `http://127.0.0.1:${port}/agentweave/cloudflare/callback`;
