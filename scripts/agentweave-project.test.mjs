@@ -304,6 +304,35 @@ test("project desired state rejects unknown fields and recursively rejects crede
     validateAgentWeaveProjectData(firebaseWebConfiguration),
     firebaseWebConfiguration,
   );
+  const firebaseWithoutAuthDomain = structuredClone(firebaseWebConfiguration);
+  firebaseWithoutAuthDomain.providers.identity.publicConfig.authDomain = null;
+  assert.equal(validateAgentWeaveProjectData(firebaseWithoutAuthDomain), firebaseWithoutAuthDomain);
+
+  for (const [publicConfig, expected] of [
+    [{}, /projectId.*required/],
+    [{ projectId: "UPPERCASE", firebaseWebKey: "public", webApplicationId: "web" }, /projectId.*valid/],
+    [{
+      projectId: "sample-project-123",
+      firebaseWebKey: "public",
+      webApplicationId: "web",
+      authDomain: "https://sample-project-123.firebaseapp.com",
+    }, /authDomain.*valid/],
+    [{
+      projectId: "sample-project-123",
+      firebaseWebKey: "public\u0085value",
+      webApplicationId: "web",
+    }, /control characters/],
+    [{
+      projectId: "sample-project-123",
+      firebaseWebKey: "public",
+      webApplicationId: "web",
+      unexpected: true,
+    }, /unknown field 'unexpected'/],
+  ]) {
+    const invalidFirebase = managedProject();
+    invalidFirebase.providers.identity = provider("agentweave.identity.firebase", publicConfig);
+    assert.throws(() => validateAgentWeaveProjectData(invalidFirebase), expected);
+  }
 
   const accessToken = managedProject();
   accessToken.providers.identity.publicConfig.accessToken = "must-never-be-written";
