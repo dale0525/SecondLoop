@@ -35,7 +35,7 @@ export function useCreemWebhookBootstrap({
     && entitlement.policy.sourceMode === "commerce_provider"
     && draft.providers.commerce?.id === "agentweave.commerce.creem"
     && Boolean(draft.deployment.cloudflare.accountId);
-  const modelReady = draft.modelAccess.profile.modelName.trim().length > 0;
+  const modelReady = validManagedModelName(draft.modelAccess.profile.modelName);
   const configurationReady = bootstrapConfigurationReady(draft);
   const configurationFingerprint = creemBootstrapFingerprint(draft);
   const savedConfigurationFingerprint = creemBootstrapFingerprint(snapshot.project);
@@ -127,6 +127,13 @@ export function useCreemWebhookBootstrap({
     retry: () => void execute(true),
     status,
   });
+}
+
+function validManagedModelName(value: string): boolean {
+  return value.length > 0
+    && value === value.trim()
+    && !/[\u0000-\u001f\u007f]/.test(value)
+    && new TextEncoder().encode(value).byteLength <= 256;
 }
 
 function bootstrapConfigurationReady(draft: ManagedProjectDraft): boolean {

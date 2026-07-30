@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -360,10 +360,14 @@ describe("developer release workspace", () => {
     );
     await user.clear(productAllowedModels);
 
-    await new Promise((resolve) => window.setTimeout(resolve, 300));
-    expect(save).not.toHaveBeenCalled();
-    expect(accessRequest).not.toHaveBeenCalledWith("commerce.creem.bootstrap", expect.anything());
-    await user.type(screen.getByRole("textbox", { name: /^Allowed model Required/ }), "gpt-4.1-mini");
+    const modelName = screen.getByRole("textbox", { name: /^Allowed model Required/ });
+    for (const invalidModelName of ["", " gpt-4.1-mini", "gpt-4.1-mini\u0007", "🙂".repeat(65)]) {
+      fireEvent.change(modelName, { target: { value: invalidModelName } });
+      await new Promise((resolve) => window.setTimeout(resolve, 300));
+      expect(save).not.toHaveBeenCalled();
+      expect(accessRequest).not.toHaveBeenCalledWith("commerce.creem.bootstrap", expect.anything());
+    }
+    fireEvent.change(modelName, { target: { value: "gpt-4.1-mini" } });
 
     await waitFor(() => expect(save).toHaveBeenCalled());
     await waitFor(() => expect(accessRequest).toHaveBeenCalledWith(
