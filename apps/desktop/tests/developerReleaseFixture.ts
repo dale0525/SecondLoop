@@ -83,6 +83,7 @@ export function userConfigurableSnapshot(): DeveloperProjectSnapshot {
     project,
     deploymentStatus: "not_required",
     deploymentMessage: null,
+    recoveryReason: null,
   };
 }
 
@@ -127,6 +128,7 @@ export function managedSnapshot(
     },
     deploymentStatus,
     deploymentMessage: "Deploy and verify the configured gateway before packaging.",
+    recoveryReason: null,
   };
 }
 
@@ -189,6 +191,7 @@ export function managedCommerceSnapshot(): DeveloperProjectSnapshot {
     project,
     deploymentStatus: "ready",
     deploymentMessage: null,
+    recoveryReason: null,
     verifiedBundle: {
       bundleRevision: `sha256:${"d".repeat(64)}`,
       projectionSecretRevision: "revision-1",

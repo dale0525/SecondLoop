@@ -263,6 +263,8 @@
   "developer.apiConnected": "开发 API 已连接",
   "developer.apiDisconnected": "开发 API 已断开",
   "developer.apiUnavailable": "开发 API 不可用",
+  "developer.recovery.title": "开发者恢复模式已启用。",
+  "developer.recovery.description": "配置无效期间，Agent 运行时保持关闭。请完成访问设置并保存有效项目，随后将自动重新加载。",
   "developer.apiUnavailableHint": "使用 AGENTWEAVE_DEV_API=1 启动服务器后即可管理本地 Skills。",
   "developer.tabsLabel": "开发者工具分区",
   "developer.tabModel": "模型",

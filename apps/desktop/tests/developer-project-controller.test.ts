@@ -121,6 +121,42 @@ describe("developer project controller", () => {
     expect(unchanged.revision).toBe(initial.revision);
   });
 
+  it("loads an invalid Firebase project for recovery and exits recovery after a valid save", async () => {
+    const root = await fixtureRoot();
+    const invalidProject = firebaseProject({});
+    await writeFile(path.join(root, "agent-app.json"), JSON.stringify(firebaseManifest({})));
+    await writeFile(path.join(root, "agentweave-project.json"), JSON.stringify(invalidProject));
+    const harness = ipcHarness();
+    const refreshRuntime = vi.fn(async () => undefined);
+    registerDeveloperProjectController({
+      appRoot: root,
+      ipcMain: harness.ipcMain,
+      packageApp: vi.fn(),
+      refreshRuntime,
+      requesterWebContents: { id: 7 },
+      showItemInFolder: vi.fn(),
+    });
+
+    const recovery = await harness.invoke(DEVELOPER_PROJECT_LOAD_CHANNEL, undefined);
+    expect(recovery.recoveryReason).toContain("projectId is required");
+    expect(recovery.deploymentStatus).toBe("stale");
+
+    const publicConfig = {
+      projectId: "example-project",
+      firebaseWebKey: "public-web-key",
+      webApplicationId: "1:123:web:abc",
+      authDomain: "example-project.firebaseapp.com",
+    };
+    const saved = await harness.invoke(DEVELOPER_PROJECT_SAVE_CHANNEL, {
+      expectedRevision: recovery.revision,
+      project: firebaseProject(publicConfig),
+    });
+
+    expect(saved.recoveryReason).toBeNull();
+    expect(refreshRuntime).toHaveBeenCalledTimes(1);
+    expect(saved.manifest).toEqual(firebaseManifest(publicConfig));
+  });
+
   it("keeps the restored project on disk when the previous runtime cannot restart", async () => {
     const root = await fixtureRoot();
     const harness = ipcHarness();
@@ -331,6 +367,32 @@ function appManagedProject() {
         environment: "production",
       },
     },
+  };
+}
+
+function firebaseManifest(publicConfig: Record<string, unknown>) {
+  return {
+    schemaVersion: 2,
+    appId: "com.example.app",
+    modelAccess: { configurationPolicy: "user_configurable" },
+    identity: {
+      mode: "required",
+      provider: { id: "agentweave.identity.firebase", version: "0.1.0", publicConfig },
+    },
+    entitlements: { mode: "disabled" },
+  };
+}
+
+function firebaseProject(publicConfig: Record<string, unknown>) {
+  return {
+    schemaVersion: 1,
+    providers: {
+      identity: { id: "agentweave.identity.firebase", version: "0.1.0", publicConfig },
+      entitlement: null,
+      gateway: null,
+    },
+    modelAccess: { configurationPolicy: "user_configurable" },
+    deployment: null,
   };
 }
 

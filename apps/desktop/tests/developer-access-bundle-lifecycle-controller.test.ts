@@ -115,6 +115,7 @@ function snapshot(): DeveloperProjectSnapshot {
     project: {},
     deploymentStatus: "ready",
     deploymentMessage: null,
+    recoveryReason: null,
     verifiedBundle: {
       bundleRevision: `sha256:${"c".repeat(64)}`,
       projectionSecretRevision: "auto-revision",

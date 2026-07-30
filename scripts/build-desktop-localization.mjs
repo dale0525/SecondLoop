@@ -48,7 +48,10 @@ export function buildDesktopLocalization(appRootInput = process.env.AGENTWEAVE_A
   }
 
   const appRoot = resolveConfinedPath(PROJECT_ROOT, appRootInput, "desktop Agent App root");
-  const { app } = validateAgentApp(appRoot);
+  const { app } = validateAgentApp(appRoot, {
+    validateProject: false,
+    validateRuntimeProviders: false,
+  });
   if (!app.localization) {
     return {
       defaultLocale: "en",

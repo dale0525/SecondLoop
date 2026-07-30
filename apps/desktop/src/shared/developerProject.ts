@@ -46,6 +46,7 @@ export type DeveloperProjectSnapshot = Readonly<{
   project: Record<string, unknown>;
   deploymentStatus: DeveloperDeploymentStatus;
   deploymentMessage: string | null;
+  recoveryReason: string | null;
   verifiedDeployment?: DeveloperVerifiedDeployment | null;
   verifiedBundle?: DeveloperVerifiedAccessBundle | null;
 }>;

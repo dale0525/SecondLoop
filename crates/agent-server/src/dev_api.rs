@@ -76,6 +76,12 @@ pub(crate) fn routes() -> Router<Arc<AppState>> {
         )
 }
 
+pub(crate) fn recovery_routes() -> Router<Arc<AppState>> {
+    Router::new()
+        .route("/dev/providers", get(list_providers))
+        .route("/dev/skills", get(list_skills))
+}
+
 async fn list_providers() -> Result<Json<Vec<ProviderDescriptor>>, StatusCode> {
     crate::provider_catalog::builtin_provider_catalog()
         .map(Json)

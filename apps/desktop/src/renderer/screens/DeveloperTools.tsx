@@ -1,4 +1,5 @@
 import * as Tabs from "@radix-ui/react-tabs";
+import { Callout } from "@radix-ui/themes";
 import {
   ArrowLeft,
   Bot,
@@ -49,6 +50,8 @@ type DeveloperToolsProps = {
   onBack: () => void;
   onInventoryChange?: (inventory: DevSkillInventory) => void;
   onNavigate?: (route: DeveloperRoute) => void;
+  onRecoveryResolved?: () => void;
+  recoveryMode?: boolean;
   route?: DeveloperRoute;
 };
 
@@ -61,6 +64,8 @@ export function DeveloperTools({
   onBack,
   onInventoryChange,
   onNavigate,
+  onRecoveryResolved,
+  recoveryMode = false,
   route,
 }: DeveloperToolsProps): JSX.Element {
   const { t } = useI18n();
@@ -186,6 +191,7 @@ export function DeveloperTools({
       setProjectSnapshot(snapshot);
       setProject(parseDeveloperProject(snapshot.project));
       setProviders(installedProviders);
+      if (snapshot.recoveryReason === null) onRecoveryResolved?.();
       try {
         setControlStatus(await loadDeveloperControlStatus());
       } catch {
@@ -199,7 +205,7 @@ export function DeveloperTools({
     } finally {
       setReleaseLoading(false);
     }
-  }, [t]);
+  }, [onRecoveryResolved, t]);
 
   useEffect(() => {
     if (activeRoute === "skills") return;
@@ -211,8 +217,9 @@ export function DeveloperTools({
   const adoptProjectSnapshot = useCallback((snapshot: DeveloperProjectSnapshot) => {
     setProjectSnapshot(snapshot);
     setProject(parseDeveloperProject(snapshot.project));
+    if (snapshot.recoveryReason === null) onRecoveryResolved?.();
     bootstrap.reload();
-  }, [bootstrap]);
+  }, [bootstrap, onRecoveryResolved]);
 
   const handleDelete = useCallback(async (skillPackage: DevSkillPackage) => {
     const operationId = beginOperation();
@@ -257,7 +264,11 @@ export function DeveloperTools({
   return (
     <main className="developer-screen" aria-label={t("developer.ariaLabel")}>
       <header className="top-bar developer-top-bar">
-        <AppIconButton label={t("common.backToSettings")} onClick={onBack}>
+        <AppIconButton
+          disabled={recoveryMode}
+          label={t("common.backToSettings")}
+          onClick={onBack}
+        >
           <ArrowLeft aria-hidden="true" size={18} />
         </AppIconButton>
         <div className="top-bar-title">
@@ -294,12 +305,22 @@ export function DeveloperTools({
         ) : <span className="top-bar-spacer" aria-hidden="true" />}
       </header>
 
+      {recoveryMode ? (
+        <Callout.Root className="release-policy-note" color="orange" role="status">
+          <Callout.Text>
+            <strong>{t("developer.recovery.title")}</strong>{" "}
+            {t("developer.recovery.description")}
+          </Callout.Text>
+        </Callout.Root>
+      ) : null}
+
       <Tabs.Root
         className="developer-tabs"
         onValueChange={(value) => navigate(value as DeveloperTab)}
         value={activeTab}
       >
-        <Tabs.List aria-label={t("developer.tabsLabel")} className="developer-tab-list">
+        {!recoveryMode ? (
+          <Tabs.List aria-label={t("developer.tabsLabel")} className="developer-tab-list">
           <Tabs.Trigger className="developer-tab" value="model">
             <Bot aria-hidden="true" size={17} /> {t("developer.tabModel")}
           </Tabs.Trigger>
@@ -312,7 +333,8 @@ export function DeveloperTools({
           <Tabs.Trigger className="developer-tab" value="build">
             <PackageCheck aria-hidden="true" size={17} /> {t("developer.tabBuild")}
           </Tabs.Trigger>
-        </Tabs.List>
+          </Tabs.List>
+        ) : null}
 
         <Tabs.Content className="developer-tab-content developer-model-content" value="model">
           <ReleaseBoundary error={releaseError} loading={releaseLoading} onRetry={loadReleaseState}>
