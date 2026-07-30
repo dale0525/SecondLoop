@@ -261,10 +261,16 @@ function userRequest(path, body, method = "POST") {
   });
 }
 
-test("configuration preserves explicit unlimited limits and requires subscription mappings", () => {
-  const parsed = parseEntitlementConfig(commerceConfig());
+test("configuration preserves explicit unlimited limits, empty model allowlists, and subscription mappings", () => {
+  const wildcardCommerce = commerceConfig();
+  wildcardCommerce.policy.productPlans[0].allowedModels = [];
+  const parsed = parseEntitlementConfig(wildcardCommerce);
   assert.equal(parsed.policy.productPlans[0].limits.maxRequests, 0);
   assert.equal(parsed.policy.productPlans[0].limits.maxConcurrency, 0);
+  assert.deepEqual(parsed.policy.productPlans[0].allowedModels, []);
+  const wildcardUniform = uniformConfig();
+  wildcardUniform.policy.uniformPlan.allowedModels = [];
+  assert.deepEqual(parseEntitlementConfig(wildcardUniform).policy.uniformPlan.allowedModels, []);
   assert.throws(() => parseEntitlementConfig({
     ...commerceConfig(),
     policy: { ...commerceConfig().policy, productPlans: [] },
@@ -392,6 +398,31 @@ test("uniform policy returns a signed v2 projection with explicit unlimited fiel
   assert.deepEqual(projection.subjectBudget.concurrency, { mode: "unlimited" });
 });
 
+test("empty model allowlists permit every model while non-empty lists remain exact", async () => {
+  const worker = createEntitlementWorker({ cryptoImpl: webcrypto, nowSeconds: () => NOW });
+  const wildcardConfig = uniformConfig();
+  wildcardConfig.policy.uniformPlan.allowedModels = [];
+  const allowed = await worker.fetch(
+    await projectionRequest("model-not-listed"),
+    environment(null, wildcardConfig),
+  );
+  const allowedProjection = await allowed.json();
+  assert.deepEqual(
+    { decision: allowedProjection.decision, reasonCode: allowedProjection.reasonCode },
+    { decision: "allow", reasonCode: null },
+  );
+
+  const denied = await worker.fetch(
+    await projectionRequest("model-not-listed"),
+    environment(null, uniformConfig()),
+  );
+  const deniedProjection = await denied.json();
+  assert.deepEqual(
+    { decision: deniedProjection.decision, reasonCode: deniedProjection.reasonCode },
+    { decision: "deny", reasonCode: "model_not_allowed" },
+  );
+});
+
 test("projection rotation accepts current and next secrets and signs with the matched secret", async () => {
   const nextSecret = "next-projection-secret-with-at-least-32-bytes";
   const worker = createEntitlementWorker({ cryptoImpl: webcrypto, nowSeconds: () => NOW });
@@ -488,6 +519,17 @@ test("the unique eligible subscription wins when a newer inactive row sorts firs
     { decision: (await response.json()).decision, selected: policyInternals.selectSubscription([inactive, active], NOW).subscription.subscription_id },
     { decision: "allow", selected: "sub_active" },
   );
+
+  const wildcardConfig = commerceConfig();
+  wildcardConfig.policy.productPlans[0].allowedModels = [];
+  const wildcardResponse = await handleProjection(
+    await projectionRequest("model-not-listed", PROJECTION_SECRET, "agentweave.commerce.creem"),
+    wildcardConfig,
+    store,
+    env,
+    { cryptoImpl: webcrypto, nowSeconds: () => NOW },
+  );
+  assert.equal((await wildcardResponse.json()).decision, "allow");
 
   const status = await billingStatus(
     commerceConfig(),

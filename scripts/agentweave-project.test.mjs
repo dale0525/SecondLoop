@@ -253,6 +253,30 @@ test("project desired state validates providers and hashes canonical public conf
   assert.equal(validateProjectMatchesRuntime(project, managedApp(project)), true);
 });
 
+test("managed entitlement policies accept empty model arrays as allowing every model", () => {
+  const commerce = managedBundleProject();
+  commerce.deployment.cloudflare.entitlement.policy.productPlans[0].allowedModels = [];
+  assert.equal(validateAgentWeaveProjectData(commerce), commerce);
+
+  const uniform = managedBundleProject();
+  uniform.providers.commerce = null;
+  uniform.deployment.cloudflare.entitlement.policy = {
+    sourceMode: "uniform_bounded",
+    tenantLimits: { maxRequests: 0, maxUnits: 0 },
+    uniformPlan: {
+      id: "default",
+      displayName: "Default",
+      allowedModels: [],
+      limits: { maxRequests: 0, maxUnits: 0, maxConcurrency: 0 },
+    },
+  };
+  assert.equal(validateAgentWeaveProjectData(uniform), uniform);
+
+  const missing = structuredClone(commerce);
+  delete missing.deployment.cloudflare.entitlement.policy.productPlans[0].allowedModels;
+  assert.throws(() => validateAgentWeaveProjectData(missing), /allowedModels.*required/);
+});
+
 test("project desired state rejects unknown fields and recursively rejects credential material", () => {
   const unknown = managedProject();
   unknown.extra = true;

@@ -404,8 +404,8 @@ function validatePolicyPlan(value, label, { productRequired }) {
     requireString(plan.productId, `${label}.productId`, { maxBytes: 256 });
     if (!/^prod_[A-Za-z0-9_]+$/.test(plan.productId)) fail(`${label}.productId is invalid`);
   }
-  if (!Array.isArray(plan.allowedModels) || plan.allowedModels.length === 0 || plan.allowedModels.length > 128) {
-    fail(`${label}.allowedModels must be a non-empty bounded array`);
+  if (!Array.isArray(plan.allowedModels) || plan.allowedModels.length > 128) {
+    fail(`${label}.allowedModels must be a bounded array`);
   }
   plan.allowedModels.forEach((model, index) => {
     requireString(model, `${label}.allowedModels[${index}]`, { maxBytes: 256 });
