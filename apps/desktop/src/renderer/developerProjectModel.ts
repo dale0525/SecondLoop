@@ -293,7 +293,6 @@ export function validateManagedDraft(
     }
     for (const plan of plans.filter((candidate) => candidate.enabled !== false)) {
       if (!plan.id.trim()) issues.push("Plan ID is required");
-      if (plan.allowedModels.length === 0) issues.push(`${plan.displayName || plan.id} needs an allowed model`);
       if (managedEntitlement.policy.sourceMode === "commerce_provider"
         && (!plan.productId || !/^prod_[A-Za-z0-9_]+$/.test(plan.productId))) {
         issues.push(`${plan.displayName || plan.id} has an invalid Creem product`);

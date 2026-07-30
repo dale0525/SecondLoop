@@ -109,8 +109,8 @@ function plan(raw, label, { productRequired }) {
     "id", "displayName", "productId", "enabled", "allowedModels", "limits",
   ], label);
   const models = value.allowedModels;
-  if (!Array.isArray(models) || models.length === 0 || models.length > 128) {
-    invalid(`${label}.allowedModels must be a non-empty array`);
+  if (!Array.isArray(models) || models.length > 128) {
+    invalid(`${label}.allowedModels must be an array with at most 128 entries`);
   }
   const allowedModels = models.map((model, index) => string(model, `${label}.allowedModels[${index}]`, 256));
   if (new Set(allowedModels).size !== allowedModels.length) invalid(`${label}.allowedModels contains duplicates`);

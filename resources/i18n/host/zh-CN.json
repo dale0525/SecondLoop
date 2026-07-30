@@ -633,6 +633,7 @@
   "developer.release.unsupportedProduct": "不是订阅产品",
   "developer.release.planId": "稳定计划 ID",
   "developer.release.allowedModels": "允许模型",
+  "developer.release.allowedModelsHint": "留空表示允许全部模型；多个模型 ID 请使用英文逗号分隔。",
   "developer.release.maxRequests": "周期请求数",
   "developer.release.maxUnits": "Token / 用量单位",
   "developer.release.maxConcurrency": "并发请求数",
