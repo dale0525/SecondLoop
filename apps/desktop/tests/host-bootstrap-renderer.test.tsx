@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import App from "../src/renderer/App";
+import { HostBootstrapProvider, useHostBootstrap } from "../src/renderer/hostBootstrap";
 import {
   hostDiscoveryFixture,
   installHostBootstrap,
@@ -140,4 +141,31 @@ describe("trusted Renderer bootstrap", () => {
     expect(ensureRunning).toHaveBeenCalledOnce();
     expect(load).toHaveBeenCalledOnce();
   });
+
+  it("keeps bootstrap closed while disabled and loads once enabled", async () => {
+    installHostBootstrap();
+    const load = vi.fn(window.agentWeave!.hostBootstrap!.load);
+    window.agentWeave!.hostBootstrap = { load };
+    const { rerender } = render(
+      <HostBootstrapProvider disabled>
+        <BootstrapStatus />
+      </HostBootstrapProvider>,
+    );
+
+    expect(screen.getByText("unavailable")).toBeInTheDocument();
+    expect(load).not.toHaveBeenCalled();
+
+    rerender(
+      <HostBootstrapProvider disabled={false}>
+        <BootstrapStatus />
+      </HostBootstrapProvider>,
+    );
+
+    expect(await screen.findByText("ready")).toBeInTheDocument();
+    expect(load).toHaveBeenCalledOnce();
+  });
 });
+
+function BootstrapStatus(): JSX.Element {
+  return <span>{useHostBootstrap().status}</span>;
+}

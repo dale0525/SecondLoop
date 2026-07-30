@@ -470,6 +470,10 @@
   background: var(--color-surface-muted);
 }
 
+.developer-tabs--recovery {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .developer-tab-list {
   display: flex;
   min-height: 0;

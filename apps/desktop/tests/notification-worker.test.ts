@@ -42,4 +42,39 @@ describe("desktop notification host", () => {
     })).resolves.toBe(0);
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it("does not claim while the developer runtime is in recovery", async () => {
+    const fetchMock = vi.fn();
+    const isEnabled = vi.fn().mockResolvedValue(false);
+
+    await expect(deliverDesktopNotificationsOnce({
+      createNotification: () => { throw new Error("unused"); },
+      isEnabled,
+      isSupported: () => true,
+      request: fetchMock,
+    })).resolves.toBe(0);
+
+    expect(isEnabled).toHaveBeenCalledOnce();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("resumes claims after developer recovery is resolved", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response("[]", { headers: { "Content-Type": "application/json" } }),
+    );
+    const isEnabled = vi.fn()
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+    const options = {
+      createNotification: () => { throw new Error("unused"); },
+      isEnabled,
+      isSupported: () => true,
+      request: fetchMock,
+    };
+
+    await expect(deliverDesktopNotificationsOnce(options)).resolves.toBe(0);
+    await expect(deliverDesktopNotificationsOnce(options)).resolves.toBe(0);
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
 });

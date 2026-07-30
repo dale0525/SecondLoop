@@ -22,6 +22,13 @@ vi.mock("electron", () => ({
 describe("sidecar preload capability", () => {
   beforeEach(() => vi.mocked(ipcRenderer.invoke).mockReset());
 
+  it("reports whether a developer project is configured", () => {
+    expect(desktopPreloadApi.getRuntimeInfo()).toMatchObject({
+      developerProject: Boolean(process.env.AGENTWEAVE_APP_ROOT),
+      shell: "agentweave-desktop",
+    });
+  });
+
   it("exposes only no-argument status and recovery calls with parsed results", async () => {
     vi.mocked(ipcRenderer.invoke).mockResolvedValue({
       schemaVersion: 1,

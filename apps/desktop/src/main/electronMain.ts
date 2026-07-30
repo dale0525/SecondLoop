@@ -89,6 +89,9 @@ app.whenReady().then(async () => {
   const approvalUrl = rendererBase
     ? new URL("/approval.html", rendererBase).href
     : pathToFileURL(path.join(__dirname, "../dist/approval.html")).href;
+  const developerAppRoot = process.env.AGENTWEAVE_APP_ROOT
+    ? path.resolve(process.env.AGENTWEAVE_APP_ROOT)
+    : null;
   const disposeNotifications = startDesktopNotificationWorker({
     createNotification: (options) => {
       const notification = new Notification(options);
@@ -100,6 +103,9 @@ app.whenReady().then(async () => {
         show: () => notification.show()
       };
     },
+    ...(developerAppRoot
+      ? { isEnabled: () => isDeveloperRuntimeAvailable(developerAppRoot) }
+      : {}),
     isSupported: () => Notification.isSupported(),
     request: sidecar.request,
   });
@@ -121,9 +127,6 @@ app.whenReady().then(async () => {
         for (const dispose of disposers.reverse()) dispose();
       };
       try {
-        const developerAppRoot = process.env.AGENTWEAVE_APP_ROOT
-          ? path.resolve(process.env.AGENTWEAVE_APP_ROOT)
-          : null;
         configureRequesterWindowSecurity({
           openExternal: (url) => shell.openExternal(url),
           onExternalError: (error) => console.error("Failed to open external URL", error),
@@ -386,6 +389,14 @@ app.whenReady().then(async () => {
   });
   await lifecycle.ensureWindow();
 });
+
+async function isDeveloperRuntimeAvailable(appRoot: string): Promise<boolean> {
+  try {
+    return (await loadDeveloperProjectSnapshot(appRoot, true)).recoveryReason === null;
+  } catch {
+    return false;
+  }
+}
 
 function configureDevelopmentUserDataRoot(): void {
   if (app.isPackaged) return;
