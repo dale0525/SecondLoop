@@ -23,7 +23,6 @@ import { Accounts } from "./screens/Accounts";
 import { Memory } from "./screens/Memory";
 import { FoundationActions } from "./screens/FoundationActions";
 import { IdentityRequiredScreen } from "./components/IdentityRequiredScreen";
-import { loadDeveloperProject } from "./developerAccessApi";
 
 type AppView = "chat" | "settings" | "developer" | "owner-skills" | "accounts" | "memory" | "actions";
 type DevApiProbe = {
@@ -65,25 +64,100 @@ export default function App(): JSX.Element {
   return (
     <I18nProvider>
       <AppearanceProvider>
-        <HostBootstrapProvider>
-          <IdentitySessionProvider>
-            <AppContent />
-          </IdentitySessionProvider>
-        </HostBootstrapProvider>
+        <AppStartup />
       </AppearanceProvider>
     </I18nProvider>
   );
 }
 
-function AppContent(): JSX.Element {
-  const [view, setView] = useState<AppView>(getViewFromHash);
-  const [developerRoute, setDeveloperRoute] = useState<DeveloperRoute>(getDeveloperRouteFromHash);
+function AppStartup(): JSX.Element {
+  const [startupMode, setStartupMode] = useState<"checking" | "normal" | "recovery" | "unavailable">(() =>
+    shouldProbeDeveloperProject() ? "checking" : "normal"
+  );
+  const [attempt, setAttempt] = useState(0);
+  const { t } = useI18n();
+
+  useEffect(() => {
+    const bridge = window.agentWeave?.developerProject;
+    if (!bridge || !shouldProbeDeveloperProject()) {
+      setStartupMode("normal");
+      return;
+    }
+    let active = true;
+    setStartupMode("checking");
+    void bridge.load()
+      .then((snapshot) => {
+        if (active) setStartupMode(snapshot.recoveryReason === null ? "normal" : "recovery");
+      })
+      .catch(() => {
+        if (active) setStartupMode("unavailable");
+      });
+    return () => {
+      active = false;
+    };
+  }, [attempt]);
+
+  if (startupMode === "checking") {
+    return <div aria-busy="true" className="app-root" />;
+  }
+
+  if (startupMode === "unavailable") {
+    return (
+      <main aria-label={t("developer.ariaLabel")} className="app-root developer-screen">
+        <div className="developer-empty-state" role="alert">
+          <h2>{t("developer.release.unavailable")}</h2>
+          <p>{t("developer.release.unavailableHint")}</p>
+          <button
+            className="settings-primary-action"
+            onClick={() => setAttempt((current) => current + 1)}
+            type="button"
+          >
+            {t("conversation.retry")}
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  const developerRecovery = startupMode === "recovery";
+
+  return (
+    <HostBootstrapProvider disabled={developerRecovery}>
+      <IdentitySessionProvider>
+        <AppContent
+          developerRecovery={developerRecovery}
+          onRecoveryResolved={() => setStartupMode("normal")}
+        />
+      </IdentitySessionProvider>
+    </HostBootstrapProvider>
+  );
+}
+
+function shouldProbeDeveloperProject(): boolean {
+  if (!window.agentWeave?.developerProject) return false;
+  try {
+    return window.agentWeave.getRuntimeInfo?.().developerProject ?? true;
+  } catch {
+    return true;
+  }
+}
+
+function AppContent({
+  developerRecovery,
+  onRecoveryResolved,
+}: {
+  developerRecovery: boolean;
+  onRecoveryResolved: () => void;
+}): JSX.Element {
+  const [view, setView] = useState<AppView>(() => developerRecovery ? "developer" : getViewFromHash());
+  const [developerRoute, setDeveloperRoute] = useState<DeveloperRoute>(() =>
+    developerRecovery ? "access/setup" : getDeveloperRouteFromHash()
+  );
   const [ownerPolicy, setOwnerPolicy] = useState<OwnerPolicy | null>(null);
   const [devApiProbe, setDevApiProbe] = useState<DevApiProbe>({
     inventory: null,
     status: "idle",
   });
-  const [developerRecovery, setDeveloperRecovery] = useState(false);
   const devApiProbeStarted = useRef(false);
   const bootstrap = useHostBootstrap();
   const { t } = useI18n();
@@ -170,23 +244,13 @@ function AppContent(): JSX.Element {
   };
 
   useEffect(() => {
-    if (!window.agentWeave?.developerProject) return;
-    let active = true;
-    void loadDeveloperProject()
-      .then((snapshot) => {
-        if (!active || snapshot.recoveryReason === null) return;
-        setDeveloperRecovery(true);
-        setDeveloperRoute("access/setup");
-        setView("developer");
-        if (window.location.hash !== "#developer/access/setup") {
-          window.location.hash = "#developer/access/setup";
-        }
-      })
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
-  }, []);
+    if (!developerRecovery) return;
+    setDeveloperRoute("access/setup");
+    setView("developer");
+    if (window.location.hash !== "#developer/access/setup") {
+      window.location.hash = "#developer/access/setup";
+    }
+  }, [developerRecovery]);
 
   useEffect(() => {
     if (
@@ -250,7 +314,7 @@ function AppContent(): JSX.Element {
           onBack={() => navigate("settings")}
           onInventoryChange={handleDevInventoryChange}
           onNavigate={navigateDeveloper}
-          onRecoveryResolved={() => setDeveloperRecovery(false)}
+          onRecoveryResolved={onRecoveryResolved}
           recoveryMode={developerRecovery}
           route={developerRoute}
         />

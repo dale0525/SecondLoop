@@ -66,6 +66,7 @@ import {
 import { createOwnerTransport } from "./ownerTransport";
 
 type DesktopRuntimeInfo = {
+  developerProject: boolean;
   platform: string;
   shell: "agentweave-desktop";
 };
@@ -129,6 +130,7 @@ const owner = createOwnerTransport({
 });
 
 const runtimeInfo: DesktopRuntimeInfo = {
+  developerProject: typeof process !== "undefined" && Boolean(process.env.AGENTWEAVE_APP_ROOT),
   platform: typeof process === "undefined" ? "browser" : process.platform,
   shell: "agentweave-desktop"
 };
