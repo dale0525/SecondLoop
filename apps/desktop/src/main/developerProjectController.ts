@@ -29,6 +29,7 @@ import {
   type DeveloperVerifiedAccessBundle,
   type DeveloperVerifiedDeployment,
 } from "../shared/developerProject";
+import { refreshRuntimeAfterProjectSave } from "./developerProjectReload";
 
 const MAX_DOCUMENT_BYTES = 256 * 1024;
 const REVISION_PATTERN = /^[a-f0-9]{64}$/;
@@ -71,8 +72,12 @@ export function registerDeveloperProjectController(options: {
     trusted(event);
     const request = parseSaveRequest(value);
     return serialize(async (root) => {
-      const snapshot = await saveProject(root, request);
-      await options.refreshRuntime?.();
+      const previous = await loadSnapshot(root);
+      const snapshot = await saveProject(root, request, previous);
+      await refreshRuntimeAfterProjectSave({
+        refreshRuntime: options.refreshRuntime,
+        restorePreviousProject: () => writePairWithJournal(root, previous.manifest, previous.project),
+      });
       return snapshot;
     });
   });
@@ -546,8 +551,8 @@ function verifiedDeploymentFromReference(reference: Record<string, unknown>): De
 async function saveProject(
   root: string,
   request: DeveloperProjectSaveRequest,
+  current: DeveloperProjectSnapshot,
 ): Promise<DeveloperProjectSnapshot> {
-  const current = await loadSnapshot(root);
   if (current.revision !== request.expectedRevision) {
     throw new Error("Developer project changed on disk; reload before saving");
   }
