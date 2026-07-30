@@ -63,6 +63,90 @@ describe("developer project controller", () => {
     expect(packageApp).not.toHaveBeenCalled();
   });
 
+  it("restores the previous project and runtime when a saved project cannot reload", async () => {
+    const root = await fixtureRoot();
+    const harness = ipcHarness();
+    const refreshRuntime = vi.fn()
+      .mockRejectedValueOnce(new Error("candidate failed"))
+      .mockResolvedValueOnce(undefined);
+    registerDeveloperProjectController({
+      appRoot: root,
+      ipcMain: harness.ipcMain,
+      packageApp: vi.fn(),
+      refreshRuntime,
+      requesterWebContents: { id: 7 },
+      showItemInFolder: vi.fn(),
+    });
+    const initial = await harness.invoke(DEVELOPER_PROJECT_LOAD_CHANNEL, undefined);
+
+    await expect(harness.invoke(DEVELOPER_PROJECT_SAVE_CHANNEL, {
+      expectedRevision: initial.revision,
+      project: appManagedProject(),
+    })).rejects.toThrow("previous project was restored");
+
+    expect(refreshRuntime).toHaveBeenCalledTimes(2);
+    const restored = await harness.invoke(DEVELOPER_PROJECT_LOAD_CHANNEL, undefined);
+    expect(restored.revision).toBe(initial.revision);
+    expect(restored.manifest).toEqual(initial.manifest);
+    expect(restored.project).toEqual(initial.project);
+  });
+
+  it("rejects an incomplete Firebase projection before writing or reloading", async () => {
+    const root = await fixtureRoot();
+    const harness = ipcHarness();
+    const refreshRuntime = vi.fn(async () => undefined);
+    registerDeveloperProjectController({
+      appRoot: root,
+      ipcMain: harness.ipcMain,
+      packageApp: vi.fn(),
+      refreshRuntime,
+      requesterWebContents: { id: 7 },
+      showItemInFolder: vi.fn(),
+    });
+    const initial = await harness.invoke(DEVELOPER_PROJECT_LOAD_CHANNEL, undefined);
+    const invalid: any = appManagedProject();
+    invalid.providers.identity = {
+      id: "agentweave.identity.firebase",
+      version: "0.1.0",
+      publicConfig: {},
+    };
+
+    await expect(harness.invoke(DEVELOPER_PROJECT_SAVE_CHANNEL, {
+      expectedRevision: initial.revision,
+      project: invalid,
+    })).rejects.toThrow("projectId is required");
+
+    expect(refreshRuntime).not.toHaveBeenCalled();
+    const unchanged = await harness.invoke(DEVELOPER_PROJECT_LOAD_CHANNEL, undefined);
+    expect(unchanged.revision).toBe(initial.revision);
+  });
+
+  it("keeps the restored project on disk when the previous runtime cannot restart", async () => {
+    const root = await fixtureRoot();
+    const harness = ipcHarness();
+    const refreshRuntime = vi.fn(async () => {
+      throw new Error("runtime failed");
+    });
+    registerDeveloperProjectController({
+      appRoot: root,
+      ipcMain: harness.ipcMain,
+      packageApp: vi.fn(),
+      refreshRuntime,
+      requesterWebContents: { id: 7 },
+      showItemInFolder: vi.fn(),
+    });
+    const initial = await harness.invoke(DEVELOPER_PROJECT_LOAD_CHANNEL, undefined);
+
+    await expect(harness.invoke(DEVELOPER_PROJECT_SAVE_CHANNEL, {
+      expectedRevision: initial.revision,
+      project: appManagedProject(),
+    })).rejects.toThrow("restored on disk");
+
+    expect(refreshRuntime).toHaveBeenCalledTimes(2);
+    const restored = await harness.invoke(DEVELOPER_PROJECT_LOAD_CHANNEL, undefined);
+    expect(restored.revision).toBe(initial.revision);
+  });
+
   it("packages a ready BYOK project and reveals only the verified output", async () => {
     const root = await fixtureRoot();
     const output = path.join(path.dirname(root), "dist", "Example.app");

@@ -7,6 +7,8 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 
+import { validateKnownProviderPublicConfig } from "./provider-public-config.mjs";
+
 export const AGENTWEAVE_PROJECT_SCHEMA_VERSION = 2;
 export const DEPLOYMENT_LOCK_SCHEMA_VERSION = 2;
 export const RUNTIME_PROVIDER_MANIFEST_SCHEMA_VERSION = 2;
@@ -213,6 +215,7 @@ function validateProviderSelection(value, label) {
   requireSemver(provider.version, `${label}.version`);
   requireObject(provider.publicConfig, `${label}.publicConfig`);
   rejectNonPublicConfig(provider.publicConfig, `${label}.publicConfig`);
+  validateKnownProviderPublicConfig(provider.id, provider.publicConfig, `${label}.publicConfig`);
   return provider;
 }
 
