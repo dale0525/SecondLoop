@@ -38,6 +38,13 @@ test("desktop appearance build includes only selected themes and auto-discovers 
         }],
       },
     };
+    manifest.schemaVersion = 2;
+    manifest.modelAccess = { configurationPolicy: "user_configurable" };
+    manifest.identity = {
+      mode: "required",
+      provider: { id: "agentweave.identity.firebase", version: "0.1.0", publicConfig: {} },
+    };
+    manifest.entitlements = { mode: "disabled" };
     writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 
     const bundle = buildDesktopAppearance(appRoot);

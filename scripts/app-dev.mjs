@@ -1,24 +1,33 @@
 import { spawn, spawnSync } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 
 import { resolveAppProject } from "./app-project.mjs";
+import {
+  validateAgentWeaveProjectData,
+  validateProjectMatchesRuntime,
+} from "./agentweave-project.mjs";
+import { validateAgentApp } from "./scaffold-agent-app.mjs";
 
 const DESKTOP_URL = "http://127.0.0.1:5173";
 
 export function createAppDevPlan(options = {}) {
   const app = resolveAppProject(options);
+  const recovery = developerRecovery(app.appRoot);
   const environment = Object.freeze({
     AGENTWEAVE_APP_ROOT: app.appRoot,
     AGENTWEAVE_DEV_API: "1",
     AGENTWEAVE_DEV_SKILLS_ROOT: app.packagesRoot,
     AGENTWEAVE_DESKTOP_URL: DESKTOP_URL,
     AGENTWEAVE_DEV_USER_DATA_ROOT: join(app.projectRoot, ".tool", "app-dev", app.outputName),
+    ...(recovery ? { AGENTWEAVE_DEV_RECOVERY_REVISION: recovery.revision } : {}),
   });
   return Object.freeze({
     app,
     environment,
+    recovery,
     setup: Object.freeze([
       Object.freeze({ command: "cargo", args: ["build", "-p", "agent-server", "--bin", "agent-server"] }),
       Object.freeze({ command: "npm", args: ["--prefix", "apps/desktop", "run", "build:electron"] }),
@@ -80,6 +89,9 @@ async function runAppDev() {
   mkdirSync(plan.environment.AGENTWEAVE_DEV_USER_DATA_ROOT, { recursive: true });
   mkdirSync(plan.app.packagesRoot, { recursive: true });
   console.log(`Preparing ${plan.app.displayName} from ${plan.app.appRootRelative}...`);
+  if (plan.recovery) {
+    console.warn(`Starting Developer Recovery because App validation failed: ${plan.recovery.reason}`);
+  }
   runSetup(plan);
   const vite = spawnProcess(plan, plan.vite, "vite");
   let electron;
@@ -122,6 +134,33 @@ async function runAppDev() {
   } finally {
     stop();
     for (const signal of ["SIGINT", "SIGTERM"]) process.removeListener(signal, stop);
+  }
+}
+
+function developerRecovery(appRoot) {
+  const { app } = validateAgentApp(appRoot, {
+    validateProject: false,
+    validateRuntimeProviders: false,
+  });
+  const project = JSON.parse(readFileSync(join(appRoot, "agentweave-project.json"), "utf8"));
+  const recoveryValidation = { validateKnownConfig: false };
+  validateAgentWeaveProjectData(project, "agentweave-project.json", recoveryValidation);
+  validateProjectMatchesRuntime(project, app, recoveryValidation);
+  try {
+    validateAgentApp(appRoot);
+    return null;
+  } catch (error) {
+    const manifest = readFileSync(join(appRoot, "agent-app.json"));
+    const projectBytes = readFileSync(join(appRoot, "agentweave-project.json"));
+    const revision = createHash("sha256")
+      .update(manifest)
+      .update("\0")
+      .update(projectBytes)
+      .digest("hex");
+    const reason = (error instanceof Error ? error.message : String(error))
+      .replaceAll(/[\r\n]+/g, " ")
+      .slice(0, 500);
+    return Object.freeze({ reason, revision });
   }
 }
 

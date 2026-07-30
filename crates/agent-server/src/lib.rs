@@ -39,6 +39,7 @@ mod model_access_api;
 mod oauth_api;
 pub mod owner_api;
 pub mod provider_catalog;
+pub mod recovery_api;
 pub mod skill_release;
 mod structured_content_api;
 mod task_api;

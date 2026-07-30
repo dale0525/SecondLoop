@@ -22,6 +22,7 @@ mod server_app;
 mod server_automation;
 mod server_identity_startup;
 mod server_model_startup;
+mod server_recovery;
 #[path = "server_skill_startup.rs"]
 mod server_skill_startup;
 #[cfg(test)]
@@ -58,6 +59,16 @@ async fn main() -> anyhow::Result<()> {
     } else {
         skills_root.clone()
     };
+    if let Some(recovery) = server_recovery::requirement(dev_api_enabled).await? {
+        return server_recovery::serve(
+            transport,
+            storage_protection_key,
+            credential_vault_key,
+            dev_skills_root,
+            recovery,
+        )
+        .await;
+    }
     let managed_skills = managed_skills_config_from_lookup(|name| std::env::var_os(name))?;
     let builtin_mode = builtin_skills_mode_from_lookup(|name| std::env::var_os(name))?;
     let owner_host = owner_host_config_from_lookup(|name| std::env::var_os(name))?;
@@ -479,7 +490,10 @@ async fn reconcile_managed_startup(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::main_test_fs::{make_test_tree_writable, remove_test_dir, unique_test_dir};
+    use crate::main_test_fs::{
+        make_test_tree_writable, remove_test_dir, unique_test_dir, write_instruction_package,
+        write_runtime_package,
+    };
     use agent_runtime::platform::PlatformId;
     use agent_runtime::skill_store::{SkillRevisionStore, SkillStorePaths};
     use agent_runtime::turn::{ModelClient, ModelEventStream};
@@ -490,7 +504,6 @@ mod tests {
     };
     use futures::stream;
     use model_gateway::responses::{GatewayEvent, GatewayRequest};
-    use std::path::Path;
     use std::sync::Mutex;
     use tower::ServiceExt;
 
@@ -922,78 +935,5 @@ mod tests {
         remove_test_dir(valid_source).await;
         remove_test_dir(corrupt_source).await;
         remove_test_dir(failed_source).await;
-    }
-
-    async fn write_runtime_package(package_root: &Path, tool_name: &str) {
-        tokio::fs::create_dir_all(package_root).await.unwrap();
-        tokio::fs::write(
-            package_root.join("agentweave.json"),
-            serde_json::json!({
-                "schemaVersion": 1,
-                "id": "com.example.server-runtime",
-                "version": "1.0.0",
-                "displayName": "Server runtime",
-                "kind": "native_runtime",
-                "package": {
-                    "includeInstructions": false,
-                    "includeRuntime": true
-                }
-            })
-            .to_string(),
-        )
-        .await
-        .unwrap();
-        tokio::fs::write(
-            package_root.join("skill.json"),
-            serde_json::json!({
-                "name": "server-runtime",
-                "description": "Server runtime test skill.",
-                "version": "1.0.0",
-                "entry": {
-                    "type": "command",
-                    "command": "node",
-                    "args": ["index.js"]
-                },
-                "tools": [{
-                    "name": tool_name,
-                    "description": "Test tool.",
-                    "input_schema": { "type": "object" }
-                }]
-            })
-            .to_string(),
-        )
-        .await
-        .unwrap();
-        tokio::fs::write(package_root.join("index.js"), "process.stdin.resume();\n")
-            .await
-            .unwrap();
-    }
-
-    async fn write_instruction_package(package_root: &Path, id: &str) {
-        tokio::fs::create_dir_all(package_root).await.unwrap();
-        let name = id.rsplit('.').next().unwrap();
-        tokio::fs::write(
-            package_root.join("agentweave.json"),
-            serde_json::json!({
-                "schemaVersion": 1,
-                "id": id,
-                "version": "1.0.0",
-                "displayName": name,
-                "kind": "instruction_only",
-                "package": {
-                    "includeInstructions": true,
-                    "includeRuntime": false
-                }
-            })
-            .to_string(),
-        )
-        .await
-        .unwrap();
-        tokio::fs::write(
-            package_root.join("SKILL.md"),
-            format!("---\nname: {name}\ndescription: {name}\n---\n{name}\n"),
-        )
-        .await
-        .unwrap();
     }
 }

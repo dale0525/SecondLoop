@@ -16,6 +16,7 @@ import {
 } from "../src/renderer/devSkillPrompts";
 import { DeveloperTools } from "../src/renderer/screens/DeveloperTools";
 import { installHostBootstrap } from "./hostBootstrapFixture";
+import { installReleaseBridge, userConfigurableSnapshot } from "./developerReleaseFixture";
 
 afterEach(() => {
   cleanup();
@@ -118,6 +119,54 @@ describe("DeveloperTools", () => {
     expect(
       await screen.findByRole("main", { name: "Developer Tools" })
     ).toBeInTheDocument();
+  });
+
+  it("locks invalid projects to Access setup while Developer Recovery is active", async () => {
+    const base = userConfigurableSnapshot();
+    installReleaseBridge({
+      ...base,
+      manifest: {
+        ...base.manifest,
+        identity: {
+          mode: "required",
+          provider: {
+            id: "agentweave.identity.firebase",
+            version: "0.1.0",
+            publicConfig: {},
+          },
+        },
+      },
+      project: {
+        ...base.project,
+        providers: {
+          identity: {
+            id: "agentweave.identity.firebase",
+            version: "0.1.0",
+            publicConfig: {},
+          },
+          entitlement: null,
+          gateway: null,
+        },
+      },
+      deploymentStatus: "stale",
+      deploymentMessage: "Repair and save the provider configuration before deploying.",
+      recoveryReason: "agent app manifest.identity.provider.publicConfig.projectId is required",
+    });
+    if (!window.agentWeave) throw new Error("Release bridge must be installed first");
+    window.agentWeave.server = {
+      request: async () => {
+        throw new Error("ordinary development inventory is unavailable");
+      },
+    };
+    window.history.replaceState(null, "", "/#settings");
+
+    render(<App />);
+
+    expect(await screen.findByText("Developer Recovery is active.")).toBeInTheDocument();
+    expect(window.location.hash).toBe("#developer/access/setup");
+    expect(screen.getByRole("button", { name: "Back to settings" })).toBeDisabled();
+    expect(screen.queryByRole("tab", { name: "Model" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("main", { name: "Settings" })).not.toBeInTheDocument();
   });
 
   it("shows settings developer entry only when the dev API is available", async () => {
