@@ -8,7 +8,7 @@ import { contactEmail } from "../lib/i18n";
   currentPath="/oauth-help/"
   title="Google OAuth help"
   eyebrow="CONNECT / CONFIGURE / REVOKE"
-  updated="July 22, 2026"
+  updated="July 30, 2026"
   description="What AgentWeave Developer Tools requests from Google, how Firebase setup works, and how to revoke or remove local authorization."
 >
   <div class="policy-callout">
@@ -17,7 +17,7 @@ import { contactEmail } from "../lib/i18n";
 
   <h2>1. Before you connect</h2>
   <ul>
-    <li>Use a Google account that is allowed to administer the intended Cloud project.</li>
+    <li>Use a Google account that is allowed to administer the intended existing Cloud project.</li>
     <li>Start with a dedicated test project that contains no production users or regulated data.</li>
     <li>Review the account name, application name, publisher domain, and requested permissions on Google's consent screen.</li>
     <li>Do not continue if the browser is not on a Google-owned authorization domain.</li>
@@ -29,7 +29,7 @@ import { contactEmail } from "../lib/i18n";
     <li><code>https://www.googleapis.com/auth/cloud-platform</code><span>Read and manage the selected Google Cloud project and enable services needed by the requested Firebase setup.</span></li>
     <li><code>https://www.googleapis.com/auth/firebase</code><span>View and administer Firebase project configuration needed to add Firebase and enable email authentication.</span></li>
   </ul>
-  <p>These permissions are broad because project discovery, API enablement, first-time Firebase Authentication initialization, and Firebase configuration cross Cloud Resource Manager, Service Usage, Firebase Management, and Identity Toolkit. The <code>cloud-platform</code> scope is required by Google's <code>identityPlatform:initializeAuth</code> method, while the <code>firebase</code> scope covers the Firebase project and Web App writes. AgentWeave does not create or delete Cloud projects and uses these permissions only for the developer-directed setup workflow.</p>
+  <p>These permissions are broad because project discovery, API enablement, Firebase configuration, and the required Identity Platform initialization cross Cloud Resource Manager, Service Usage, Firebase Management, and Identity Toolkit. The <code>cloud-platform</code> scope is required by Google's <code>identityPlatform:initializeAuth</code> method, while the <code>firebase</code> scope covers Firebase project and Web App writes. AgentWeave does not create or delete Cloud projects and uses these permissions only for the developer-directed setup workflow. Do not grant them for a project you are not authorized to manage.</p>
 
   <h2>3. What happens during setup</h2>
   <ol>
@@ -37,7 +37,7 @@ import { contactEmail } from "../lib/i18n";
     <li>Your default browser opens Google's authorization page.</li>
     <li>After you consent, Google redirects to a temporary <code>127.0.0.1</code> callback owned by the local AgentWeave Host.</li>
     <li>AgentWeave exchanges the one-time authorization code directly with Google's token endpoint.</li>
-    <li>You select an existing project. AgentWeave adds Firebase when needed, enables the Identity Toolkit API, initializes Firebase Authentication when needed, enables email-and-password sign-in, creates or reuses an AgentWeave Web App, and returns its public Firebase configuration.</li>
+    <li>You select an existing project. AgentWeave adds Firebase if needed, enables Identity Toolkit, initializes Firebase Authentication when required, enables email-and-password sign-in, and creates or reuses a Firebase Web App.</li>
     <li>The public Firebase web configuration is returned to the developer workspace. OAuth tokens remain in local sensitive storage.</li>
   </ol>
 
@@ -62,7 +62,7 @@ import { contactEmail } from "../lib/i18n";
   <h3>The callback page cannot connect</h3>
   <p>Keep AgentWeave open while the browser completes authorization. Local firewall, proxy, or endpoint security software must allow the temporary IPv4 loopback callback. Do not replace the callback with a public URL.</p>
   <h3>No projects appear</h3>
-  <p>The Google account may lack permission to list or administer projects, an organization policy may restrict project visibility or service enablement, or the selected project may be in an unsupported lifecycle state. Try a dedicated account or ask the organization administrator for the required role.</p>
+  <p>The Google account may lack project-listing or project-administration permissions, or the selected project may be in an unsupported lifecycle state. Try a dedicated account or ask the organization administrator for the required role.</p>
   <h3>API enablement or Firebase setup fails</h3>
   <p>Verify billing and organization policy, confirm that you can enable services in the project, and retry after any Google service propagation delay. AgentWeave keeps retryable authorization state for a limited period rather than silently switching projects.</p>
 
