@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "appId": "com.secondloop.secretary",
   "package": {
     "id": "com.secondloop.app",
@@ -196,5 +196,32 @@
     "system": "prompts/system.md",
     "developer": "prompts/developer.md",
     "additional": []
+  },
+  "modelAccess": {
+    "configurationPolicy": "app_managed",
+    "profile": {
+      "providerId": "cloudflare-gateway",
+      "endpointType": "responses",
+      "baseUrl": "https://com-secondloop-secretary-gateway.workers.dev/v1",
+      "modelName": "gpt",
+      "authentication": "user_identity",
+      "headers": {}
+    }
+  },
+  "identity": {
+    "mode": "required",
+    "provider": {
+      "id": "agentweave.identity.firebase",
+      "version": "0.1.0",
+      "publicConfig": {}
+    }
+  },
+  "entitlements": {
+    "mode": "required",
+    "provider": {
+      "id": "agentweave.entitlements.cloudflare_policy",
+      "version": "0.1.0",
+      "publicConfig": {}
+    }
   }
 }
